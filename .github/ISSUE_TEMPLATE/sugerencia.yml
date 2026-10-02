@@ -1,0 +1,17 @@
+name: Proponer una mejora
+description: Comparte una propuesta o mejora de la documentación.
+title: "[Mejora] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Qué problema resolvería
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta y alternativas
+    validations:
+      required: true

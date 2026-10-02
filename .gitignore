@@ -1,0 +1,27 @@
+# Sesiones, IPC, logs y preferencias locales: nunca publicar.
+runs/
+*_LOG.txt
+*_SAMPLES.csv
+*.signal
+fishing_bot_config.json
+# Entornos y generados.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+dist/
+build/
+*.egg-info/
+*.zip
+SHA256SUMS.txt
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.env.*
+*.pem
+*.key
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,9 @@
+# Versiones del entorno de referencia AUDIT-R3.15. Python 3.13 de 64 bits.
+# El instalador usa un entorno virtual local; no instala paquetes globales.
+mss==10.2.0
+numpy==2.5.3
+opencv-python==5.0.0.93
+customtkinter==6.0.0
+Pillow==12.3.0
+darkdetect==0.8.0
+packaging==26.3
