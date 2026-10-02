@@ -31,7 +31,9 @@ No necesitas activar `.venv` ni cambiar la política de ejecución de PowerShell
 
 1. Pantalla principal a **1920 × 1080**.
 2. Abre **Bit Heroes de Steam** (experimental) o Kongregate en **Google Chrome**.
-3. Ve al minijuego de pesca y deja START visible, sin resultados o CAST pendientes.
+3. Deja visible la pantalla principal, el menú **Fishing con Play**, o **START**.
+   El bot abre Fishing, pulsa Play y espera al personaje si hace falta.
+   No dejes resultados ni un CAST pendiente al iniciar una sesión nueva.
 4. Mantén la disposición compatible. La implementación usa coordenadas fijas:
    una resolución correcta por sí sola no demuestra que zoom y escala coincidan.
 5. Steam: título `Bit Heroes`, ejecutable `Bit Heroes.exe`, área de juego
@@ -51,7 +53,11 @@ Ko-fi y GitHub sí pueden abrirse en tu navegador habitual.
 preparado. Elige **Steam / Chrome / Auto** en el panel. Auto solo acepta una
 ventana inequívoca; si ambos clientes están abiertos, selecciona el que usarás.
 El inicio verifica la vista compacta y enfoca la ventana elegida sin un clic de
-pesca. Al llegar a START se realiza el inventario inicial de la sesión.
+pesca. CONTROL entra a Fishing desde la pantalla principal, pulsa Play y espera
+hasta 60 s a que aparezca START; entonces realiza el inventario inicial.
+Si ya está en START, no vuelve al menú ni envía Play. No toca New Bait,
+Shop, Events u otros modos de farmeo. Un modal desconocido detiene el recorrido
+al agotar la espera; no lo cierra a ciegas.
 
 Si Windows rechaza el cambio de foco, no inicia los motores. Si el juego pierde
 el foco, se minimiza, cambia de pestaña, se mueve o redimensiona durante la
@@ -76,7 +82,7 @@ Python es una instalación independiente y no se elimina automáticamente.
 Cada Release incluye `SHA256SUMS.txt`. Puedes calcular el hash del ZIP:
 
 ```powershell
-Get-FileHash .\BitHeroesFishing-v0.1.0-beta.2-source.zip -Algorithm SHA256
+Get-FileHash .\BitHeroesFishing-v0.1.0-beta.3-source.zip -Algorithm SHA256
 ```
 
 Compáralo con el publicado. Un hash coincidente comprueba integridad respecto

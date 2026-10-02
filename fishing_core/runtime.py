@@ -32,6 +32,7 @@ from .cast_audit import CastAudit
 from .cast_peak import CastPeakPolicy,DEFAULT_GAME_DELAY_MS
 from .cast_test import pending_budget
 from .game_window import ENV_WINDOW, GameWindow, WindowGuard
+from .navigation import enter_fishing
 
 FAST_MONITOR={"left":430,"top":710,"width":1310,"height":320}
 FULL_MONITOR={"left":0,"top":0,"width":1920,"height":1080}
@@ -240,13 +241,18 @@ def _control_loop(io,ui,channel,log,model):
     cast_candidate=cast_verification=None
     result_closure=ResultClosure()
     cast_audit=CastAudit()
-    cast_peak=CastPeakPolicy(cast_delay_ms)
-    log.emit("CAST_CONFIGURATION",human=True,target="PREDICTED_CURRENT_BAR_MAXIMUM",game_delay_estimate_ms=cast_delay_ms,
+    game=getattr(getattr(io,"game_guard",None),"game",None)
+    sampling_client="Steam" if getattr(game,"client",None)=="Steam" else "Chrome"
+    cast_peak=CastPeakPolicy(cast_delay_ms,client=sampling_client)
+    log.emit("CAST_CONFIGURATION",human=True,target="PREDICTED_OR_STEAM_FRESH_DISPLAYED_MAXIMUM",game_delay_estimate_ms=cast_delay_ms,
              estimate_is_not_measured_game_latency=True,full_context_max_ms=200,verification_max_ms=80,
              scheduled_input_lateness_max_ms=3,noncritical_control_move_settle_ms=10,noncritical_control_hold_ms=25,
-             catch_click_timing_unchanged=True)
+              catch_click_timing_unchanged=True,sampling=cast_peak.configuration())
     with mss.mss() as sct:
         try:
+            enter_fishing(io,ui,lambda:capture(sct,FULL_MONITOR),
+                          lambda:check_stop(io,channel,log),log)
+            flow.entered=time.perf_counter()
             while True:
                 check_stop(io,channel,log)
                 start=time.perf_counter_ns()
@@ -351,7 +357,11 @@ def _control_loop(io,ui,channel,log,model):
                         fresh=cast_sampler.local_evidence(ui.cast_status(FrameView(fresh_image,830,775)))
                         fresh_peak=cast_peak.sample(fresh,fresh_start_ns,fresh_capture_end_ns,
                                                    time.perf_counter_ns(),flow.cycle_id,verification=True)
-                        if (peak_decision and fresh_peak.get("predicted_peak_ns") is not None
+                        if peak_decision and peak_decision["reason"]=="STEAM_FRESH_MAXIMUM_CANDIDATE":
+                            fresh_peak["ready"]=fresh_peak["reason"]=="STEAM_FRESH_DISPLAYED_MAXIMUM"
+                            if not fresh_peak["ready"]:
+                                fresh_peak["reason"]="STEAM_MAXIMUM_NOT_CONFIRMED_IN_VERIFICATION"
+                        elif (peak_decision and fresh_peak.get("predicted_peak_ns") is not None
                                 and abs(fresh_peak["predicted_peak_ns"]-peak_decision.get("predicted_peak_ns",0))>12_000_000):
                             fresh_peak["ready"]=False
                             fresh_peak["reason"]="CAST_PEAK_CHANGED_DURING_VERIFICATION"

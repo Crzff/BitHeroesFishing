@@ -1,5 +1,18 @@
 # Cambios
 
+## v0.1.0-beta.3
+
+- Corrige el bloqueo de CAST con las capturas más lentas del cliente Steam.
+- Perfil CAST exclusivo de Steam; Chrome conserva sus límites históricos.
+- Alternativa Steam con máximo mostrado confirmado en otra captura fresca.
+- Entrada automática pantalla principal → Fishing → Play → START y espera de viaje.
+- Estados de navegación en el panel; sin Shop, Events, otros modos ni reclamar cebos.
+- Cinco pescas reales Steam completas: cuatro CATCH SUCCESS y una recompensa directa.
+- CAST retenidos entre 42 y 46 sobre máximo 48: no se garantiza el máximo.
+- 159 pruebas públicas, incluida integración Steam simulada y parada F8.
+- Se conservan demora CAST 32 ms, CATCH, presupuesto inicial único y cierre confirmado.
+- Las Releases beta.1 y beta.2 permanecen intactas.
+
 ## v0.1.0-beta.2
 
 - Corrige la dependencia exclusiva del título de Chrome; selector Auto / Steam / Chrome.

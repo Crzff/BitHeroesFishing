@@ -22,8 +22,9 @@ No ejecutes varios paneles con motores activos.
 
 Selecciona **Steam** para `Bit Heroes.exe` o **Chrome** para el título exacto
 `Play Bit Heroes Online | Kongregate - Google Chrome`. Steam no necesita Chrome.
-Auto se niega a elegir si detecta varias ventanas. Cierra duplicadas y llega a
-START. Brave y títulos traducidos no son compatibles con ese enfoque automático.
+Auto se niega a elegir si detecta varias ventanas. Cierra duplicadas y deja la
+pantalla principal, Fishing/Play o START. Brave y títulos traducidos no son
+compatibles con ese enfoque automático.
 
 ### ¿Funciona mientras uso otra ventana o con el juego minimizado?
 
@@ -33,10 +34,24 @@ de pestaña o se minimiza. No vuelve a robar el foco ni reanuda una pesca a medi
 
 ### ¿Steam está completamente validado?
 
-Todavía no. Se comprobó la ventana Unity 1920×1080, el enfoque, la pantalla START
-y la protección del panel sin iniciar motores. No se realizó una pesca completa
-de Steam; CAST, CATCH, inventario y cierre en ese cliente siguen sin validación
-real. La evidencia histórica de Chrome no demuestra esos resultados en Steam.
+No de forma universal. La beta.3 completó cinco pescas reales en Steam 1920×1080,
+incluida la entrada desde la pantalla principal: cuatro CATCH SUCCESS y una
+recompensa directa, con inventario inicial único y cierre de cada resultado.
+Los CAST retenidos fueron 42–46 con máximo 48. Es una prueba corta en una sola
+configuración, no garantía para otras cuentas, cañas, escalas o sesiones largas.
+
+### ¿Puedo iniciar desde la pantalla principal?
+
+Sí: INICIAR BOT abre Fishing, pulsa Play y espera al personaje hasta ver START.
+También puedes iniciar con el menú Fishing abierto o ya en START. No toca Shop,
+Events, New Bait ni otros modos. Si hay un popup desconocido, ciérralo manualmente
+con el bot detenido y vuelve a iniciar; no compra ni reclama cebos automáticamente.
+
+### Steam se queda en CAST con la beta.2
+
+Actualiza a la beta.3 en una carpeta nueva y cierra los paneles antiguos: conservan
+el código anterior en memoria. La corrección adapta el muestreo a capturas más lentas
+de Steam sin desactivar las guardias. Vuelve a START antes de iniciar otra sesión.
 
 ### La resolución es correcta pero no detecta el juego
 

@@ -23,6 +23,21 @@ class PanelStateTests(unittest.TestCase):
         state.apply(self.event("CONTROL_INPUT_SENT", purpose="TRADE", outcome="SUCCESS", outcome_path="DIRECT_REWARD"))
         self.assertIn("sin CATCH", state.outcome)
 
+    def test_navigation_progress_does_not_claim_inventory_or_completed_fishing(self):
+        state=PanelState("test")
+        for kind,fields,text in (
+            ("NAVIGATION_BEGIN",{},"Fishing"),
+            ("NAVIGATION_INPUT_SENT",{"purpose":"OPEN_FISHING"},"Abriendo"),
+            ("NAVIGATION_INPUT_SENT",{"purpose":"PLAY_FISHING"},"PLAY"),
+            ("NAVIGATION_TRAVEL_WAIT",{},"Esperando al personaje"),
+            ("NAVIGATION_READY",{"screen":"START"},"inventario inicial"),
+        ):
+            state.apply(self.event(kind,**fields))
+            self.assertIn(text,state.activity)
+            self.assertIsNone(state.bait_initial)
+            self.assertEqual(state.completed,0)
+            self.assertIsNone(state.cast_attempt)
+
     def test_initial_total_is_preserved_and_remaining_is_explicitly_estimated(self):
         state = PanelState("test")
         state.apply(self.event("BAIT_INVENTORY", reliable=True, total=103, stacks=[]))

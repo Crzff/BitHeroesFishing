@@ -33,7 +33,7 @@ def main():
         failed = True
     try:
         import numpy as np
-        for name in ("bait_templates.npz", "cast_digits.npz", "ui_templates.npz"):
+        for name in ("bait_templates.npz", "cast_digits.npz", "ui_templates.npz", "fishing_navigation.npz"):
             with np.load(ROOT / "assets" / name, allow_pickle=False) as data:
                 if not data.files:
                     raise ValueError(f"Plantillas vacias: {name}")

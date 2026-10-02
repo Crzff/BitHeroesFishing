@@ -38,6 +38,15 @@ class PanelState:
         if kind == "BAIT_CHECK_STARTED":
             self.activity = "Comprobando inventario de cebos"
             self.bait_checking = True
+        elif kind == "NAVIGATION_BEGIN":
+            self.activity = "Buscando Fishing o START · sin entrar a otros modos"
+        elif kind == "NAVIGATION_INPUT_SENT":
+            self.activity = {"OPEN_FISHING":"Abriendo menú Fishing",
+                             "PLAY_FISHING":"PLAY enviado · esperando llegar al muelle"}.get(event.get("purpose"),self.activity)
+        elif kind == "NAVIGATION_TRAVEL_WAIT":
+            self.activity = "Esperando al personaje · comienza al aparecer START"
+        elif kind == "NAVIGATION_READY" and event.get("screen")=="START":
+            self.activity = "START encontrado · preparando inventario inicial"
         elif kind == "BAIT_INVENTORY" and self.bait_initial is None and event.get("reliable") is True and type(event.get("total")) is int:
             self.bait_total = event["total"]
             self.checked_perf_ns = event.get("checked_perf_ns")

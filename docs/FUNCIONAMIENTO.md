@@ -3,7 +3,7 @@
 ## Dos motores, responsabilidades separadas
 
 El panel inicia una sesión nueva con dos procesos Python. CONTROL identifica
-pantallas y gestiona START, CAST, inventario, recompensas y modales. CATCH
+pantallas y gestiona entrada a Fishing, START, CAST, inventario, recompensas y modales. CATCH
 observa el minijuego y es el único que decide y envía su clic.
 
 La comunicación usa archivos por sesión y bloqueos de intento para evitar
@@ -13,6 +13,8 @@ ni bloqueos de sesiones anteriores.
 ## Secuencia habitual
 
 ```text
+pantalla principal → Fishing → Play → esperar llegada
+                                       ↓
 START → inventario inicial único → START → CAST
                                       ↓
                          CATCH o recompensa directa
@@ -21,6 +23,12 @@ START → inventario inicial único → START → CAST
                                       ↓
                     otro START o parada con cero
 ```
+
+También acepta el menú Fishing ya abierto o START. La navegación exige varias
+lecturas estables y otra captura fresca antes de cada clic; envía Fishing y Play
+como máximo una vez cada uno. Tras Play solo espera, sin repetir clics durante
+el viaje. El límite del recorrido es 60 s; F8 y las guardias siguen activos.
+No entra en Shop, Events u otros modos ni reclama New Bait, y no usa su temporizador.
 
 La lectura inicial puede abrir el selector de cebos para inspeccionarlo y
 cerrarlo. No compra, cambia equipo ni selecciona una rareza automáticamente.
@@ -32,6 +40,14 @@ certificada.
 Lee mínimo, máximo y valor de la barra de la caña. El predictor usa
 observaciones recientes y una demora experimental de **32 ms**, no una medición
 de la latencia universal del juego. Revalida el estado antes del input.
+
+Chrome conserva el perfil histórico de seis muestras y capturas de hasta 15 ms.
+Steam usa cuatro muestras y hasta 45 ms para permitir capturas a ritmo de frames.
+Si no hay una predicción utilizable cerca del pico, propone otra captura y solo
+autoriza la alternativa al leer el máximo exacto en esa verificación fresca,
+con historial ascendente. Esta rama no predice ni garantiza el valor retenido.
+Ambas rutas mantienen verificación hasta 80 ms, contexto completo menor de 200 ms
+y cancelación si el envío programado llega con más de 3 ms de retraso.
 
 El panel distingue **input enviado**, **valor retenido observado** y
 **lectura no confirmada**. Alcanzar el máximo no está garantizado.

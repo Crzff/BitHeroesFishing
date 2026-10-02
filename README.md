@@ -5,7 +5,7 @@ dos motores separados y parada de emergencia con **F8**.
 
 <!-- PROJECT_LINKS_START -->
 [![Estado](https://img.shields.io/badge/estado-beta-555555?style=for-the-badge)](#limitaciones)
-[![Descargar](https://img.shields.io/badge/Descargar-ZIP-555555?style=for-the-badge)](https://github.com/Crzff/BitHeroesFishing/releases/tag/v0.1.0-beta.2)
+[![Descargar](https://img.shields.io/badge/Descargar-ZIP-555555?style=for-the-badge)](https://github.com/Crzff/BitHeroesFishing/releases/tag/v0.1.0-beta.3)
 [![Descargas](https://img.shields.io/github/downloads/Crzff/BitHeroesFishing/total?label=descargas&color=555555&style=for-the-badge)](https://github.com/Crzff/BitHeroesFishing/releases)
 [![Licencia](https://img.shields.io/badge/c%C3%B3digo-MIT-555555?style=for-the-badge)](LICENSE)
 <!-- PROJECT_LINKS_END -->
@@ -19,6 +19,8 @@ dos motores separados y parada de emergencia con **F8**.
 ## Qué hace
 
 - **CONTROL** gestiona inventario, START, CAST, resultados y modales.
+- Puede iniciar desde **pantalla principal → Fishing → Play → START**;
+  espera al personaje antes de pescar. Si ya está en START, no repite el recorrido.
 - **CATCH** decide y envía el clic del minijuego; CONTROL no lo sustituye.
 - Lee los cebos **una vez al inicio de cada sesión** y muestra los restantes
   **estimados**: inventario inicial menos un cebo por CAST enviado.
@@ -28,9 +30,11 @@ dos motores separados y parada de emergencia con **F8**.
 - Ofrece **Siempre visible** y una vista compacta comprobada para no tapar
   el inventario ni las barras en la disposición compatible.
 - Selecciona **Auto / Steam / Chrome** y vincula ambos motores a esa ventana.
-  Steam es experimental: detección y foco comprobados, sin una pesca completa validada.
+  Steam tiene cinco pescas completas comprobadas en una configuración concreta;
+  sigue siendo beta, no una certificación para todas las cuentas.
 
-No compra cebos, no cambia equipo ni selecciona rarezas automáticamente.
+No compra ni reclama cebos gratis, no abre Shop/Events, no entra en otros modos,
+no cambia equipo ni selecciona rarezas automáticamente.
 F8, DETENER y cerrar el panel detienen la sesión; no la reinician solos.
 
 ## Requisitos
@@ -41,7 +45,7 @@ F8, DETENER y cerrar el panel detienen la sesión; no la reinician solos.
 | Python | **3.13**, con Tcl/Tk y Python Launcher |
 | Pantalla principal | **1920 × 1080** |
 | Cliente del juego | **Steam (experimental)** o **Google Chrome / Kongregate** |
-| Juego | Pantalla de pesca con START visible; ventana en primer plano |
+| Juego | Pantalla principal, menú Fishing con Play o pesca con START; en primer plano |
 | Disposición | Interfaz y escala compatibles con las coordenadas comprobadas |
 
 **Steam no necesita Chrome abierto.** Se identifica `Bit Heroes.exe` por su
@@ -59,7 +63,7 @@ la ventana, detiene la sesión. Brave y otras resoluciones no están certificado
 ## Descarga
 
 En [**Releases**](https://github.com/Crzff/BitHeroesFishing/releases), abre la última versión beta y descarga
-`BitHeroesFishing-v0.1.0-beta.2-source.zip` de **Assets**.
+`BitHeroesFishing-v0.1.0-beta.3-source.zip` de **Assets**.
 
 **Esta descarga contiene código Python, no un .exe portable.** Python y una
 conexión a Internet son necesarios para la primera instalación de dependencias.
@@ -75,9 +79,11 @@ No ejecutes el programa directamente dentro del ZIP.
    instala las dependencias desde PyPI. **No necesita administrador.**
 4. Ejecuta **`COMPROBAR.bat`** para revisar Python, dependencias, plantillas y
    resolución. Esta comprobación no inicia pesca ni envía clics.
-5. Abre el juego en Steam o Chrome, ve a FISHING y deja **START** visible.
+5. Abre el juego en Steam o Chrome y deja visible la **pantalla principal**,
+   el menú **Fishing / Play** o **START**. No dejes un CAST pendiente.
 6. Haz doble clic en **`ABRIR_BOT.bat`**, elige **Steam / Chrome / Auto**
-   y pulsa **INICIAR BOT** en el panel. Intenta enfocar el juego automáticamente.
+   y pulsa **INICIAR BOT** en el panel. Enfoca el juego e inicia el recorrido de
+   pesca si hace falta; al aparecer START comprueba el inventario inicial.
 7. Para detener: **F8**, **DETENER BOT** o cierra el panel.
 
 Abrir el panel **no inicia la pesca**. No uses el ratón ni cambies la ventana,
@@ -91,6 +97,10 @@ Guía completa: [instalación](docs/INSTALACION.md) ·
 
 - **Beta**, no una garantía de funcionamiento universal ni de ausencia de sanciones.
 - CAST intenta alcanzar el máximo leído de la caña, pero **no siempre lo alcanza**.
+- Steam admite capturas más lentas y una verificación alternativa del máximo
+  mostrado; esa lectura no garantiza que el juego retenga el máximo.
+- La entrada automática desde la pantalla principal se probó en Steam; en Chrome
+  requiere la misma disposición y todavía no tiene una prueba real nueva.
 - Los restantes son un presupuesto estimado, **no un recuento final de inventario**.
 - Una lectura ambigua no se trata como cero.
 - No se certifican inventarios con desplazamiento ni cambio automático de rareza.

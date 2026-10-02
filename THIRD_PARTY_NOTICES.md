@@ -6,8 +6,8 @@ Bit Heroes, sus gráficos, fuentes, iconos y marcas pertenecen a sus respectivos
 titulares. Kongregate y Google son marcas de sus respectivos propietarios.
 Este proyecto no está afiliado, avalado ni patrocinado por ellos.
 
-Los archivos `assets/ui_templates.npz`, `assets/cast_digits.npz` y
-`assets/bait_templates.npz` contienen referencias mínimas de reconocimiento
+Los archivos `assets/ui_templates.npz`, `assets/cast_digits.npz`,
+`assets/bait_templates.npz` y `assets/fishing_navigation.npz` contienen referencias mínimas de reconocimiento
 derivadas de la interfaz: máscaras, glifos y algunos iconos de cebos. **No son
 contenido original del autor ni se ofrecen bajo MIT.** No incluyen el cliente
 del juego, una cuenta ni capturas completas de sesiones.
