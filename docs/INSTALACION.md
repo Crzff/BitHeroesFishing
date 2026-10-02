@@ -30,21 +30,33 @@ No necesitas activar `.venv` ni cambiar la política de ejecución de PowerShell
 ## 3. Preparar el juego
 
 1. Pantalla principal a **1920 × 1080**.
-2. Abre Bit Heroes de Kongregate en **Google Chrome**.
+2. Abre **Bit Heroes de Steam** (experimental) o Kongregate en **Google Chrome**.
 3. Ve al minijuego de pesca y deja START visible, sin resultados o CAST pendientes.
 4. Mantén la disposición compatible. La implementación usa coordenadas fijas:
    una resolución correcta por sí sola no demuestra que zoom y escala coincidan.
-5. Comprueba el título de la ventana:
-   `Play Bit Heroes Online | Kongregate - Google Chrome`.
+5. Steam: título `Bit Heroes`, ejecutable `Bit Heroes.exe`, área de juego
+   **1920×1080 en (0,0)**. Usa pantalla completa sin bordes. No copies el bot a
+   la carpeta de Steam, no modifiques DLL ni archivos del juego.
+6. Chrome: título `Play Bit Heroes Online | Kongregate - Google Chrome`,
+   ventana ocupando la pantalla principal y disposición compatible.
 
-El enfoque actual no identifica el juego en Brave, Edge, Firefox u otro idioma.
+Steam **no necesita Chrome**. No se identifica el juego en Brave, Edge,
+Firefox u otro idioma. El juego debe permanecer visible y en primer plano;
+no hay modo de pesca en segundo plano ni minimizado.
 Ko-fi y GitHub sí pueden abrirse en tu navegador habitual.
 
 ## 4. Abrir y detener
 
 `ABRIR_BOT.bat` abre solamente el panel. Pulsa INICIAR BOT cuando el juego esté
-preparado. El inicio verifica la vista compacta y enfoca Chrome sin un clic de
+preparado. Elige **Steam / Chrome / Auto** en el panel. Auto solo acepta una
+ventana inequívoca; si ambos clientes están abiertos, selecciona el que usarás.
+El inicio verifica la vista compacta y enfoca la ventana elegida sin un clic de
 pesca. Al llegar a START se realiza el inventario inicial de la sesión.
+
+Si Windows rechaza el cambio de foco, no inicia los motores. Si el juego pierde
+el foco, se minimiza, cambia de pestaña, se mueve o redimensiona durante la
+sesión, el bot se detiene y no se reanuda solo. Recupera START antes de iniciar
+una sesión nueva. La selección del cliente se aplica solo a esa sesión.
 
 **F8 detiene ambos motores.** También sirven DETENER BOT y cerrar el panel.
 No hay reanudación automática después de una parada del usuario. No pulses
@@ -64,7 +76,7 @@ Python es una instalación independiente y no se elimina automáticamente.
 Cada Release incluye `SHA256SUMS.txt`. Puedes calcular el hash del ZIP:
 
 ```powershell
-Get-FileHash .\BitHeroesFishing-v0.1.0-beta.1-source.zip -Algorithm SHA256
+Get-FileHash .\BitHeroesFishing-v0.1.0-beta.2-source.zip -Algorithm SHA256
 ```
 
 Compáralo con el publicado. Un hash coincidente comprueba integridad respecto

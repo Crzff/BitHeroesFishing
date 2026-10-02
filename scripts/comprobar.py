@@ -52,6 +52,13 @@ def main():
         ok = resolution == (1920, 1080)
         print(f"{'OK' if ok else 'ERROR'} pantalla principal {resolution[0]}x{resolution[1]}; se requiere 1920x1080")
         failed |= not ok
+        try:
+            sys.path.insert(0,str(ROOT))
+            from fishing_core.game_window import WindowsAPI
+            windows=WindowsAPI().windows()
+            print('INFO clientes detectados (sin enfocar): '+(', '.join(w.client for w in windows) or 'ninguno'))
+        except Exception as exc:
+            print(f'AVISO no se pudo enumerar el juego: {exc}')
     for name in ("FISHING_BOT_APP.py", "CATCH_FAST_PROCESS_V6_FINAL.py", "FISHING_CONTROL_PROCESS.py"):
         ok = (ROOT / name).is_file()
         print(f"{'OK' if ok else 'ERROR'} archivo {name}")

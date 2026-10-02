@@ -55,6 +55,16 @@ del panel separan CATCH SUCCESS, recompensas directas, FAILED y ciclos completos
 
 ## Panel y seguridad
 
+El selector **Auto / Steam / Chrome** identifica una ventana por ejecutable,
+clase y título. Ambos motores reciben la misma identidad y posición, sin
+modificar variables de entorno globales. Las consolas arrancan minimizadas sin
+activar otra ventana. El bot no modifica ni inyecta código en el cliente del juego.
+
+Las guardias comprueban foco, visibilidad, minimización, identidad y geometría
+en el bucle y antes de los clics. Si falla una comprobación, se solicita la parada
+compartida. No se recupera foco automáticamente durante una sesión: no pesca en
+segundo plano y nunca continúa una sesión interrumpida con el mismo presupuesto.
+
 Durante la pesca utiliza una vista compacta fija en una región comprobada de
 la pantalla. Comprueba su rectángulo real y que DETENER no quede recortado.
 Al detenerse restaura la vista normal. Siempre visible solo cambia la preferencia

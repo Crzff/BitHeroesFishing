@@ -20,10 +20,23 @@ No ejecutes varios paneles con motores activos.
 
 ### No identifica la ventana del juego
 
-La versión actual busca Google Chrome con el título exacto
-`Play Bit Heroes Online | Kongregate - Google Chrome`. Cierra ventanas duplicadas
-del juego y llega a START. Brave y títulos traducidos no son compatibles con
-ese enfoque automático.
+Selecciona **Steam** para `Bit Heroes.exe` o **Chrome** para el título exacto
+`Play Bit Heroes Online | Kongregate - Google Chrome`. Steam no necesita Chrome.
+Auto se niega a elegir si detecta varias ventanas. Cierra duplicadas y llega a
+START. Brave y títulos traducidos no son compatibles con ese enfoque automático.
+
+### ¿Funciona mientras uso otra ventana o con el juego minimizado?
+
+No. Lee píxeles visibles de la pantalla y envía input al juego en primer plano.
+Ahora intenta enfocarlo al iniciar; después se detiene si pierde el foco, cambia
+de pestaña o se minimiza. No vuelve a robar el foco ni reanuda una pesca a medias.
+
+### ¿Steam está completamente validado?
+
+Todavía no. Se comprobó la ventana Unity 1920×1080, el enfoque, la pantalla START
+y la protección del panel sin iniciar motores. No se realizó una pesca completa
+de Steam; CAST, CATCH, inventario y cierre en ese cliente siguen sin validación
+real. La evidencia histórica de Chrome no demuestra esos resultados en Steam.
 
 ### La resolución es correcta pero no detecta el juego
 

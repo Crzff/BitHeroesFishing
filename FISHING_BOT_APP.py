@@ -21,7 +21,8 @@ import customtkinter as ctk
 from fishing_core.processes import start_children, close_children
 from fishing_core import VERSION
 from fishing_core.panel_state import PanelState, SessionFeed
-from fishing_core.panel_safety import ACTIVE_GEOMETRY, ACTIVE_SIZE, panel_bounds_safe, stop_button_visible, window_bounds, focus_game
+from fishing_core.panel_safety import ACTIVE_GEOMETRY, ACTIVE_SIZE, panel_bounds_safe, stop_button_visible, window_bounds
+from fishing_core.game_window import CLIENTS, focus_window
 from fishing_core.protocol import atomic_json
 from fishing_core.project_links import support_url
 
@@ -238,6 +239,14 @@ class FishingBotApp(ctk.CTk):
         )
         self.btn_siempre_visible.pack(fill="x")
 
+        # Seleccion de esta sesion; no altera preferencias personales guardadas.
+        self.game_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD)
+        self.game_frame.pack(fill="x", pady=(0, 8))
+        ctk.CTkLabel(self.game_frame, text="Juego · visible y en primer plano").pack(side="left", padx=12)
+        self.game_selector = ctk.CTkOptionMenu(self.game_frame, values=list(CLIENTS), width=115)
+        self.game_selector.set("Auto")
+        self.game_selector.pack(side="right", padx=12, pady=6)
+
         # Frame de logs
         self.logs_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD, corner_radius=12)
         self.logs_frame.pack(fill="both", expand=True)
@@ -340,6 +349,7 @@ class FishingBotApp(ctk.CTk):
                              self.resizable(), self.overrideredirect())
         self._fishing_view = True
         self.logs_frame.pack_forget()
+        self.game_frame.pack_forget()
         self.btn_iniciar.pack_forget()
         self.btn_reiniciar.pack_forget()
         self.minsize(*ACTIVE_SIZE)
@@ -387,6 +397,7 @@ class FishingBotApp(ctk.CTk):
         self.btn_iniciar.pack(fill="x", pady=(0, 8), before=self.btn_detener)
         self.btn_reiniciar.pack(fill="x", pady=(0, 8), before=self.btn_siempre_visible)
         self.logs_frame.pack(fill="both", expand=True)
+        self.game_frame.pack(fill="x", pady=(0, 8), before=self.logs_frame)
         self.attributes("-topmost", self.siempre_visible)
         self._normal_view = None
 
@@ -515,8 +526,9 @@ class FishingBotApp(ctk.CTk):
 
         try:
             self._preparar_vista_pesca()
-            focus_game()
-            self.p_catch, self.p_control, self.channel, self.launch_mutex = start_children()
+            game = focus_window(self.game_selector.get())
+            self._log(f"Juego seleccionado: {game.client} · 1920x1080 · F8 detiene")
+            self.p_catch, self.p_control, self.channel, self.launch_mutex = start_children(game)
             self.panel_state = PanelState(self.channel.run_id)
             self.session_feed = SessionFeed(self.channel.directory, self.channel.run_id)
             self._log(f"  CATCH iniciado (PID: {self.p_catch.pid})")

@@ -43,48 +43,7 @@ def window_bounds(app):
     return rect.left,rect.top,rect.right,rect.bottom
 
 
-def focus_game():
-    """Activa solo el Chrome del juego identificado; no hace clics para dar foco."""
-    import ctypes
-    from ctypes import wintypes
-    user=ctypes.windll.user32
-    kernel=ctypes.windll.kernel32
-    user.GetForegroundWindow.restype=wintypes.HWND
-    user.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
-    user.GetWindowThreadProcessId.restype=wintypes.DWORD
-    user.SetForegroundWindow.argtypes=[wintypes.HWND]
-    user.ShowWindow.argtypes=[wintypes.HWND,ctypes.c_int]
-    windows=[]
-    @ctypes.WINFUNCTYPE(wintypes.BOOL,wintypes.HWND,wintypes.LPARAM)
-    def visit(hwnd,param):
-        if user.IsWindowVisible(hwnd):
-            title=ctypes.create_unicode_buffer(2048)
-            user.GetWindowTextW(hwnd,title,len(title))
-            if title.value=="Play Bit Heroes Online | Kongregate - Google Chrome":
-                windows.append(hwnd)
-        return True
-    user.EnumWindows(visit,0)
-    if len(windows)!=1:
-        raise RuntimeError("No se identifica una ventana unica de Bit Heroes en Chrome")
-    if user.GetAsyncKeyState(0x77)&0x8000:
-        raise KeyboardInterrupt("F8")
-    game=windows[0]
-    if user.IsIconic(game):
-        user.ShowWindow(game,9)
-    user.SetForegroundWindow(game)
-    if user.GetForegroundWindow()!=game:
-        # Windows puede rechazar una activacion de otro hilo. Adjuntar solo
-        # durante el cambio de foco y deshacerlo siempre, sin input de raton.
-        current=kernel.GetCurrentThreadId()
-        foreground=user.GetWindowThreadProcessId(user.GetForegroundWindow(),None)
-        attached=False
-        try:
-            if foreground and foreground!=current:
-                attached=bool(user.AttachThreadInput(current,foreground,True))
-            user.SetForegroundWindow(game)
-        finally:
-            if attached:
-                user.AttachThreadInput(current,foreground,False)
-    if user.GetForegroundWindow()!=game:
-        raise RuntimeError("Windows no confirma el foco del juego; no se inician motores")
-    return game
+def focus_game(client="Auto"):
+    """Compatibilidad para herramientas previas que esperan solo el HWND."""
+    from .game_window import focus_window
+    return focus_window(client).hwnd

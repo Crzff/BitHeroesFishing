@@ -10,6 +10,7 @@ import time
 from .protocol import Channel
 from . import VERSION
 from .telemetry import ROOT, run_environment
+from .game_window import ENV_WINDOW, WindowsAPI, WindowGuard, focus_window
 
 
 class Mutex:
@@ -81,24 +82,34 @@ def close_children(processes, channel=None):
         raise RuntimeError("Errores al detener procesos: "+"; ".join(errors))
 
 
-def start_children():
+def start_children(game=None):
     mutex=Mutex("LAUNCHER")
-    env=run_environment()
-    channel=Channel(env["FISHING_RUN_ID"])
-    catch=control=None
+    catch=control=channel=None
     try:
+        if game is None:
+            test_hwnd=os.environ.get("FISHING_TEST_GAME_HWND")
+            game=WindowsAPI().inspect(int(test_hwnd)) if test_hwnd else focus_window()
+        guard=WindowGuard(game)
+        guard.check()
+        env=run_environment()
+        env[ENV_WINDOW]=game.serialize()
+        channel=Channel(env["FISHING_RUN_ID"])
         flags=subprocess.CREATE_NEW_CONSOLE | 0x00000200
+        startup=subprocess.STARTUPINFO()
+        startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow=7  # SW_SHOWMINNOACTIVE: no robar el foco del juego.
         catch=subprocess.Popen([python_executable(),"-B","-u",str(ROOT/"CATCH_FAST_PROCESS_V6_FINAL.py")],
-                               cwd=str(ROOT),env=env,creationflags=flags)
+                               cwd=str(ROOT),env=env,creationflags=flags,startupinfo=startup)
         deadline=time.monotonic()+5
         while channel.ready() is None:
             if catch.poll() is not None or time.monotonic()>deadline:
                 raise RuntimeError("CATCH no termino de inicializar; CONTROL no se inicia")
             time.sleep(.025)
+        guard.check()
         control=subprocess.Popen([python_executable(),"-B","-u",str(ROOT/"FISHING_CONTROL_PROCESS.py")],
-                                 cwd=str(ROOT),env=env,creationflags=flags)
+                                 cwd=str(ROOT),env=env,creationflags=flags,startupinfo=startup)
         return catch,control,channel,mutex
-    except Exception:
+    except (Exception,KeyboardInterrupt):
         try:
             close_children((catch,control),channel)
         finally:

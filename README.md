@@ -5,7 +5,7 @@ dos motores separados y parada de emergencia con **F8**.
 
 <!-- PROJECT_LINKS_START -->
 [![Estado](https://img.shields.io/badge/estado-beta-555555?style=for-the-badge)](#limitaciones)
-[![Descargar](https://img.shields.io/badge/Descargar-ZIP-555555?style=for-the-badge)](https://github.com/Crzff/BitHeroesFishing/releases/tag/v0.1.0-beta.1)
+[![Descargar](https://img.shields.io/badge/Descargar-ZIP-555555?style=for-the-badge)](https://github.com/Crzff/BitHeroesFishing/releases/tag/v0.1.0-beta.2)
 [![Descargas](https://img.shields.io/github/downloads/Crzff/BitHeroesFishing/total?label=descargas&color=555555&style=for-the-badge)](https://github.com/Crzff/BitHeroesFishing/releases)
 [![Licencia](https://img.shields.io/badge/c%C3%B3digo-MIT-555555?style=for-the-badge)](LICENSE)
 <!-- PROJECT_LINKS_END -->
@@ -27,6 +27,8 @@ dos motores separados y parada de emergencia con **F8**.
   directas y resultados FAILED de cierres completos.
 - Ofrece **Siempre visible** y una vista compacta comprobada para no tapar
   el inventario ni las barras en la disposición compatible.
+- Selecciona **Auto / Steam / Chrome** y vincula ambos motores a esa ventana.
+  Steam es experimental: detección y foco comprobados, sin una pesca completa validada.
 
 No compra cebos, no cambia equipo ni selecciona rarezas automáticamente.
 F8, DETENER y cerrar el panel detienen la sesión; no la reinician solos.
@@ -38,19 +40,26 @@ F8, DETENER y cerrar el panel detienen la sesión; no la reinician solos.
 | Sistema | Windows, Python de 64 bits |
 | Python | **3.13**, con Tcl/Tk y Python Launcher |
 | Pantalla principal | **1920 × 1080** |
-| Navegador del juego | **Google Chrome** |
-| Juego | Bit Heroes en Kongregate, en la pantalla de pesca con START visible |
+| Cliente del juego | **Steam (experimental)** o **Google Chrome / Kongregate** |
+| Juego | Pantalla de pesca con START visible; ventana en primer plano |
 | Disposición | Interfaz y escala compatibles con las coordenadas comprobadas |
 
-El enfoque automático identifica exactamente la ventana
-`Play Bit Heroes Online | Kongregate - Google Chrome`. Usar Brave para el juego,
-otro título, otro idioma, zoom, escalado o disposición puede impedir el inicio
-o la detección. No se certifica compatibilidad con otras resoluciones.
+**Steam no necesita Chrome abierto.** Se identifica `Bit Heroes.exe` por su
+ejecutable, clase Unity y título `Bit Heroes`; no hace falta instalar el bot junto
+al juego ni modificar sus archivos. Usa pantalla completa sin bordes: área de
+juego 1920×1080 en la pantalla principal, sin desplazamiento.
+
+Para Chrome se conserva el título exacto
+`Play Bit Heroes Online | Kongregate - Google Chrome` y la disposición compatible.
+Si Steam y Chrome están abiertos, elige uno: Auto no adivina entre dos ventanas.
+**No funciona en segundo plano ni minimizado**: lee la pantalla y envía input
+al juego visible. Al perder el foco, cambiar de pestaña o mover/redimensionar
+la ventana, detiene la sesión. Brave y otras resoluciones no están certificados.
 
 ## Descarga
 
 En [**Releases**](https://github.com/Crzff/BitHeroesFishing/releases), abre la última versión beta y descarga
-`BitHeroesFishing-v0.1.0-beta.1-source.zip` de **Assets**.
+`BitHeroesFishing-v0.1.0-beta.2-source.zip` de **Assets**.
 
 **Esta descarga contiene código Python, no un .exe portable.** Python y una
 conexión a Internet son necesarios para la primera instalación de dependencias.
@@ -66,8 +75,9 @@ No ejecutes el programa directamente dentro del ZIP.
    instala las dependencias desde PyPI. **No necesita administrador.**
 4. Ejecuta **`COMPROBAR.bat`** para revisar Python, dependencias, plantillas y
    resolución. Esta comprobación no inicia pesca ni envía clics.
-5. Abre el juego en Chrome, ve a FISHING y deja **START** visible.
-6. Haz doble clic en **`ABRIR_BOT.bat`** y pulsa **INICIAR BOT** en el panel.
+5. Abre el juego en Steam o Chrome, ve a FISHING y deja **START** visible.
+6. Haz doble clic en **`ABRIR_BOT.bat`**, elige **Steam / Chrome / Auto**
+   y pulsa **INICIAR BOT** en el panel. Intenta enfocar el juego automáticamente.
 7. Para detener: **F8**, **DETENER BOT** o cierra el panel.
 
 Abrir el panel **no inicia la pesca**. No uses el ratón ni cambies la ventana,

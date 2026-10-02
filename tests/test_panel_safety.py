@@ -14,7 +14,8 @@ class PanelSafetyTests(unittest.TestCase):
             geometry=Mock(return_value="550x900+20+20"),minsize=Mock(return_value=(520,850)),
             maxsize=Mock(return_value=(1920,1080)),resizable=Mock(return_value=(True,True)),
             overrideredirect=Mock(return_value=False),attributes=Mock(),update_idletasks=Mock(),
-            logs_frame=Mock(),btn_iniciar=Mock(),btn_reiniciar=Mock(),
+            logs_frame=Mock(),game_frame=Mock(),game_selector=Mock(get=Mock(return_value="Steam")),
+            btn_iniciar=Mock(),btn_reiniciar=Mock(),
             btn_detener=Mock(winfo_ismapped=Mock(return_value=True),winfo_rootx=Mock(return_value=36),
                              winfo_rooty=Mock(return_value=500),winfo_width=Mock(return_value=470),
                              winfo_height=Mock(return_value=38)),
@@ -81,8 +82,17 @@ class PanelSafetyTests(unittest.TestCase):
         app._after_idle=Mock()
         catch,control=Mock(pid=1),Mock(pid=2)
         channel=Mock(run_id="test")
-        with patch.object(gui,"focus_game",side_effect=lambda:steps.append("focus")), \
-             patch.object(gui,"start_children",side_effect=lambda:(steps.append("children") or (catch,control,channel,Mock()))), \
+        game=SimpleNamespace(client="Steam")
+        def focus(client):
+            self.assertEqual(client,"Steam")
+            steps.append("focus")
+            return game
+        def start(bound):
+            self.assertIs(bound,game)
+            steps.append("children")
+            return catch,control,channel,Mock()
+        with patch.object(gui,"focus_window",side_effect=focus), \
+             patch.object(gui,"start_children",side_effect=start), \
              patch.object(gui,"PanelState"),patch.object(gui,"SessionFeed"):
             gui.FishingBotApp.iniciar_bot(app)
         self.assertEqual(steps,["safe","focus","children"])
@@ -94,7 +104,7 @@ class PanelSafetyTests(unittest.TestCase):
         app._verificar_scripts=Mock(return_value=True)
         app._preparar_vista_pesca=Mock()
         app._after_idle=Mock()
-        with patch.object(gui,"focus_game",side_effect=RuntimeError("no game")), \
+        with patch.object(gui,"focus_window",side_effect=RuntimeError("no game")), \
              patch.object(gui,"start_children") as children:
             gui.FishingBotApp.iniciar_bot(app)
         children.assert_not_called()

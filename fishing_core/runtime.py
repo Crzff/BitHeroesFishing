@@ -31,6 +31,7 @@ from .result_closure import ResultClosure
 from .cast_audit import CastAudit
 from .cast_peak import CastPeakPolicy,DEFAULT_GAME_DELAY_MS
 from .cast_test import pending_budget
+from .game_window import ENV_WINDOW, GameWindow, WindowGuard
 
 FAST_MONITOR={"left":430,"top":710,"width":1310,"height":320}
 FULL_MONITOR={"left":0,"top":0,"width":1920,"height":1080}
@@ -43,7 +44,15 @@ class WindowsIO:
         self.user32=ctypes.windll.user32
         self.user32.SetProcessDPIAware()
         self.user32.GetForegroundWindow.restype=wintypes.HWND
-        self.expected_hwnd=int(os.environ.get("FISHING_TEST_GAME_HWND","0"))
+        binding=os.environ.get(ENV_WINDOW)
+        if not binding:
+            raise SafetyStop("Falta la ventana seleccionada; inicia desde el panel o lanzador")
+        try:
+            self.game_guard=WindowGuard(GameWindow.deserialize(binding))
+            self.game_guard.check()
+        except (RuntimeError,ValueError,TypeError) as exc:
+            raise SafetyStop(str(exc)) from exc
+        self.expected_hwnd=self.game_guard.game.hwnd
         if (self.user32.GetSystemMetrics(0),self.user32.GetSystemMetrics(1)) != (1920,1080):
             raise SafetyStop("Se requiere pantalla principal 1920x1080; no se envian clics")
 
@@ -51,19 +60,27 @@ class WindowsIO:
         if self.user32.GetAsyncKeyState(0x77)&0x8000:
             raise KeyboardInterrupt("F8")
 
+    def check_game(self):
+        guard=getattr(self,"game_guard",None)
+        if guard is not None:
+            try:
+                guard.check()
+            except RuntimeError as exc:
+                raise SafetyStop(str(exc)) from exc
+        elif self.expected_hwnd and self.user32.GetForegroundWindow()!=self.expected_hwnd:
+            raise SafetyStop("El juego perdio el primer plano; no se envia input")
+
     def click(self,xy):
         self.emergency()
-        if self.expected_hwnd and self.user32.GetForegroundWindow()!=self.expected_hwnd:
-            raise SafetyStop("Prueba CAST: el juego perdio el primer plano; no se envia input")
+        self.check_game()
         if not self.user32.SetCursorPos(int(xy[0]),int(xy[1])):
             raise SafetyStop("Windows rechazo SetCursorPos")
         # Solo CONTROL, nunca CATCH: permitir que el juego procese el cambio
         # de cursor y DOWN en botones de interfaz. CAST usa su ruta inmediata.
         if getattr(self,"control_mode",False):
             time.sleep(.01)
-            self.emergency()
-            if self.expected_hwnd and self.user32.GetForegroundWindow()!=self.expected_hwnd:
-                raise SafetyStop("CONTROL: foco perdido antes de DOWN; no se envia input")
+        self.emergency()
+        self.check_game()
         self.user32.mouse_event(0x0002,0,0,0,0)
         try:
             if getattr(self,"control_mode",False):
@@ -76,8 +93,7 @@ class WindowsIO:
         import ctypes
         from ctypes import wintypes
         self.emergency()
-        if self.expected_hwnd and self.user32.GetForegroundWindow()!=self.expected_hwnd:
-            raise SafetyStop("Prueba CAST: juego fuera de primer plano; no se envia input")
+        self.check_game()
         point=wintypes.POINT()
         if not self.user32.GetCursorPos(ctypes.byref(point)):
             raise SafetyStop("CAST: Windows no devuelve posicion del cursor")
@@ -94,6 +110,8 @@ class WindowsIO:
         packet[0].payload.mouse.flags=0x0002
         packet[1].payload.mouse.flags=0x0004
         self.user32.SendInput.argtypes=[wintypes.UINT,ctypes.POINTER(Input),ctypes.c_int]
+        self.emergency()
+        self.check_game()
         sent=self.user32.SendInput(2,packet,ctypes.sizeof(Input))
         if sent!=2:
             if sent==1:
@@ -111,6 +129,7 @@ def check_stop(io,channel,log):
     log.check()
     if channel.stop_path.exists():
         raise KeyboardInterrupt("Parada compartida")
+    io.check_game()
 
 
 def _managed(role,loop,model=None):
