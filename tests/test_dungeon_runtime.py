@@ -313,22 +313,29 @@ class DungeonRuntimeTests(unittest.TestCase):
             self.assertEqual(runner.budget.gold_reserved,0)
 
     def test_decline_only_a_stable_known_non_target_and_confirm_that_action(self):
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:offer=data['offer_brute']
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,vision=self.runner(Path(tmp));runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk')
-            vision.familiar_name.return_value='Brute';runner.click=Mock();runner.wait=Mock(return_value='frame')
-            self.assertTrue(runner.decline_other('frame','test:1',1))
+            vision.familiar_name.return_value='Brute';runner.click=Mock();runner.wait=Mock(return_value=offer)
+            self.assertTrue(runner.decline_other(offer,'test:1',1))
             self.assertEqual([call.args[0] for call in runner.click.call_args_list],['FAMILIAR_OFFER','DECLINE_CONFIRM'])
             self.assertEqual(runner.budget.gold_reserved,0)
             self.assertTrue((Path(tmp)/'decline-1.intent.json').exists())
             runner.click.reset_mock()
             for name in (None,'Tealk','tealk'):
                 vision.familiar_name.return_value=name
-                self.assertFalse(runner.decline_other('frame','test:1',2))
+                self.assertFalse(runner.decline_other(offer,'test:1',2))
                 runner.click.assert_not_called()
-            runner.plan['target']='';vision.familiar_name.return_value='Brute'
-            self.assertFalse(runner.decline_other('frame','test:1',2));runner.click.assert_not_called()
+            # Sin objetivo se rechaza cualquier oferta legible, conocida o no; nunca oro ni gemas.
+            runner.plan['target']=''
+            for offer_id,name in ((3,'Brute'),(4,None)):
+                vision.familiar_name.return_value=name
+                self.assertTrue(runner.decline_other(offer,'test:1',offer_id))
+            self.assertEqual(runner.click.call_count,4);self.assertEqual(runner.budget.gold_reserved,0)
+            self.assertFalse(runner.decline_other(np.zeros_like(offer),'test:1',5))
 
     def test_changed_familiar_before_decline_and_wrong_confirm_never_send_yes(self):
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:offer=data['offer_brute']
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,vision=self.runner(Path(tmp));vision.screen.return_value='FAMILIAR_OFFER'
             vision.familiar_name.return_value='Tealk'
@@ -336,11 +343,11 @@ class DungeonRuntimeTests(unittest.TestCase):
                 runner.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015),expected_familiar='Brute')
             io.click.assert_not_called()
             runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');vision.familiar_name.return_value='Brute'
-            def wait(screen,timeout=10):
+            def wait(screen,timeout=10,expected=None):
                 if screen=='DECLINE_CONFIRM':raise SafetyStop('Confirmación distinta')
-                return 'frame'
+                return offer
             runner.wait=wait
-            with self.assertRaises(SafetyStop):runner.decline_other('frame','test:1',1)
+            with self.assertRaises(SafetyStop):runner.decline_other(offer,'test:1',1)
             io.click.assert_called_once_with((755,955))
 
     def test_decline_closes_on_a_different_known_next_offer_but_never_the_same_or_unknown_one(self):
@@ -377,6 +384,29 @@ class DungeonRuntimeTests(unittest.TestCase):
                     self.assertEqual(io.click.call_count,2)
                 self.assertEqual(runner.budget.payload()['entries_reserved'],0)
                 self.assertEqual(runner.budget.gold_reserved,0)
+
+    def test_without_target_any_different_next_offer_closes_but_the_same_one_does_not(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('offer_brute','offer','decline_confirm','battle')}
+        for next_screen,closes in (('offer',True),('battle',True),('offer_brute',False)):
+            with self.subTest(next_screen=next_screen),tempfile.TemporaryDirectory() as tmp:
+                runner,io,_=self.runner(Path(tmp));runner.plan['target']='';runner.vision=vision=DungeonVision()
+                state=['offer_brute'];runner.capture=lambda:frames[state[0]]
+                def wait(predicate,timeout=10,expected=None):
+                    frame=runner.capture()
+                    if not (predicate(frame) if callable(predicate) else vision.screen(frame)==predicate):
+                        raise SafetyStop('Cierre no confirmado')
+                    return frame
+                runner.wait=wait
+                def click(xy):state[0]='decline_confirm' if xy==(755,955) else next_screen
+                io.click.side_effect=click
+                with patch('fishing_core.dungeon_runtime.time.sleep'):
+                    if closes:self.assertTrue(runner.decline_other(frames['offer_brute'],'test:1','1-1'))
+                    else:
+                        with self.assertRaises(SafetyStop):runner.decline_other(frames['offer_brute'],'test:1','1-1')
+                intent=json.loads((Path(tmp)/'decline-1-1.intent.json').read_text())
+                self.assertIs(intent['effect_confirmed'],closes);self.assertEqual(runner.budget.gold_reserved,0)
 
     def test_battle_auto_does_not_claim_that_map_auto_was_started(self):
         with tempfile.TemporaryDirectory() as tmp:

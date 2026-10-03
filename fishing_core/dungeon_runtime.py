@@ -10,7 +10,7 @@ import numpy as np
 
 from .control_flow import SafetyStop
 from .dungeon_catalog import dungeon,farm_plan,normalize
-from .dungeon_vision import DungeonVision
+from .dungeon_vision import DungeonVision,familiar_glyph
 from .farm_budget import FarmBudget
 from .game_window import ENV_WINDOW,WindowGuard
 from .processes import Mutex,child_options,close_children,python_executable
@@ -220,24 +220,30 @@ class DungeonRunner:
         return attempt
 
     def decline_other(self,frame,attempt,offer):
-        name=self.vision.familiar_name(frame);target=self.plan['target']
-        if not target or not isinstance(name,str) or normalize(name)==normalize(target):return False
+        """Sin objetivo se rechaza toda oferta legible; con objetivo, solo otro nombre conocido."""
+        name=self.vision.familiar_name(frame);target=self.plan['target'];glyph=familiar_glyph(frame)
+        if glyph is None:return False
+        if target and (not isinstance(name,str) or normalize(name)==normalize(target)):return False
+        same=lambda f:(lambda g:g is not None and np.array_equal(g,glyph))(familiar_glyph(f))
         frame=self.wait('FAMILIAR_OFFER')
-        if self.vision.familiar_name(frame)!=name:raise SafetyStop('Nombre de familiar inestable; no se rechaza')
+        if not same(frame):raise SafetyStop('Nombre de familiar inestable; no se rechaza')
         path=self.channel.directory/f'decline-{offer}.intent.json'
         if path.exists():raise SafetyStop('Rechazo ya registrado; no se repite una decisión incierta')
         intent={'attempt_id':attempt,'familiar':name,'target':target,'action':'DECLINE','effect_confirmed':False}
         atomic_json(path,intent)
-        self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015),expected_familiar=name)
+        self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015),expected_familiar=name if target else None)
         self.wait('DECLINE_CONFIRM')
         self.click('DECLINE_CONFIRM',(818,752),'DECLINE_YES',(670,695,955,805))
         def closed(frame):
             screen=self.vision.screen(frame)
-            return (screen in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','VICTORY','LOADING') or
-                    (screen=='FAMILIAR_OFFER' and self.vision.familiar_name(frame) not in (None,name)))
-        self.wait(closed)  # Otra oferta conocida acredita cierre; la misma o ilegible no.
+            if screen in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','VICTORY','LOADING'):return True
+            if screen!='FAMILIAR_OFFER':return False
+            # Otra oferta acredita cierre; la misma o ilegible no. Con objetivo, solo otro nombre conocido.
+            return self.vision.familiar_name(frame) not in (None,name) if target else not same(frame) and familiar_glyph(frame) is not None
+        self.wait(closed)
         atomic_json(path,{**intent,'effect_confirmed':True})
-        self.log.emit('FAMILIAR_DECLINED',message=f'{name} rechazado · objetivo {target}',familiar=name,target=target)
+        label=name or 'familiar sin referencia'
+        self.log.emit('FAMILIAR_DECLINED',message=f'{label} rechazado · objetivo {target or "ninguno"}',familiar=name,target=target)
         return True
 
     def observe(self,attempt,cycle,*,auto_started=False):
