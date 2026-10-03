@@ -307,3 +307,20 @@ prueba y causa observada en vivo:
   oferta legible (identidad por glifo del nombre). Nunca Persuade ni Bribe.
 - Ajustes del usuario (autorizados): auto-Persuade GOLD y Decline duplicates
   desactivados en el juego; gemas seguían apagadas.
+
+## World Boss Netherworld T9 — 2026-10-03
+
+`python -m fishing_core.boss_runtime <runs>` (Linux/niri, sin panel todavía) gasta
+xeals en **Netherworld Tier 9 Normal, sala privada en solitario**. Comprueba y nunca
+cambia la configuración del diálogo Summon; reserva 1 xeal antes de START; cierra con
+TOWN y la X de la lista. Sin xeals cierra la lista sin invocar.
+
+- Heroic T9 en solitario: derrota en segundos (`c4`, 2026-10-03). Normal: victoria ~8 s.
+- Sala pública: se une otro jugador y START queda desactivado → pantalla desconocida,
+  parada sin expulsar a nadie.
+- Diálogos y ventanas entran/salen animados: cada clic espera pantalla **y** botón estables.
+- En vivo: `20261003_133642_00491fa11b43` y `20261003_133747_c0b5fc0a0427`, 2 victorias
+  y parada por saldo 0.
+
+Pendiente: Trials (coste 5 tokens; con 3 el juego ofrece comprar con gemas → siempre
+NO), integración en el panel y un orquestador que repita cada modo al regenerarse.
