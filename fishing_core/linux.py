@@ -13,6 +13,10 @@ import time
 from .control_flow import SafetyStop
 from .game_window import ENV_WINDOW, GameWindow, WindowGuard
 
+# Escape enviado ~0,6 s tras pedir foco se perdio; con 1,5 s estable funciono.
+# ponytail: umbral fijo observado, medir mas sesiones si vuelve a perderse.
+FOCUS_SETTLE=1.0
+
 
 class Niri:
     def request(self,request):
@@ -139,19 +143,25 @@ class LinuxAPI:
         self.emergency()
         game=self.inspect(xid)
         self.niri.request({"Action":{"FocusWindow":{"id":game.compositor_id}}})
-        deadline=time.monotonic()+2
-        settled=time.monotonic()+.5
+        deadline=time.monotonic()+3
+        stable_since=None
         while True:
             self.emergency()
             try:
                 self.check_window(game)
-                # El foco llega antes que el final de la animacion entre espacios.
-                # No mover el cursor sobre una ventana que aun esta entrando.
-                if time.monotonic()>=settled:
+                # El foco llega antes que el final de la animacion y Wine/Unity
+                # puede perder la primera tecla: contar foco continuo confirmado.
+                now=time.monotonic()
+                if stable_since is None:
+                    stable_since=now
+                if now-stable_since>=FOCUS_SETTLE:
                     return
             except RuntimeError:
+                stable_since=None
                 if time.monotonic()>=deadline:
                     raise
+            if time.monotonic()>=deadline:
+                raise RuntimeError("Steam no mantuvo el foco estable; no se envia input")
             time.sleep(.02)
 
     def check_window(self,game):

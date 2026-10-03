@@ -160,6 +160,29 @@ class LinuxTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             api.cursor()
 
+    def activation(self,results):
+        api=LinuxAPI.__new__(LinuxAPI);clock=[0.0];game=self.game()
+        api.emergency=Mock();api.inspect=Mock(return_value=game);api.niri=Mock()
+        outcomes=iter(results)
+        def check(_):
+            if not next(outcomes,True):raise RuntimeError("focus")
+        api.check_window=Mock(side_effect=check)
+        def sleep(seconds):clock[0]+=seconds
+        fake=SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep)
+        return api,clock,fake
+
+    def test_activate_waits_for_continuous_confirmed_focus_not_time_since_request(self):
+        # Foco tarda 0,6 s y parpadea una vez: la espera cuenta desde la ultima confirmacion.
+        api,clock,fake=self.activation([False]*30+[True]*10+[False]+[True]*100)
+        with patch("fishing_core.linux.time",fake):api.activate(123)
+        self.assertGreaterEqual(clock[0],(30+10+1)*.02+1.0-1e-9)
+
+    def test_activate_stops_when_focus_never_settles(self):
+        api,clock,fake=self.activation([True,False]*200)
+        with patch("fishing_core.linux.time",fake):
+            with self.assertRaises(RuntimeError):api.activate(123)
+        self.assertLess(clock[0],3.1)
+
     def test_overview_blocks_game_input_despite_keyboard_focus(self):
         api=LinuxAPI.__new__(LinuxAPI)
         api.inspect=Mock(return_value=self.game())
