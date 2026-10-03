@@ -101,6 +101,13 @@ class DungeonVisionTests(unittest.TestCase):
         damaged=self.frames['difficulty'].copy();damaged[340:415,625:715]=0
         self.assertIsNone(self.vision.cost(damaged,'Normal'))
 
+    def test_energy_reads_a_zero_in_the_balance_but_never_the_alternating_clock(self):
+        # 107/369 real: el 0 de esta fuente puntuaba como 8 (2 huecos) y se rechazaba.
+        self.assertEqual(self.vision.screen(self.frames['energy_team_zero']),'TEAM')
+        self.assertEqual(self.vision.energy(self.frames['energy_team_zero']),(107,369))
+        self.assertIsNone(self.vision.energy(self.frames['energy_team_timer_2']))
+        self.assertEqual(self.vision.energy(self.frames['energy_team_large']),(317,368))
+
     def test_native_spending_flags_use_the_parent_checkbox_not_rarity(self):
         self.assertIs(self.vision.setting(self.frames['settings_gold'],'gold'),False)
         self.assertIs(self.vision.setting(self.frames['settings_gems'],'gems'),False)

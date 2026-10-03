@@ -145,9 +145,11 @@ def choose_digit(candidates,observed_holes,structures):
 
 
 class BaitReader:
-    def __init__(self, path=ASSETS):
+    def __init__(self, path=ASSETS, extra=None):
         with np.load(path, allow_pickle=False) as data:
             self.templates = {k: data[k] for k in data.files}
+        # Variantes de otra fuente (p. ej. energía); solo añaden referencias.
+        self.templates.update(extra or {})
         # Misma altura de la fuente del inventario; evita reescalar el observado
         # arriba/abajo contra referencias del porcentaje de distinto tamano.
         for key in tuple(self.templates):

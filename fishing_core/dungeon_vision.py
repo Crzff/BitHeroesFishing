@@ -24,7 +24,7 @@ class DungeonVision:
         # ponytail: dos fondos observados; máscara alfa etiquetada si otro fondo falla.
         self.home_masks={key:np.all(self.templates[key]==self.templates[key+'_TOWN'],axis=2).astype(np.uint8)
                          for key in ('HOME_QUEST','HOME_SETTINGS')}
-        self.digits=BaitReader()
+        self.digits=BaitReader(extra={k:v for k,v in self.templates.items() if k.startswith('DIGIT_')})
 
     def locate(self,frame,key,roi,threshold=.97):
         x,y,x1,y1=roi;image=frame[y:y1,x:x1];ref=self.templates[key]

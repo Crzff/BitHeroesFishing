@@ -58,7 +58,8 @@
     "zones_list_bottom": "8a5e3d6481c0bdc41df51e91c376e729e2305dd48d22beb8b00fe7f89b14745f",
     "zones_reopened": "0957861c45b1ac74ed51cc45a2e8cb437883a8806db00d082e3cd05de82ea54a",
     "energy_team_large": "82a79750eb382478aa85c409c96d21abe90399a6da5f8cdc650ced1849cb3489",
-    "energy_team_timer": "a13a0252d6d16762bab8209c938be9a8337ec2212c1ecda92a83fd8cb37cb34a"
+    "energy_team_timer": "a13a0252d6d16762bab8209c938be9a8337ec2212c1ecda92a83fd8cb37cb34a",
+    "energy_team_zero": "4528aef8456104f7760efd5de9b9348b20f7ab50887f5f36e1e0e94e4b1dd0ec"
   },
   "regions": {
     "HOME_QUEST": [
@@ -609,6 +610,24 @@
         1129,
         52
       ]
+    ],
+    "DIGIT_0_ENERGY": [
+      "energy_team_zero",
+      [
+        1063,
+        30,
+        1080,
+        52
+      ]
+    ],
+    "DIGIT_8_ENERGY": [
+      "energy_team_large",
+      [
+        1177,
+        30,
+        1194,
+        52
+      ]
     ]
   },
   "notes": [
@@ -616,7 +635,8 @@
     "home_town_moved: fixture m\u00ednima Quest/Settings del fallo UNKNOWN en pueblo; reconoce p\u00edxeles invariantes sin rebajar .97/12",
     "DUNGEON_MAP_HUD: etiqueta SHOP visible en exploraci\u00f3n, no en combate; solo referencia de contexto, nunca autoriza compras",
     "Zones: 20 nombres/t\u00edtulos observados en Steam/niri 2026-10-03; abrir mapa no acredita dungeon desbloqueada. Choices compara texto blanco con los mismos umbrales .97/12, sin OCR.",
-    "Energ\u00eda TEAM 2026-10-03: saldo 317/368, slash 23\u00d722; normalizar sombreado al 50 % y binarizar blanco >=170. Reloj 2:09 no es saldo. Referencia previa 21\u00d720 y filtros intactos."
+    "Energ\u00eda TEAM 2026-10-03: saldo 317/368, slash 23\u00d722; normalizar sombreado al 50 % y binarizar blanco >=170. Reloj 2:09 no es saldo. Referencia previa 21\u00d720 y filtros intactos.",
+    "Energ\u00eda TEAM 2026-10-03: primer saldo con 0 (107/369). El 0 de esta fuente puntuaba como 8 y se rechazaba por huecos (1\u22602); se a\u00f1ade DIGIT_0_ENERGY binarizado igual que energy(). Umbrales, margen y rechazo de reloj intactos. DIGIT_8_ENERGY (de 317/368) compite con ese 0 para que un 8 real no punt\u00fae como 0."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",
