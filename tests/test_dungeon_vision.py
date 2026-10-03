@@ -107,6 +107,10 @@ class DungeonVisionTests(unittest.TestCase):
         self.assertEqual(self.vision.energy(self.frames['energy_team_zero']),(107,369))
         self.assertIsNone(self.vision.energy(self.frames['energy_team_timer_2']))
         self.assertEqual(self.vision.energy(self.frames['energy_team_large']),(317,368))
+        # 61/369: una variante suelta de 8 hacía puntuar los 6 como 8; juego completo 0-9.
+        self.assertEqual(self.vision.energy(self.frames['energy_team_61']),(61,369))
+        for clock in ('energy_team_clock_153','energy_team_clock_152','energy_team_clock_145','energy_team_clock_144'):
+            self.assertIsNone(self.vision.energy(self.frames[clock]),clock)
 
     def test_native_spending_flags_use_the_parent_checkbox_not_rarity(self):
         self.assertIs(self.vision.setting(self.frames['settings_gold'],'gold'),False)

@@ -59,7 +59,12 @@
     "zones_reopened": "0957861c45b1ac74ed51cc45a2e8cb437883a8806db00d082e3cd05de82ea54a",
     "energy_team_large": "82a79750eb382478aa85c409c96d21abe90399a6da5f8cdc650ced1849cb3489",
     "energy_team_timer": "a13a0252d6d16762bab8209c938be9a8337ec2212c1ecda92a83fd8cb37cb34a",
-    "energy_team_zero": "4528aef8456104f7760efd5de9b9348b20f7ab50887f5f36e1e0e94e4b1dd0ec"
+    "energy_team_zero": "4528aef8456104f7760efd5de9b9348b20f7ab50887f5f36e1e0e94e4b1dd0ec",
+    "energy_team_61": "e85c5944fc3936401859e0b381a87e361e79382340027bbb1364c121763e23e6",
+    "energy_team_clock_153": "607c0f8f7785dc508f7e88501ca17b88dc4cdf2bd9cc1280879336824effedbd",
+    "energy_team_clock_152": "7e4f72e1b0c21104b518c4af1ad09c6ccb1f1739f517f5cbc10f20c73ff1d25a",
+    "energy_team_clock_145": "a8c2f3a0649dab1bb5363e596906b20cfb88f54f78d74d538de5eb935216a3cb",
+    "energy_team_clock_144": "273f43c2a96e866e382de210b0f07ead6a4e49d3db032867b70cf1f2e6bd5bc1"
   },
   "regions": {
     "HOME_QUEST": [
@@ -620,8 +625,80 @@
         52
       ]
     ],
+    "DIGIT_1_ENERGY": [
+      "energy_team_zero",
+      [
+        1053,
+        30,
+        1058,
+        52
+      ]
+    ],
+    "DIGIT_2_ENERGY": [
+      "energy_team_clock_152",
+      [
+        1136,
+        30,
+        1153,
+        52
+      ]
+    ],
+    "DIGIT_3_ENERGY": [
+      "energy_team_zero",
+      [
+        1134,
+        30,
+        1151,
+        52
+      ]
+    ],
+    "DIGIT_4_ENERGY": [
+      "energy_team_clock_145",
+      [
+        1114,
+        30,
+        1131,
+        52
+      ]
+    ],
+    "DIGIT_5_ENERGY": [
+      "energy_team_clock_153",
+      [
+        1114,
+        30,
+        1131,
+        52
+      ]
+    ],
+    "DIGIT_6_ENERGY": [
+      "energy_team_zero",
+      [
+        1156,
+        30,
+        1172,
+        52
+      ]
+    ],
+    "DIGIT_7_ENERGY": [
+      "energy_team_zero",
+      [
+        1085,
+        30,
+        1101,
+        52
+      ]
+    ],
     "DIGIT_8_ENERGY": [
       "energy_team_large",
+      [
+        1177,
+        30,
+        1194,
+        52
+      ]
+    ],
+    "DIGIT_9_ENERGY": [
+      "energy_team_zero",
       [
         1177,
         30,
@@ -636,7 +713,7 @@
     "DUNGEON_MAP_HUD: etiqueta SHOP visible en exploraci\u00f3n, no en combate; solo referencia de contexto, nunca autoriza compras",
     "Zones: 20 nombres/t\u00edtulos observados en Steam/niri 2026-10-03; abrir mapa no acredita dungeon desbloqueada. Choices compara texto blanco con los mismos umbrales .97/12, sin OCR.",
     "Energ\u00eda TEAM 2026-10-03: saldo 317/368, slash 23\u00d722; normalizar sombreado al 50 % y binarizar blanco >=170. Reloj 2:09 no es saldo. Referencia previa 21\u00d720 y filtros intactos.",
-    "Energ\u00eda TEAM 2026-10-03: primer saldo con 0 (107/369). El 0 de esta fuente puntuaba como 8 y se rechazaba por huecos (1\u22602); se a\u00f1ade DIGIT_0_ENERGY binarizado igual que energy(). Umbrales, margen y rechazo de reloj intactos. DIGIT_8_ENERGY (de 317/368) compite con ese 0 para que un 8 real no punt\u00fae como 0."
+    "Energ\u00eda TEAM 2026-10-03: el lector de cebos confund\u00eda 0/6 con 8 en la fuente de energ\u00eda (rechazo por huecos). Variantes sueltas de 0 u 8 desplazaban el error (61/369 fallaba). Se a\u00f1ade el juego completo DIGIT_0..9_ENERGY de saldos/relojes reales etiquetados, solo para dungeons. Umbrales, margen, huecos y rechazo de reloj intactos."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

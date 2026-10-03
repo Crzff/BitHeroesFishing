@@ -137,7 +137,8 @@ class DungeonVision:
         if len(separators)!=1:return None  # Reloj/valor ilegible nunca es saldo.
         sx,sw=separators[0]
         balance=self.number(image[:,:sx]);capacity=self.number(image[:,sx+sw:])
-        return (balance,capacity) if balance is not None and capacity is not None and capacity>0 else None
+        # Saldo > capacidad delata una capacidad truncada; por encima del máximo se pausa.
+        return (balance,capacity) if balance is not None and capacity is not None and 0<capacity and balance<=capacity else None
 
     def cost(self,frame,difficulty):
         if self.screen(frame) not in ('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'):return None
