@@ -1,5 +1,7 @@
 import json
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -426,6 +428,41 @@ class DungeonRuntimeTests(unittest.TestCase):
             runner.observe('test:1',1)
             self.assertEqual(runner.budget.payload()['completed_runs'],1)
             io.click.assert_called_once_with((1150,1000))
+
+    def test_run_stops_before_navigating_when_the_next_entry_exceeds_the_energy_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.plan=farm_plan('Z5D2','Normal',3,15)
+            runner.go_home=Mock();runner.verify_settings=Mock();runner.select_route=Mock();runner.observe=Mock()
+            def enter(cycle):
+                runner.budget.energy_reserved+=10
+                return f'test:{cycle}'
+            runner.enter=Mock(side_effect=enter)
+            runner.run()
+            runner.enter.assert_called_once_with(1)
+            runner.verify_settings.assert_called_once();runner.select_route.assert_called_once()
+            self.assertEqual(runner.log.emit.call_args.kwargs['message'],'Límite de energía alcanzado')
+
+    def test_wait_requires_two_consecutive_matching_reads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp))
+            runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            reads=iter([True,False,False])
+            with patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=[0,.5,1,1.5,3]), \
+                    patch('fishing_core.dungeon_runtime.time.sleep'):
+                with self.assertRaises(SafetyStop):DungeonRunner.wait(runner,lambda _:next(reads),timeout=2)
+            io.click.assert_not_called()
+
+    def test_check_stops_when_the_supervising_panel_is_gone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp))
+            with patch.dict('os.environ',{'FARM_LAUNCHER_PID':str(os.getppid())}):runner.check()
+            with patch.dict('os.environ',{'FARM_LAUNCHER_PID':str(os.getppid()+1)}):
+                with self.assertRaisesRegex(SafetyStop,'panel'):runner.check()
+
+    def test_check_stops_after_the_session_time_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.deadline=time.monotonic()-1
+            with self.assertRaisesRegex(SafetyStop,'15 minutos'):runner.check()
 
 
 if __name__=='__main__':unittest.main()
