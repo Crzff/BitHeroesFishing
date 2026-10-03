@@ -28,7 +28,7 @@
 - [x] Reconocimiento de una ruta real y guardas de gasto.
   - Aceptación: UNKNOWN/precio/saldo inciertos nunca autorizan entrada.
   - Verificar: capturas etiquetadas y casos negativos; lector y pruebas.
-- [ ] Una dungeon supervisada, cierre y repetición finita.
+- [x] Una dungeon supervisada, cierre y repetición finita.
   - Aceptación: entrada/resultado únicos, F8/foco/derrota detienen y energía limitada.
   - Verificar: suite y una run registrada; runtime y proceso propio, sin CATCH.
   - Entrada/cierre de Z5D2 Normal comprobados en `20261002_140836_70c52d4b0fe5`,
@@ -36,6 +36,9 @@
   - F8 real `20261002_141807_df80cbf262f4`: 0 inputs/entradas, panel restaurado.
   - Oro autorizado durante la prueba: una persuasión Melvguin / 2.000 GOLD;
     reclutamiento desconocido. `max_gold=0` automático se conserva por ahora.
+  - Repetición autónoma certificada 2026-10-03: `20261003_131256_f3ef71365838`,
+    6/6 runs Z5D2 Normal (62→~4 energía), 3 ofertas rechazadas sin objetivo,
+    parada por límite de runs. Antes: 4/10 en `20261003_130308_1b472c88bb8f`.
 - [ ] Calibrar navegación de zonas y siguientes rutas; ampliar por familiar.
   - Z5D3 Heroic/Tealk: una entrada de 30 energía y cierre supervisado confirmados
     en `20261002_154802_ca83930eecdc`; límite 1 run/sesión, repetición pendiente.

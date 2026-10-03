@@ -291,3 +291,19 @@ Recorrido continuo completo con la última corrección sin intervención, repeti
 otras dungeons/dificultades (navegación de zonas ya comprobada), ampliar rutas por familiar y nombres reconocidos, reconocimiento de
 derrota, Persuade con cuota de oro y botín estructurado. No se hicieron compras,
 consumibles, cambios de equipo, commits o publicación.
+
+## Repetición autónoma Z5D2 — 2026-10-03
+
+`20261003_131256_f3ef71365838`: **6/6 runs** Z5D2 Normal sin intervención,
+energía 62→~4, parada por límite de runs. Correcciones previas, cada una con
+prueba y causa observada en vivo:
+
+- Foco: `activate()` exige 1 s de foco continuo confirmado; un Escape enviado
+  ~0,6 s tras pedir foco se perdía (`20261003_114038_dde3ac5617e7`).
+- Energía: la barra alterna saldo y reloj cada 2–6 s. El lector de cebos
+  confundía 0/6 con 8 en esta fuente; se añadió `DIGIT_0..9_ENERGY` real y la
+  espera de saldo en TEAM es de 30 s. Saldo > capacidad se descarta.
+- Ofertas: con Decline duplicates desactivado y sin objetivo, se rechaza toda
+  oferta legible (identidad por glifo del nombre). Nunca Persuade ni Bribe.
+- Ajustes del usuario (autorizados): auto-Persuade GOLD y Decline duplicates
+  desactivados en el juego; gemas seguían apagadas.
