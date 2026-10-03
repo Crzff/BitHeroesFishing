@@ -55,7 +55,7 @@ class DungeonRuntimeTests(unittest.TestCase):
                             locate=Mock(return_value=(1000,943)))
         runner=DungeonRunner(io,Mock(),vision,channel,Mock(),plan)
         runner.capture=Mock(return_value='frame')
-        def wait(predicate,timeout=10):
+        def wait(predicate,timeout=10,expected=None):
             if callable(predicate):
                 predicate('frame')
                 if not predicate('frame'):raise SafetyStop('Lectura no confirmada')
@@ -227,7 +227,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             def capture():return frames['zones_list_bottom' if state[0]=='ZONES' and state[1]==16 else
                                         'zones_list_top' if state[0]=='ZONES' else f'zones_map_{state[1]}']
             state[1]=20;runner.capture=capture
-            def wait(predicate,timeout=10):
+            def wait(predicate,timeout=10,expected=None):
                 for _ in range(2):
                     frame=capture()
                     okay=predicate(frame) if callable(predicate) else vision.screen(frame)==predicate
@@ -351,7 +351,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             with self.subTest(next_offer=next_offer),tempfile.TemporaryDirectory() as tmp:
                 runner,io,_=self.runner(Path(tmp));runner.plan['target']='Tealk';runner.vision=vision=DungeonVision()
                 state=['offer_brute'];runner.capture=lambda:frames[state[0]]
-                def wait(predicate,timeout=10):
+                def wait(predicate,timeout=10,expected=None):
                     for _ in range(2):
                         frame=runner.capture()
                         okay=predicate(frame) if callable(predicate) else vision.screen(frame)==predicate
@@ -428,6 +428,31 @@ class DungeonRuntimeTests(unittest.TestCase):
             runner.observe('test:1',1)
             self.assertEqual(runner.budget.payload()['completed_runs'],1)
             io.click.assert_called_once_with((1150,1000))
+
+    def energy_clock(self,path,readings):
+        runner,io,vision=self.runner(path);runner.wait=DungeonRunner.wait.__get__(runner)
+        runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+        values=iter(readings);vision.energy=Mock(side_effect=lambda _:next(values,readings[-1]))
+        clock=[0.0]
+        def sleep(seconds):clock[0]+=seconds
+        fake=SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep,perf_counter_ns=time.perf_counter_ns)
+        return runner,io,fake
+
+    def test_energy_waits_out_the_recharge_clock_and_reserves_before_one_accept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            # ~15 s de reloj (None) y despues saldo estable: 10 s no bastaban.
+            runner,io,fake=self.energy_clock(Path(tmp),[None]*125+[(100,368)])
+            with patch('fishing_core.dungeon_runtime.time',fake):runner.enter(1)
+            io.click.assert_called_once()
+            self.assertEqual(runner.budget.energy_reserved,10)
+
+    def test_permanent_recharge_clock_stops_without_reserving_or_accept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,fake=self.energy_clock(Path(tmp),[None])
+            with patch('fishing_core.dungeon_runtime.time',fake):
+                with self.assertRaisesRegex(SafetyStop,'saldo de energía en TEAM'):runner.enter(1)
+            io.click.assert_not_called()
+            self.assertEqual(runner.budget.energy_reserved,0)
 
     def test_run_stops_before_navigating_when_the_next_entry_exceeds_the_energy_limit(self):
         with tempfile.TemporaryDirectory() as tmp:

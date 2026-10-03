@@ -18,6 +18,7 @@ from .protocol import Channel,atomic_json
 from .telemetry import ROOT,Telemetry,run_environment
 
 ROUTE_COSTS={('Z5D2','Normal'):10,('Z5D3','Heroic'):30}
+ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
               'DIFFICULTY_Z5D2':('MAP_Z5',),'DIFFICULTY_Z5D3':('MAP_Z5',),'ZONES':MAP_SCREENS,
@@ -70,7 +71,7 @@ class DungeonRunner:
         self.check();shot=self.cap.grab({'left':0,'top':0,'width':1920,'height':1080})
         return np.frombuffer(shot.bgra,np.uint8).reshape(1080,1920,4)[:,:,:3].copy()
 
-    def wait(self,predicate,timeout=10):
+    def wait(self,predicate,timeout=10,expected=None):
         deadline=time.monotonic()+timeout;stable=0;frame=None
         while time.monotonic()<deadline:
             frame=self.capture()
@@ -78,7 +79,7 @@ class DungeonRunner:
             stable=stable+1 if okay else 0
             if stable>=2:return frame
             time.sleep(.12)
-        expected=predicate if isinstance(predicate,str) else 'lectura estable'
+        expected=expected or (predicate if isinstance(predicate,str) else 'lectura estable')
         screen=self.vision.screen(frame) if frame is not None else 'SIN_LECTURA'
         familiar=self.vision.familiar_name(frame) if screen=='FAMILIAR_OFFER' else None
         snapshot=None
@@ -205,7 +206,8 @@ class DungeonRunner:
             okay=self.vision.screen(frame)=='TEAM' and current is not None and current==balance
             balance=current
             return okay
-        frame=self.wait(known,10)
+        # La barra puede mostrar el reloj de recarga en vez del saldo; nunca se usa como saldo.
+        frame=self.wait(known,ENERGY_WAIT,'saldo de energía en TEAM')
         if balance is None or self.vision.screen(frame)!='TEAM':raise SafetyStop('Energía desconocida')
         attempt=f'{self.channel.run_id}:{cycle}'
         if not self.budget.reserve_entry(attempt,resource='ENERGY',balance=balance[0],cost=self.cost):
