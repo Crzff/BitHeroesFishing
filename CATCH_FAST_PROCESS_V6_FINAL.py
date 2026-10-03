@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import ctypes
+import os
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -50,7 +51,7 @@ REARME_TIMEOUT_SEG = 1.5          # reducido de 3.0 a 1.5s
 COOLDOWN = 0.65
 FRAMES_POST_CLICK = 12            # frames de verificacion tras el click
 
-user32 = ctypes.windll.user32
+user32 = ctypes.windll.user32 if os.name=="nt" else None
 
 _historial_catch = deque(maxlen=200)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 import ntpath
+import os
 
 CHROME_TITLE="Play Bit Heroes Online | Kongregate - Google Chrome"
 CLIENTS=("Auto", "Steam", "Chrome")
@@ -17,21 +18,29 @@ class GameWindow:
     pid: int
     client: str
     rect: tuple[int, int, int, int]
+    compositor_id: int | None = None
 
     def serialize(self):
-        return json.dumps(asdict(self))
+        value=asdict(self)
+        if self.compositor_id is None:
+            value.pop("compositor_id")
+        return json.dumps(value)
 
     @classmethod
     def deserialize(cls, text):
         value=json.loads(text)
-        if (not isinstance(value,dict) or set(value)!={"hwnd","pid","client","rect"}
+        if (not isinstance(value,dict)
+                or set(value) not in ({"hwnd","pid","client","rect"},
+                                     {"hwnd","pid","client","rect","compositor_id"})
                 or type(value["hwnd"]) is not int or value["hwnd"]<=0
                 or type(value["pid"]) is not int or value["pid"]<=0
                 or value["client"] not in CLIENTS[1:]
                 or not isinstance(value["rect"],list) or len(value["rect"])!=4
-                or any(type(n) is not int for n in value["rect"])):
+                or any(type(n) is not int for n in value["rect"])
+                or "compositor_id" in value and (type(value["compositor_id"]) is not int
+                                                  or value["compositor_id"]<=0)):
             raise RuntimeError("Identidad de ventana invalida; no se envia input")
-        return cls(value["hwnd"],value["pid"],value["client"],tuple(value["rect"]))
+        return cls(value["hwnd"],value["pid"],value["client"],tuple(value["rect"]),value.get("compositor_id"))
 
 
 def window_client(title, class_name, executable):
@@ -182,30 +191,50 @@ class WindowsAPI:
             raise RuntimeError("Windows no confirma el foco del juego; no se inician motores")
 
 
+def window_api():
+    if os.name=="nt":
+        return WindowsAPI()
+    from .linux import LinuxAPI
+    return LinuxAPI()
+
+
 def focus_window(client="Auto", api=None):
-    api=api or WindowsAPI()
-    api.emergency()
-    game=select_window(api.windows(),client)
-    api.activate(game.hwnd)
-    # Restaurar una ventana minimizada cambia su rectangulo; leerlo de nuevo.
-    current=api.inspect(game.hwnd)
-    if (current.hwnd,current.pid,current.client)!=(game.hwnd,game.pid,game.client):
-        raise RuntimeError("Cambio la identidad del juego al enfocarlo")
-    validate_geometry(current,api.screen())
-    WindowGuard(current,api).check()
-    return current
+    own_api=api is None
+    api=api or window_api()
+    try:
+        api.emergency()
+        game=select_window(api.windows(),client)
+        api.activate(game.hwnd)
+        # Restaurar una ventana minimizada cambia su rectangulo; leerlo de nuevo.
+        current=api.inspect(game.hwnd)
+        if (current.hwnd,current.pid,current.client)!=(game.hwnd,game.pid,game.client):
+            raise RuntimeError("Cambio la identidad del juego al enfocarlo")
+        validate_geometry(current,api.screen())
+        WindowGuard(current,api).check()
+        return current
+    finally:
+        if own_api and getattr(api,"platform",None)=="linux":
+            api.close()
 
 
 class WindowGuard:
     def __init__(self, game, api=None):
         self.game=game
-        self.api=api or WindowsAPI()
-        validate_geometry(game,self.api.screen())
-        if self.api.inspect(game.hwnd)!=game:
-            raise RuntimeError("La ventana seleccionada cambio antes de iniciar")
+        self.api=api or window_api()
+        try:
+            validate_geometry(game,self.api.screen())
+            if self.api.inspect(game.hwnd)!=game:
+                raise RuntimeError("La ventana seleccionada cambio antes de iniciar")
+        except (Exception,KeyboardInterrupt):
+            if api is None and getattr(self.api,"platform",None)=="linux":
+                self.api.close()
+            raise
 
     def check(self):
         api,game=self.api,self.game
+        if getattr(api,"platform",None)=="linux":
+            api.check_window(game)
+            return
         if (not api.user.IsWindow(game.hwnd) or not api.user.IsWindowVisible(game.hwnd)
                 or api.user.IsIconic(game.hwnd) or api.foreground()!=game.hwnd):
             raise RuntimeError("El juego perdio el primer plano o fue minimizado; no se envia input")

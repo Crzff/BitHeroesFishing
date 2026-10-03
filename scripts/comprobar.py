@@ -15,10 +15,11 @@ PACKAGES = {"mss": "mss", "numpy": "numpy", "opencv-python": "cv2",
 
 def main():
     failed = False
-    python_ok = os.name == "nt" and sys.version_info[:2] == (3, 13) and struct.calcsize("P") == 8
+    python_ok = sys.platform in ("win32","linux") and sys.version_info[:2] == (3, 13) and struct.calcsize("P") == 8
     print(f"{'OK' if python_ok else 'ERROR'} Python {sys.version.split()[0]} / {struct.calcsize('P') * 8} bits / {sys.platform}")
     failed |= not python_ok
-    for package, module in PACKAGES.items():
+    packages={**PACKAGES,**({"python-xlib":"Xlib"} if sys.platform=="linux" else {})}
+    for package, module in packages.items():
         try:
             importlib.import_module(module)
             print(f"OK {package} {metadata.version(package)}")
@@ -59,6 +60,29 @@ def main():
             print('INFO clientes detectados (sin enfocar): '+(', '.join(w.client for w in windows) or 'ninguno'))
         except Exception as exc:
             print(f'AVISO no se pudo enumerar el juego: {exc}')
+    elif sys.platform=="linux":
+        api=None
+        try:
+            sys.path.insert(0,str(ROOT))
+            from fishing_core.linux import LinuxAPI,WaylandPointer,WaylandCapture
+            api=LinuxAPI()
+            print("OK niri / XWayland / pantalla",api.screen())
+            capture=WaylandCapture()
+            capture.close()
+            print("OK protocolo de captura Wayland (sin capturar)")
+            windows=api.windows()
+            print("INFO Steam detectado (sin enfocar):",len(windows))
+            if not windows:
+                print("AVISO abre Bit Heroes de Steam a pantalla completa antes de iniciar")
+            pointer=WaylandPointer()
+            pointer.close()
+            print("OK protocolo de puntero Wayland (sin mover ni hacer clic)")
+        except Exception as exc:
+            print(f"ERROR Linux: {exc}")
+            failed=True
+        finally:
+            if api is not None:
+                api.close()
     for name in ("FISHING_BOT_APP.py", "CATCH_FAST_PROCESS_V6_FINAL.py", "FISHING_CONTROL_PROCESS.py"):
         ok = (ROOT / name).is_file()
         print(f"{'OK' if ok else 'ERROR'} archivo {name}")

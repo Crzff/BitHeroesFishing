@@ -1,7 +1,7 @@
 """
 FISHING_BOT_APP.py - Panel de control para el bot de pesca de Bit Heroes
 
-Interfaz gráfica moderna y oscura usando CustomTkinter.
+Interfaz de juego con marcos en relieve usando Tk y CustomTkinter.
 Controla los procesos CATCH y CONTROL directamente.
 
 Uso:
@@ -13,7 +13,7 @@ import sys
 import json
 import time
 import threading
-import subprocess
+import tkinter as tk
 from pathlib import Path
 from datetime import datetime
 
@@ -25,6 +25,12 @@ from fishing_core.panel_safety import ACTIVE_GEOMETRY, ACTIVE_SIZE, panel_bounds
 from fishing_core.game_window import CLIENTS, focus_window
 from fishing_core.protocol import atomic_json
 from fishing_core.project_links import support_url
+from fishing_core.panel_theme import (
+    COLOR_BG, COLOR_CARD, COLOR_ACCENT, COLOR_HOVER, COLOR_FRAME, COLOR_INSET, COLOR_GOLD,
+    COLOR_SUCCESS, COLOR_DANGER, COLOR_TEXT, COLOR_TEXT_DIM,
+    WINDOW_STYLE, PANEL_STYLE, TITLE_STYLE, START_STYLE, STOP_STYLE, BUTTON_STYLE,
+    MENU_STYLE,
+)
 
 # ============================================================
 # Configuración
@@ -38,29 +44,17 @@ LOG_CATCH = HERE / "CATCH_LOG.txt"
 LOG_CONTROL = HERE / "CONTROL_LOG.txt"
 LOG_SAMPLES = HERE / "CATCH_SAMPLES.csv"
 
-# Flags para subprocess
-FLAGS = subprocess.CREATE_NEW_CONSOLE | 0x00000200
-
 # Archivo de configuración
 CONFIG_FILE = HERE / "fishing_bot_config.json"
-
-# Colores
-COLOR_BG = "#101010"
-COLOR_CARD = "#1d1d1d"
-COLOR_ACCENT = "#333333"
-COLOR_SUCCESS = "#dedede"
-COLOR_DANGER = "#b3b3b3"
-COLOR_TEXT = "#eeeeee"
-COLOR_TEXT_DIM = "#a3a3a3"
-
 
 # ============================================================
 # Clase principal de la aplicación
 # ============================================================
 
 class FishingBotApp(ctk.CTk):
-    def __init__(self):
+    def __init__(self,farm_primary=False):
         super().__init__()
+        self.farm_primary=farm_primary
 
         # Configuración de la ventana
         self.title(f"🎣 Bit Heroes Fishing Bot — {VERSION}")
@@ -75,6 +69,7 @@ class FishingBotApp(ctk.CTk):
         self.launch_mutex = None
         self._idle_pending = False
         self.bot_activo = False
+        self.active_mode = 'Fishing'
         self.monitor_thread = None
         self.log_thread = None
         self.stop_event = threading.Event()
@@ -83,9 +78,14 @@ class FishingBotApp(ctk.CTk):
         self.session_feed = None
         self._fishing_view = False
         self._normal_view = None
+        self._linux_panel = os.name!="nt"
 
         # Construir interfaz
         self._build_ui()
+        if farm_primary:
+            from fishing_core.dungeon_panel import DungeonPanel
+            self.dungeon_panel=DungeonPanel(self.mode_tabs.tab('Dungeons'),self._iniciar_dungeon,self.detener_bot)
+            self.title('Bit Heroes Farm Bot · Dungeons / Fishing')
 
         # Verificar scripts existen
         self._verificar_scripts()
@@ -105,42 +105,62 @@ class FishingBotApp(ctk.CTk):
 
     def _build_ui(self):
         """Construir la interfaz de usuario."""
+        self.background = tk.Canvas(self, bg=COLOR_BG, highlightthickness=0)
+        self.background.place(relwidth=1, relheight=1)
+        self.background.bind('<Configure>', self._draw_background)
+        self.window_frame = tk.Frame(self, **WINDOW_STYLE)
+        self.window_frame.pack(fill='both', expand=True, padx=8, pady=8)
         # Frame principal
-        self.main_frame = ctk.CTkFrame(self, fg_color=COLOR_BG)
-        self.main_frame.pack(fill="both", expand=True, padx=16, pady=16)
+        parent=self.window_frame
+        if self.farm_primary:
+            # https://customtkinter.tomschimansky.com/documentation/widgets/tabview/
+            self.mode_tabs=ctk.CTkTabview(parent, fg_color=COLOR_CARD, corner_radius=0,
+                segmented_button_fg_color=COLOR_INSET,
+                segmented_button_selected_color=COLOR_ACCENT,
+                segmented_button_selected_hover_color=COLOR_HOVER,
+                segmented_button_unselected_color=COLOR_INSET,
+                segmented_button_unselected_hover_color=COLOR_CARD,
+                segmented_button_font=ctk.CTkFont(family='Courier', size=14, weight='bold'),
+                text_color=COLOR_GOLD, text_color_disabled=COLOR_TEXT_DIM)
+            self.mode_tabs.pack(fill='both',expand=True)
+            self.mode_tabs.add('Dungeons');self.mode_tabs.add('Fishing');self.mode_tabs.set('Dungeons')
+            parent=self.mode_tabs.tab('Fishing')
+        self.main_frame = ctk.CTkFrame(parent, fg_color=COLOR_CARD, corner_radius=0)
+        self.main_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
         # Título
-        self.title_label = ctk.CTkLabel(
+        self.title_label = tk.Label(
             self.main_frame,
-            text="🎣 Bit Heroes Fishing Bot",
-            font=ctk.CTkFont(size=20, weight="bold"),
-            text_color=COLOR_TEXT,
+            text="BIT HEROES · FISHING",
+            **TITLE_STYLE,
         )
-        self.title_label.pack(pady=(0, 12))
+        self.title_label.pack(fill='x', pady=(0, 12))
 
         # Indicador de estado
-        self.status_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD, corner_radius=12)
-        self.status_frame.pack(fill="x", pady=(0, 12))
+        self.status_frame = tk.Frame(self.main_frame, **PANEL_STYLE)
+        self.status_frame.pack(fill="x", pady=(0, 8))
 
         self.status_indicator = ctk.CTkLabel(
             self.status_frame,
             text="● DETENIDO",
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=COLOR_DANGER,
+            height=24,
         )
-        self.status_indicator.pack(pady=12)
+        self.status_indicator.pack(pady=8)
 
         # Frame de procesos
-        self.procesos_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD, corner_radius=12)
-        self.procesos_frame.pack(fill="x", pady=(0, 12))
+        self.procesos_frame = tk.Frame(self.main_frame, **PANEL_STYLE)
+        self.procesos_frame.pack(fill="x", pady=(0, 8))
 
         self.procesos_title = ctk.CTkLabel(
             self.procesos_frame,
             text="Motores en ejecución",
             font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=COLOR_TEXT_DIM,
+            text_color=COLOR_GOLD,
+            height=20,
         )
-        self.procesos_title.pack(anchor="w", padx=12, pady=(12, 4))
+        self.procesos_title.pack(anchor="w", padx=12, pady=(8, 4))
 
         # Estado CATCH
         self.estado_catch = ctk.CTkLabel(
@@ -148,6 +168,7 @@ class FishingBotApp(ctk.CTk):
             text="  CATCH: —",
             font=ctk.CTkFont(size=13),
             text_color=COLOR_TEXT_DIM,
+            height=20,
         )
         self.estado_catch.pack(anchor="w", padx=12, pady=2)
 
@@ -157,6 +178,7 @@ class FishingBotApp(ctk.CTk):
             text="  CONTROL: —",
             font=ctk.CTkFont(size=13),
             text_color=COLOR_TEXT_DIM,
+            height=20,
         )
         self.estado_control.pack(anchor="w", padx=12, pady=(2, 12))
 
@@ -165,50 +187,40 @@ class FishingBotApp(ctk.CTk):
                                          wraplength=470, justify="left")
         self.activity_label.pack(anchor="w", padx=12, pady=(0, 4))
         self.outcome_label = ctk.CTkLabel(self.procesos_frame, text="Sin resultados en esta sesión",
-                                        text_color=COLOR_TEXT_DIM, wraplength=470, justify="left")
+                                        text_color=COLOR_TEXT_DIM, height=20, wraplength=470, justify="left")
         self.outcome_label.pack(anchor="w", padx=12, pady=(0, 4))
         self.cast_label = ctk.CTkLabel(self.procesos_frame, text="CAST: sin lanzamiento en esta sesión",
-                                       text_color=COLOR_TEXT_DIM, wraplength=470, justify="left")
+                                       text_color=COLOR_TEXT_DIM, height=20, wraplength=470, justify="left")
         self.cast_label.pack(anchor="w", padx=12, pady=(0, 12))
 
-        self.bait_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD, corner_radius=12)
-        self.bait_frame.pack(fill="x", pady=(0, 12))
+        self.bait_frame = tk.Frame(self.main_frame, **PANEL_STYLE)
+        self.bait_frame.pack(fill="x", pady=(0, 8))
         self.bait_label = ctk.CTkLabel(self.bait_frame, text="Cebos: sin lectura confirmada",
-                                     text_color=COLOR_TEXT, font=ctk.CTkFont(size=14, weight="bold"), wraplength=470)
+                                     text_color=COLOR_TEXT, height=24, font=ctk.CTkFont(size=14, weight="bold"), wraplength=470)
         self.bait_label.pack(anchor="w", padx=12, pady=(10, 4))
         self.bait_details = ctk.CTkLabel(self.bait_frame, text="Lectura automática al llegar a START",
-                                       text_color=COLOR_TEXT_DIM, wraplength=470, justify="left")
+                                       text_color=COLOR_TEXT_DIM, height=20, wraplength=470, justify="left")
         self.bait_details.pack(anchor="w", padx=12, pady=(0, 4))
         self.bait_note = ctk.CTkLabel(self.bait_frame, text="Pescas ≈ restantes · 1 cebo por CAST · conteo inicial único\nSin límite de ciclos · parada con 0 estimados · F8 detiene",
                                     text_color=COLOR_TEXT_DIM, font=ctk.CTkFont(size=11), wraplength=470)
         self.bait_note.pack(anchor="w", padx=12, pady=(0, 10))
 
         # Botones
-        self.botones_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_BG)
-        self.botones_frame.pack(fill="x", pady=(0, 12))
+        self.botones_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD, corner_radius=0)
+        self.botones_frame.pack(fill="x", pady=(0, 8))
 
-        self.btn_iniciar = ctk.CTkButton(
+        self.btn_iniciar = tk.Button(
             self.botones_frame,
-            text="▶  INICIAR BOT",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color=COLOR_SUCCESS,
-            hover_color="#bdbdbd",
-            text_color="#101010",
-            text_color_disabled="#707070",
-            height=44,
-            corner_radius=10,
+            text="▶  START · PESCA",
+            **START_STYLE,
             command=self.iniciar_bot,
         )
         self.btn_iniciar.pack(fill="x", pady=(0, 8))
 
-        self.btn_detener = ctk.CTkButton(
+        self.btn_detener = tk.Button(
             self.botones_frame,
-            text="⏹  DETENER BOT",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=COLOR_ACCENT,
-            hover_color="#484848",
-            height=38,
-            corner_radius=10,
+            text="■  DETENER · F8",
+            **STOP_STYLE,
             command=self.detener_bot,
             state="disabled",
         )
@@ -218,10 +230,8 @@ class FishingBotApp(ctk.CTk):
             self.botones_frame,
             text="🔄  REINICIAR",
             font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=COLOR_ACCENT,
-            hover_color="#484848",
-            height=38,
-            corner_radius=10,
+            **BUTTON_STYLE,
+            height=34,
             command=self.reiniciar_bot,
             state="disabled",
         )
@@ -231,24 +241,23 @@ class FishingBotApp(ctk.CTk):
             self.botones_frame,
             text="📌  SIEMPRE VISIBLE",
             font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=COLOR_ACCENT,
-            hover_color="#484848",
-            height=38,
-            corner_radius=10,
+            **BUTTON_STYLE,
+            height=34,
             command=self.alternar_siempre_visible,
         )
         self.btn_siempre_visible.pack(fill="x")
 
         # Seleccion de esta sesion; no altera preferencias personales guardadas.
-        self.game_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD)
+        self.game_frame = tk.Frame(self.main_frame, **PANEL_STYLE)
         self.game_frame.pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(self.game_frame, text="Juego · visible y en primer plano").pack(side="left", padx=12)
-        self.game_selector = ctk.CTkOptionMenu(self.game_frame, values=list(CLIENTS), width=115)
-        self.game_selector.set("Auto")
+        ctk.CTkLabel(self.game_frame, text="Juego · visible y en primer plano", text_color=COLOR_TEXT).pack(side="left", padx=12)
+        self.game_selector = ctk.CTkOptionMenu(self.game_frame,
+            values=["Steam"] if self._linux_panel else list(CLIENTS), width=115, **MENU_STYLE)
+        self.game_selector.set("Steam" if self._linux_panel else "Auto")
         self.game_selector.pack(side="right", padx=12, pady=6)
 
         # Frame de logs
-        self.logs_frame = ctk.CTkFrame(self.main_frame, fg_color=COLOR_CARD, corner_radius=12)
+        self.logs_frame = tk.Frame(self.main_frame, **PANEL_STYLE)
         self.logs_frame.pack(fill="both", expand=True)
 
         self.logs_title = ctk.CTkLabel(
@@ -256,8 +265,9 @@ class FishingBotApp(ctk.CTk):
             text="📋 Logs en tiempo real",
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=COLOR_TEXT_DIM,
+            height=20,
         )
-        self.logs_title.pack(anchor="w", padx=12, pady=(12, 4))
+        self.logs_title.pack(anchor="w", padx=12, pady=(8, 4))
 
         # Visible solo en el panel normal; el frame de logs se oculta al pescar.
         self.btn_apoyar = None
@@ -265,7 +275,7 @@ class FishingBotApp(ctk.CTk):
         if url:
             self.btn_apoyar = ctk.CTkButton(
                 self.logs_frame, text="♡  Apoyar en Ko-fi (opcional)",
-                fg_color=COLOR_ACCENT, hover_color="#484848", height=26,
+                **BUTTON_STYLE, height=26,
                 command=self._abrir_apoyo,
             )
             self.btn_apoyar.pack(anchor="e", padx=12, pady=(0, 6))
@@ -273,16 +283,27 @@ class FishingBotApp(ctk.CTk):
         # Textbox de logs
         self.log_textbox = ctk.CTkTextbox(
             self.logs_frame,
-            fg_color="#141414",
-            scrollbar_button_color="#424242",
-            scrollbar_button_hover_color="#606060",
+            fg_color=COLOR_INSET,
+            border_width=2,
+            border_color=COLOR_FRAME,
+            scrollbar_button_color=COLOR_ACCENT,
+            scrollbar_button_hover_color=COLOR_FRAME,
             text_color=COLOR_TEXT,
             font=ctk.CTkFont(size=11, family="Consolas"),
-            corner_radius=8,
+            corner_radius=0,
             wrap="none",
         )
         self.log_textbox.pack(fill="both", expand=True, padx=12, pady=(0, 12))
         self.log_textbox.configure(state="disabled")
+
+    def _draw_background(self, event):
+        """Mampostería pixelada original, sin imágenes ni descargas en ejecución."""
+        self.background.delete('stone')
+        colors = ('#1c3341', '#203847', '#1a303e')
+        for row, y in enumerate(range(0, event.height, 32)):
+            for column, x in enumerate(range(-32 if row % 2 else 0, event.width, 64)):
+                self.background.create_rectangle(x+2, y+2, x+62, y+30,
+                    fill=colors[(row+column) % len(colors)], outline=COLOR_BG, tags='stone')
 
     def _verificar_scripts(self):
         """Verificar que los scripts necesarios existen."""
@@ -342,6 +363,16 @@ class FishingBotApp(ctk.CTk):
         """Panel abierto, pero fuera de todas las zonas de lectura y clic."""
         if self._fishing_view:
             return
+        if getattr(self,"_linux_panel",False):
+            # ponytail: ocultar el panel en fullscreen niri; overlay nativo si se necesita.
+            # No dependemos de coordenadas Tk falsas bajo XWayland ni tapamos el juego.
+            self._fishing_view=True
+            self.withdraw()
+            self.update_idletasks()
+            if self.state()!="withdrawn":
+                raise RuntimeError("No se pudo ocultar el panel Linux; no se inicia pesca")
+            self._log("Panel oculto durante la sesión · F8 detiene y vuelve a mostrarlo")
+            return
         # CTk no admite minsize()/maxsize() sin argumentos como tkinter.
         # Guardar sus limites logicos, no consultar esos metodos setters.
         self._normal_view = (self.geometry(), (self._min_width, self._min_height),
@@ -370,6 +401,8 @@ class FishingBotApp(ctk.CTk):
         """Mantener la proteccion tambien al usar el panel sin supervisor."""
         if not self.bot_activo:
             return
+        if getattr(self,"_linux_panel",False) and self._fishing_view and self.state()=="withdrawn":
+            return
         try:
             bounds = window_bounds(self)
             if self._fishing_view and panel_bounds_safe(bounds) and stop_button_visible(self, bounds):
@@ -386,6 +419,10 @@ class FishingBotApp(ctk.CTk):
     def _restaurar_vista_panel(self):
         """Restaurar solamente cuando ambos motores ya terminaron."""
         if not self._fishing_view:
+            return
+        if getattr(self,"_linux_panel",False):
+            self._fishing_view=False
+            self.deiconify()
             return
         geometry, minimum, maximum, resize, decorated = self._normal_view
         self._fishing_view = False
@@ -411,6 +448,13 @@ class FishingBotApp(ctk.CTk):
             return
         try:
             for event in self.session_feed.read():
+                if event.get('role')=='DUNGEON' and hasattr(self,'dungeon_panel'):
+                    message=event.get('message')
+                    if message:
+                        self.dungeon_panel.status.configure(text=message)
+                        self._log(message)
+                    continue
+                if self.panel_state is None:continue
                 self.panel_state.apply(event)
                 kind = event.get("event")
                 if kind in ("BAIT_INVENTORY", "BAIT_LOW", "BAIT_EXHAUSTED", "BAIT_READ_FAILED",
@@ -468,11 +512,14 @@ class FishingBotApp(ctk.CTk):
         if self.bot_activo:
             self.btn_iniciar.configure(state="disabled")
             self.btn_detener.configure(state="normal")
-            self.btn_reiniciar.configure(state="normal")
+            self.btn_reiniciar.configure(state="disabled" if getattr(self,'active_mode','Fishing')=='Dungeons' else "normal")
         else:
             self.btn_iniciar.configure(state="normal")
             self.btn_detener.configure(state="disabled")
             self.btn_reiniciar.configure(state="disabled")
+        if hasattr(self,'dungeon_panel'):
+            self.dungeon_panel.active(self.bot_activo)
+            self.mode_tabs.configure(state='disabled' if self.bot_activo else 'normal')
 
     def _log(self, mensaje):
         """Agregar un mensaje al log."""
@@ -529,6 +576,7 @@ class FishingBotApp(ctk.CTk):
             game = focus_window(self.game_selector.get())
             self._log(f"Juego seleccionado: {game.client} · 1920x1080 · F8 detiene")
             self.p_catch, self.p_control, self.channel, self.launch_mutex = start_children(game)
+            self.active_mode='Fishing'
             self.panel_state = PanelState(self.channel.run_id)
             self.session_feed = SessionFeed(self.channel.directory, self.channel.run_id)
             self._log(f"  CATCH iniciado (PID: {self.p_catch.pid})")
@@ -541,6 +589,27 @@ class FishingBotApp(ctk.CTk):
         except (Exception, KeyboardInterrupt) as e:
             self._log(f"❌ Error al iniciar: {e}")
             self._after_idle()
+
+    def _iniciar_dungeon(self):
+        if self.bot_activo:return
+        try:
+            plan=self.dungeon_panel.plan()
+            from fishing_core.dungeon_runtime import start_dungeon,validate_supported
+            validate_supported(plan)
+            self._preparar_vista_pesca()
+            game=focus_window('Steam')
+            self.p_control,self.channel,self.launch_mutex=start_dungeon(game,plan)
+            self.p_catch=None
+            self.session_feed=SessionFeed(self.channel.directory,self.channel.run_id)
+            self.session_feed.path=self.channel.directory/'dungeon_events.jsonl'
+            self.panel_state=None
+            self.active_mode='Dungeons'
+            self.bot_activo=True
+            self.dungeon_panel.status.configure(text='Dungeon iniciada · F8 detiene')
+            self._actualizar_ui()
+        except (Exception,KeyboardInterrupt) as exc:
+            self._after_idle()
+            self.dungeon_panel.status.configure(text='No iniciada: '+str(exc))
 
     def detener_bot(self):
         """Detener todos los procesos del bot."""
@@ -560,6 +629,7 @@ class FishingBotApp(ctk.CTk):
 
     def reiniciar_bot(self):
         """Reiniciar todos los procesos del bot."""
+        if getattr(self,'active_mode','Fishing')=='Dungeons':return
         self._log("🔄 Reiniciando bot...")
         self.detener_bot()
         time.sleep(0.5)

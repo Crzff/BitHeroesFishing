@@ -128,7 +128,12 @@ class GameWindowTests(unittest.TestCase):
             self.assertEqual(os.environ[ENV_WINDOW],"parent-value")
         for call in popen.call_args_list:
             self.assertEqual(GameWindow.deserialize(call.kwargs["env"][ENV_WINDOW]),game)
-            self.assertEqual(call.kwargs["startupinfo"].wShowWindow,7)
+            if os.name=="nt":
+                self.assertEqual(call.kwargs["startupinfo"].wShowWindow,7)
+            else:
+                self.assertTrue(call.kwargs["start_new_session"])
+                self.assertNotIn("startupinfo",call.kwargs)
+                self.assertNotIn("creationflags",call.kwargs)
 
     def test_no_window_or_f8_closes_launcher_mutex_without_spawning_children(self):
         for exception in (RuntimeError("no game"),KeyboardInterrupt("F8")):

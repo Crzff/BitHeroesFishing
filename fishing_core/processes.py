@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -10,11 +11,29 @@ import time
 from .protocol import Channel
 from . import VERSION
 from .telemetry import ROOT, run_environment
-from .game_window import ENV_WINDOW, WindowsAPI, WindowGuard, focus_window
+from .game_window import ENV_WINDOW, WindowGuard, focus_window, window_api
 
 
 class Mutex:
     def __init__(self, role: str):
+        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}",role):
+            raise ValueError("Rol de proceso invalido")
+        if os.name!="nt":
+            import fcntl
+            from pathlib import Path
+            directory=Path(os.environ.get("XDG_RUNTIME_DIR",f"/tmp/opencode/bitheroes-{os.getuid()}"))
+            directory.mkdir(mode=0o700,parents=True,exist_ok=True)
+            if directory.stat().st_uid!=os.getuid():
+                raise RuntimeError("El directorio de exclusividad no pertenece al usuario")
+            self.handle=os.open(directory/f"bitheroes-{role}.lock",
+                                os.O_CREAT|os.O_RDWR|os.O_CLOEXEC|os.O_NOFOLLOW,0o600)
+            try:
+                fcntl.flock(self.handle,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except OSError as exc:
+                os.close(self.handle)
+                self.handle=None
+                raise RuntimeError(f"Ya hay otro proceso {role}; no se inicia un duplicado") from exc
+            return
         import ctypes
         from ctypes import wintypes
         kernel=ctypes.WinDLL("kernel32",use_last_error=True)
@@ -32,8 +51,11 @@ class Mutex:
             raise RuntimeError(f"Ya hay otro proceso {role}; no se inicia un duplicado")
 
     def close(self):
-        if self.handle:
-            self.kernel.CloseHandle(self.handle)
+        if self.handle is not None:
+            if os.name=="nt":
+                self.kernel.CloseHandle(self.handle)
+            else:
+                os.close(self.handle)
             self.handle=None
 
 
@@ -45,6 +67,8 @@ def python_executable():
 
 
 def minimize_console():
+    if os.name!="nt":
+        return
     import ctypes
     from ctypes import wintypes
     kernel=ctypes.windll.kernel32
@@ -53,6 +77,15 @@ def minimize_console():
     if hwnd:
         ctypes.windll.user32.ShowWindow.argtypes=[wintypes.HWND,ctypes.c_int]
         ctypes.windll.user32.ShowWindow(hwnd,6)
+
+
+def child_options():
+    if os.name!="nt":
+        return {"start_new_session":True}
+    startup=subprocess.STARTUPINFO()
+    startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow=7  # SW_SHOWMINNOACTIVE: no robar el foco del juego.
+    return {"creationflags":subprocess.CREATE_NEW_CONSOLE|0x00000200,"startupinfo":startup}
 
 
 def close_children(processes, channel=None):
@@ -84,22 +117,23 @@ def close_children(processes, channel=None):
 
 def start_children(game=None):
     mutex=Mutex("LAUNCHER")
-    catch=control=channel=None
+    catch=control=channel=guard=api=None
     try:
         if game is None:
             test_hwnd=os.environ.get("FISHING_TEST_GAME_HWND")
-            game=WindowsAPI().inspect(int(test_hwnd)) if test_hwnd else focus_window()
-        guard=WindowGuard(game)
+            if test_hwnd:
+                api=window_api()
+                game=api.inspect(int(test_hwnd))
+            else:
+                game=focus_window()
+        guard=WindowGuard(game,api)
         guard.check()
         env=run_environment()
         env[ENV_WINDOW]=game.serialize()
         channel=Channel(env["FISHING_RUN_ID"])
-        flags=subprocess.CREATE_NEW_CONSOLE | 0x00000200
-        startup=subprocess.STARTUPINFO()
-        startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW
-        startup.wShowWindow=7  # SW_SHOWMINNOACTIVE: no robar el foco del juego.
+        options=child_options()
         catch=subprocess.Popen([python_executable(),"-B","-u",str(ROOT/"CATCH_FAST_PROCESS_V6_FINAL.py")],
-                               cwd=str(ROOT),env=env,creationflags=flags,startupinfo=startup)
+                               cwd=str(ROOT),env=env,**options)
         deadline=time.monotonic()+5
         while channel.ready() is None:
             if catch.poll() is not None or time.monotonic()>deadline:
@@ -107,7 +141,7 @@ def start_children(game=None):
             time.sleep(.025)
         guard.check()
         control=subprocess.Popen([python_executable(),"-B","-u",str(ROOT/"FISHING_CONTROL_PROCESS.py")],
-                                 cwd=str(ROOT),env=env,creationflags=flags,startupinfo=startup)
+                                 cwd=str(ROOT),env=env,**options)
         return catch,control,channel,mutex
     except (Exception,KeyboardInterrupt):
         try:
@@ -115,18 +149,22 @@ def start_children(game=None):
         finally:
             mutex.close()
         raise
+    finally:
+        backend=guard.api if guard is not None else api
+        if backend is not None and getattr(backend,"platform",None)=="linux":
+            backend.close()
 
 
 def console_launcher():
-    import ctypes
-    catch=control=channel=mutex=None
+    catch=control=channel=mutex=api=None
     try:
         catch,control,channel,mutex=start_children()
         print(f"{VERSION} | sesion {channel.run_id} | F8 o Ctrl+C para detener ambos",flush=True)
         minimize_console()
         while catch.poll() is None and control.poll() is None:
-            if ctypes.windll.user32.GetAsyncKeyState(0x77)&0x8000:
-                break
+            if api is None:
+                api=window_api()
+            api.emergency()
             time.sleep(.03)
     except KeyboardInterrupt:
         pass
@@ -136,3 +174,5 @@ def console_launcher():
         finally:
             if mutex:
                 mutex.close()
+            if api is not None and getattr(api,"platform",None)=="linux":
+                api.close()

@@ -1,0 +1,3 @@
+# Linux conserva las dependencias del motor; Xlib conecta Steam por XWayland.
+-r requirements.txt
+python-xlib==0.33

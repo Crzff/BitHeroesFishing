@@ -35,21 +35,27 @@ from .game_window import ENV_WINDOW, GameWindow, WindowGuard
 from .navigation import enter_fishing
 
 FAST_MONITOR={"left":430,"top":710,"width":1310,"height":320}
+# Misma captura para porcentaje, texto y geometria, sin copiar sus margenes vacios.
+LINUX_FAST_MONITOR={"left":470,"top":741,"width":1235,"height":279}
 FULL_MONITOR={"left":0,"top":0,"width":1920,"height":1080}
 
 
 class WindowsIO:
     def __init__(self):
+        binding=os.environ.get(ENV_WINDOW)
+        if not binding:
+            raise SafetyStop("Falta la ventana seleccionada; inicia desde el panel o lanzador")
+        try:
+            game=GameWindow.deserialize(binding)
+        except (RuntimeError,ValueError,TypeError) as exc:
+            raise SafetyStop(str(exc)) from exc
         import ctypes
         from ctypes import wintypes
         self.user32=ctypes.windll.user32
         self.user32.SetProcessDPIAware()
         self.user32.GetForegroundWindow.restype=wintypes.HWND
-        binding=os.environ.get(ENV_WINDOW)
-        if not binding:
-            raise SafetyStop("Falta la ventana seleccionada; inicia desde el panel o lanzador")
         try:
-            self.game_guard=WindowGuard(GameWindow.deserialize(binding))
+            self.game_guard=WindowGuard(game)
             self.game_guard.check()
         except (RuntimeError,ValueError,TypeError) as exc:
             raise SafetyStop(str(exc)) from exc
@@ -125,6 +131,14 @@ def capture(sct,monitor):
     return np.frombuffer(shot.bgra,np.uint8).reshape(shot.height,shot.width,4)
 
 
+def screen_capture(io):
+    if getattr(io,"platform",None)=="linux":
+        from .linux import LinuxCapture
+        return LinuxCapture(io.game_guard)
+    import mss
+    return mss.mss()
+
+
 def check_stop(io,channel,log):
     io.emergency()
     log.check()
@@ -138,14 +152,18 @@ def _managed(role,loop,model=None):
     if not run_id:
         print("Inicia desde el panel o INICIAR_TODO.py: se requiere una sesion compartida.",flush=True)
         return 2
-    mutex=channel=log=None
+    mutex=channel=log=io=None
     code=0
     reason="NORMAL"
     try:
         mutex=Mutex(role)
         channel=Channel(run_id)
         log=Telemetry(role,run_id)
-        io=WindowsIO()
+        if os.name=="nt":
+            io=WindowsIO()
+        else:
+            from .linux import LinuxIO
+            io=LinuxIO()
         minimize_console()
         ui=UIClassifier()
         loop(io,ui,channel,log,model)
@@ -181,6 +199,12 @@ def _managed(role,loop,model=None):
                 code=1
         if mutex:
             mutex.close()
+        if io is not None and getattr(io,"platform",None)=="linux":
+            try:
+                io.close()
+            except Exception as exc:
+                print(f"Error cerrando IO Linux: {exc}",flush=True)
+                code=1
     return code
 
 
@@ -193,7 +217,6 @@ def run_catch(model):
 
 
 def _control_loop(io,ui,channel,log,model):
-    import mss
     io.control_mode=True
     deadline=time.perf_counter()+5
     print(f"CONTROL {VERSION}: inicio en 5 segundos. F8 detiene ambos procesos.",flush=True)
@@ -246,9 +269,11 @@ def _control_loop(io,ui,channel,log,model):
     cast_peak=CastPeakPolicy(cast_delay_ms,client=sampling_client)
     log.emit("CAST_CONFIGURATION",human=True,target="PREDICTED_OR_STEAM_FRESH_DISPLAYED_MAXIMUM",game_delay_estimate_ms=cast_delay_ms,
              estimate_is_not_measured_game_latency=True,full_context_max_ms=200,verification_max_ms=80,
-             scheduled_input_lateness_max_ms=3,noncritical_control_move_settle_ms=10,noncritical_control_hold_ms=25,
+              scheduled_input_lateness_max_ms=3,
+              noncritical_control_move_settle_ms=80 if getattr(io,"platform",None)=="linux" else 10,
+              noncritical_control_hold_ms=60 if getattr(io,"platform",None)=="linux" else 25,
               catch_click_timing_unchanged=True,sampling=cast_peak.configuration())
-    with mss.mss() as sct:
+    with screen_capture(io) as sct:
         try:
             enter_fishing(io,ui,lambda:capture(sct,FULL_MONITOR),
                           lambda:check_stop(io,channel,log),log)
@@ -528,7 +553,7 @@ def _control_loop(io,ui,channel,log,model):
 
 
 def _catch_loop(io,ui,channel,log,model):
-    import mss
+    fast_monitor=LINUX_FAST_MONITOR if getattr(io,"platform",None)=="linux" else FAST_MONITOR
     cfg=model.ConfigV6()
     tracker=model.TrackerBarra(cfg)
     detector=Detector()
@@ -539,17 +564,17 @@ def _catch_loop(io,ui,channel,log,model):
     input_est=cfg.lat_click_est_seg
     last_heartbeat=0
     previous_tracking=False
-    log.emit("CONFIG",human=True,config=asdict(cfg),capture_roi=FAST_MONITOR,
+    log.emit("CONFIG",human=True,config=asdict(cfg),capture_roi=fast_monitor,
              click=(960,970),input_estimate_is_game_latency=False)
     atomic_json(channel.ready_path,{"schema":1,"run_id":channel.run_id,"catch_pid":os.getpid()})
     print(f"CATCH {VERSION} listo. Un clic por intento; sin rearme por timeout. F8 detiene ambos.",flush=True)
-    with mss.mss() as sct:
+    with screen_capture(io) as sct:
         while True:
             check_stop(io,channel,log)
             cap_start=time.perf_counter_ns()
-            image=capture(sct,FAST_MONITOR)
+            image=capture(sct,fast_monitor)
             cap_done=time.perf_counter_ns()
-            view=FrameView(image,430,710)
+            view=FrameView(image,fast_monitor["left"],fast_monitor["top"])
             status=ui.catch_status(view)
             trackable=can_track(status)
             context_done=time.perf_counter_ns()
