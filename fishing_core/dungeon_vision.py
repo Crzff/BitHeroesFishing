@@ -58,12 +58,16 @@ class DungeonVision:
         if frame.shape!=(1080,1920,3):return 'UNKNOWN'
         if (self.locate(frame,'DECLINE_CONFIRM',(700,455,1220,620)) and
                 self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'DECLINE_CONFIRM'
+        if (self.locate(frame,'WB_NOT_FULL',(680,410,1240,575)) and
+                self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'WB_NOT_FULL'
         if self.locate(frame,'CONFIRM_HEADER',(770,270,1150,370)):return 'UNKNOWN'
         if (self.locate(frame,'PERSUADE',(360,640,720,780)) and
                 self.locate(frame,'BRIBE',(1240,640,1535,780)) and
                 self.locate(frame,'DECLINE',(550,890,965,1015))):return 'FAMILIAR_OFFER'
         if self.locate(frame,'LOADING',(790,470,1130,550)):return 'LOADING'
         if self.locate(frame,'ZONES_MENU',(820,120,1100,215)):return 'ZONES'
+        boss=self.boss_screen(frame)
+        if boss:return boss
         regions=[('VICTORY',(780,110,1150,210)),('SETTINGS',(760,100,1160,215)),
                  ('TEAM',(830,90,1100,200)),('DIFFICULTY_Z5D2',(540,160,1380,265)),
                  ('DIFFICULTY_Z5D3',(540,160,1380,265))]
@@ -84,6 +88,20 @@ class DungeonVision:
         if (self.locate(frame,'HOME_QUEST',(15,15,165,190)) and
                 self.locate(frame,'HOME_SETTINGS',(1760,910,1920,1080))):return 'HOME'
         return 'UNKNOWN'
+
+    def boss_screen(self,frame):
+        """Ventanas del World Boss; cada una exige título y botón propios."""
+        if self.locate(frame,'RESULT_TOWN',(970,915,1500,1080)):
+            if self.locate(frame,'WB_DEFEAT',(760,75,1160,230)):return 'WB_DEFEAT'
+            if 'WB_VICTORY' in self.templates and self.locate(frame,'WB_VICTORY',(760,75,1160,230)):return 'WB_VICTORY'
+        if self.locate(frame,'WB_LOBBY_NETHERWORLD',(640,65,1290,210)) and self.locate(frame,'WB_START',(695,905,1140,1065)):
+            return 'WB_LOBBY'
+        if self.locate(frame,'WB_SUMMON_TITLE',(790,185,1190,325)) and self.locate(frame,'WB_SUMMON_BUTTON',(975,760,1290,925)):
+            return 'WB_SUMMON'
+        if self.locate(frame,'WB_LIST',(680,120,1240,275)):
+            if self.locate(frame,'WB_SUMMON_LIST',(995,890,1365,1045)):return 'WB_LIST'
+            if self.locate(frame,'WB_CAROUSEL_SUMMON',(1100,660,1425,910)):return 'WB_CAROUSEL'
+        return None
 
     def familiar_name(self,frame):
         if self.screen(frame)!='FAMILIAR_OFFER':return None

@@ -64,7 +64,19 @@
     "energy_team_clock_153": "607c0f8f7785dc508f7e88501ca17b88dc4cdf2bd9cc1280879336824effedbd",
     "energy_team_clock_152": "7e4f72e1b0c21104b518c4af1ad09c6ccb1f1739f517f5cbc10f20c73ff1d25a",
     "energy_team_clock_145": "a8c2f3a0649dab1bb5363e596906b20cfb88f54f78d74d538de5eb935216a3cb",
-    "energy_team_clock_144": "273f43c2a96e866e382de210b0f07ead6a4e49d3db032867b70cf1f2e6bd5bc1"
+    "energy_team_clock_144": "273f43c2a96e866e382de210b0f07ead6a4e49d3db032867b70cf1f2e6bd5bc1",
+    "boss_home": "806c3272b539b91b82d4705dbb67211812f38562e64b985e979bbe6d5eca7b51",
+    "boss_list": "6bb8eb3780d8f7763f358f811b37fd96b468bfecf16a8cf24eb3cb9fc0abc76b",
+    "boss_carousel": "04336251a3fbbf50f1718e8100779eaf06355f6892c55a83b543a1d282c5f19c",
+    "boss_summon_normal": "952d090fcbed6608f804790df682e5f8abe6fcfac09804871321bed583ca52ad",
+    "boss_summon_heroic": "1bd57de7cf3d21187ecde6e8288f278f4adf5c5d36702e4518dd633196771d5e",
+    "boss_lobby": "7f778fcb06b8d67b21e7ef6986f5d47950d4d801ea9884dd4128b7de5f3ed364",
+    "boss_lobby_public": "85be3a0b73f8366fe0cae16ae04083c0e90ac1b12cea13dc25d0645dbb3f27c9",
+    "boss_lobby_joined": "3c30b57a7f5f6c19e88d5cf0bab48c85a2c51d3eb9165fccda74a3cb80d1b150",
+    "boss_not_full": "ee072961480ead9b2a5d20ec3d323f4eea958a03d6408c871e78d1c9cb23c4d2",
+    "boss_battle_off": "b917e0035994a730c91879968e0fe4a60b1eaa656a66f5d0989c34d6b2286bcd",
+    "boss_victory": "4e48d3c087039930c341665227581b96e49e175f6847f8621319a812f46cae00",
+    "boss_defeat": "aeb4d92fe948db3e78800b49bdef31e06d2a3e635819615fb5fa4e0ba248cc1f"
   },
   "regions": {
     "HOME_QUEST": [
@@ -705,6 +717,86 @@
         1194,
         52
       ]
+    ],
+    "WB_LIST": [
+      "b0",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_SUMMON_LIST": [
+      "b0",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_CLOSE": [
+      "b0",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_NETHERWORLD": [
+      "b1",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_CAROUSEL_SUMMON": [
+      "b1",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_SUMMON_TITLE": [
+      "w5",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_TIER_9": [
+      "w5",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_NORMAL": [
+      "w5",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_PRIVATE_ON": [
+      "w5",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_SUMMON_BUTTON": [
+      "w5",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_LOBBY_NETHERWORLD": [
+      "w6",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_LOBBY_NORMAL": [
+      "w6",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_SLOT2_EMPTY": [
+      "w6",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_LOBBY_PRIVATE_ON": [
+      "w6",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_START": [
+      "w6",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_NOT_FULL": [
+      "w7",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_DEFEAT": [
+      "c7",
+      "captura Steam 2026-10-03"
+    ],
+    "RESULT_TOWN": [
+      "c7",
+      "captura Steam 2026-10-03"
+    ],
+    "HOME_BOSS": [
+      "h4",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_VICTORY": [
+      "victory",
+      "captura Steam 2026-10-03"
     ]
   },
   "notes": [
@@ -713,7 +805,8 @@
     "DUNGEON_MAP_HUD: etiqueta SHOP visible en exploraci\u00f3n, no en combate; solo referencia de contexto, nunca autoriza compras",
     "Zones: 20 nombres/t\u00edtulos observados en Steam/niri 2026-10-03; abrir mapa no acredita dungeon desbloqueada. Choices compara texto blanco con los mismos umbrales .97/12, sin OCR.",
     "Energ\u00eda TEAM 2026-10-03: saldo 317/368, slash 23\u00d722; normalizar sombreado al 50 % y binarizar blanco >=170. Reloj 2:09 no es saldo. Referencia previa 21\u00d720 y filtros intactos.",
-    "Energ\u00eda TEAM 2026-10-03: el lector de cebos confund\u00eda 0/6 con 8 en la fuente de energ\u00eda (rechazo por huecos). Variantes sueltas de 0 u 8 desplazaban el error (61/369 fallaba). Se a\u00f1ade el juego completo DIGIT_0..9_ENERGY de saldos/relojes reales etiquetados, solo para dungeons. Umbrales, margen, huecos y rechazo de reloj intactos."
+    "Energ\u00eda TEAM 2026-10-03: el lector de cebos confund\u00eda 0/6 con 8 en la fuente de energ\u00eda (rechazo por huecos). Variantes sueltas de 0 u 8 desplazaban el error (61/369 fallaba). Se a\u00f1ade el juego completo DIGIT_0..9_ENERGY de saldos/relojes reales etiquetados, solo para dungeons. Umbrales, margen, huecos y rechazo de reloj intactos.",
+    "World Boss 2026-10-03: Netherworld T9 Normal privado en solitario (Heroic perd\u00eda en segundos; Normal gan\u00f3 en segundos). Plantillas WB_* y HOME_BOSS de capturas reales; TOWN cambia de posici\u00f3n entre victoria y derrota y se localiza. Fixtures boss_* conservan solo las ROI le\u00eddas."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

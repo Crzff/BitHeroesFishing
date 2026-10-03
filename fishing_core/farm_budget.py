@@ -27,6 +27,9 @@ def _seconds(value):
     return seconds
 
 
+ENTRY_RESOURCES = ("ENERGY", "XEALS", "TOKENS", "SHARDS")
+
+
 class FarmBudget:
     # ponytail: un controlador y estado en memoria; diario transaccional para reanudar.
     def __init__(self, *, max_runs, max_energy, max_seconds, energy_reserve=0,
@@ -48,7 +51,8 @@ class FarmBudget:
         self._results = {}
         self._gold_actions = {}
         self._gold_resolved = set()
-        self.energy_reserved = 0
+        self.energy_reserved = 0  # unidades del recurso de entrada de la sesion
+        self.resource = None
         self.gold_reserved = 0
         self.active_attempt = None
         self.pending_gold = None
@@ -67,8 +71,13 @@ class FarmBudget:
     def reserve_entry(self, attempt_id, *, resource, balance, cost):
         """True solo para una nueva intencion; efecto incierto nunca se libera."""
         _identifier(attempt_id)
-        if resource != "ENERGY":
-            raise ValueError("Esta cuota solo admite ENERGY")
+        # Una sesion gasta un unico recurso regenerable; nunca oro ni gemas.
+        if resource not in ENTRY_RESOURCES:
+            raise ValueError("Recurso de entrada no permitido")
+        if self.resource is None:
+            self.resource = resource
+        elif resource != self.resource:
+            raise ValueError("Una sesion no mezcla recursos de entrada")
         _quantity(balance, "Saldo de energia")
         _quantity(cost, "Coste de entrada", 1)
         if attempt_id in self._entries:

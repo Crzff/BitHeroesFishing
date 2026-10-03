@@ -263,5 +263,18 @@ class FarmBudgetTests(unittest.TestCase):
                     self.enable_gold_budget(**{name: value})
 
 
+class EntryResourceTests(unittest.TestCase):
+    def test_one_regenerable_resource_per_session_and_never_gold_or_gems(self):
+        budget=FarmBudget(max_runs=3,max_energy=2,max_seconds=60)
+        self.assertTrue(budget.reserve_entry("wb:1",resource="XEALS",balance=3,cost=1))
+        budget.finish_run("wb:1","VICTORY",closure_confirmed=True)
+        with self.assertRaises(ValueError):budget.reserve_entry("wb:2",resource="ENERGY",balance=50,cost=1)
+        for resource in ("GOLD","GEMS",None):
+            with self.assertRaises(ValueError):
+                FarmBudget(max_runs=1,max_energy=5,max_seconds=60).reserve_entry("x",resource=resource,balance=9,cost=1)
+        self.assertTrue(budget.reserve_entry("wb:2",resource="XEALS",balance=2,cost=1))
+        budget.finish_run("wb:2","VICTORY",closure_confirmed=True)
+        with self.assertRaises(ValueError):budget.reserve_entry("wb:3",resource="XEALS",balance=1,cost=1)
+
 if __name__ == "__main__":
     unittest.main()
