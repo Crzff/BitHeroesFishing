@@ -1,0 +1,431 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock,patch
+
+import numpy as np
+
+from fishing_core.control_flow import SafetyStop
+from fishing_core.dungeon_catalog import farm_plan
+from fishing_core.dungeon_runtime import DungeonRunner,validate_supported
+from fishing_core.farm_budget import FarmBudget
+
+
+class DungeonRuntimeTests(unittest.TestCase):
+    def test_uncertified_routes_are_not_silently_substituted(self):
+        validate_supported(farm_plan('Z5D2','Normal',1,30))
+        validate_supported(farm_plan('Z5D3','Heroic',1,30,'Tealk'))
+        for args in [('Z1D2','Normal',1,30,'Bob'),('Z5D2','Heroic',1,30,''),
+                     ('Z5D3','Normal',1,30,''),('Z5D3','Heroic',2,60,'Tealk')]:
+            with self.assertRaises(ValueError):validate_supported(farm_plan(*args))
+
+    def test_tealk_heroic_reserves_thirty_once_and_rejects_the_normal_cost(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk')
+            with self.assertRaises(SafetyStop):runner.enter(1)
+            io.click.assert_not_called()
+            runner.cost=30
+            runner.enter(1)
+            self.assertEqual(runner.budget.energy_reserved,30)
+            with self.assertRaises(SafetyStop):runner.enter(1)
+            self.assertEqual(io.click.call_count,1)
+
+    def test_tealk_selection_never_clicks_another_dungeon_or_normal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk')
+            runner.wait=Mock(return_value='frame');runner.click=Mock();runner.select_zone=Mock()
+            vision.cost.return_value=30
+            runner.select_route()
+            self.assertEqual(runner.cost,30)
+            runner.select_zone.assert_called_once_with(5)
+            self.assertEqual([args.args[2] for args in runner.click.call_args_list],['HOME_QUEST','NODE_Z5D3','HEROIC'])
+            runner.click.reset_mock();vision.cost.return_value=10
+            with self.assertRaises(SafetyStop):runner.select_route()
+            self.assertNotIn('HEROIC',[args.args[2] for args in runner.click.call_args_list])
+
+    def runner(self,path):
+        plan=farm_plan('Z5D2','Normal',1,30)
+        channel=SimpleNamespace(directory=path,run_id='test',stop_path=path/'stop.json')
+        io=Mock();vision=Mock(screen=Mock(return_value='TEAM'),energy=Mock(return_value=(100,368)),
+                            locate=Mock(return_value=(1000,943)))
+        runner=DungeonRunner(io,Mock(),vision,channel,Mock(),plan)
+        runner.capture=Mock(return_value='frame')
+        def wait(predicate,timeout=10):
+            if callable(predicate):
+                predicate('frame')
+                if not predicate('frame'):raise SafetyStop('Lectura no confirmada')
+            return 'frame'
+        runner.wait=wait
+        runner.cost=10;runner.safety_checked=True
+        return runner,io,vision
+
+    def test_accept_intent_is_durable_and_reserved_before_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp))
+            def click(_):
+                self.assertTrue((Path(tmp)/'entry-1.intent.json').exists())
+                self.assertEqual(runner.budget.energy_reserved,10)
+            io.click.side_effect=click
+            runner.enter(1)
+            self.assertEqual(io.click.call_count,1)
+            with self.assertRaises(SafetyStop):runner.enter(1)
+            self.assertEqual(io.click.call_count,1)
+
+    def test_invalid_energy_cost_or_native_settings_never_send_accept(self):
+        cases=[(None,10,True),((5,368),10,True),((100,368),None,True),((100,368),10,False),((100,368),40,True)]
+        for balance,cost,safe in cases:
+            with tempfile.TemporaryDirectory() as tmp:
+                runner,io,vision=self.runner(Path(tmp));vision.energy.return_value=balance
+                runner.cost=cost;runner.safety_checked=safe
+                with self.assertRaises((SafetyStop,ValueError)):runner.enter(1)
+                io.click.assert_not_called()
+
+    def test_stop_focus_change_and_unknown_screen_block_all_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            for failure in ('UNKNOWN','stop','focus','F8'):
+                vision.screen.return_value='TEAM';io.check_game.side_effect=None;io.emergency.side_effect=None
+                if failure=='UNKNOWN':vision.screen.return_value='UNKNOWN'
+                if failure=='stop':runner.channel.stop_path.write_text('{}')
+                if failure=='focus':io.check_game.side_effect=SafetyStop('focus')
+                if failure=='F8':io.emergency.side_effect=KeyboardInterrupt('F8')
+                with self.assertRaises((SafetyStop,KeyboardInterrupt)):runner.click('TEAM',(1215,982),'ACCEPT',(1000,930,1420,1035))
+                io.click.assert_not_called()
+                if runner.channel.stop_path.exists():runner.channel.stop_path.unlink()
+
+    def test_wait_timeout_records_the_last_offer_without_retrying_or_resolving_it(self):
+        import cv2
+        from fishing_core.dungeon_vision import DungeonVision
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp);runner,io,_=self.runner(path);runner.vision=DungeonVision()
+            with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+                frame=data['offer_sitra'].copy()
+            frame[800:900,200:300]=123  # Información ajena al diálogo: debe ocultarse.
+            runner.capture=Mock(return_value=frame)
+            pending=path/'decline-1-3.intent.json';pending.write_text('{"effect_confirmed":false}')
+            with patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=[0,1,3]), \
+                    patch('fishing_core.dungeon_runtime.time.sleep'):
+                with self.assertRaisesRegex(SafetyStop,'observada FAMILIAR_OFFER.*Sitra'):
+                    DungeonRunner.wait(runner,lambda _:False,timeout=2)
+            event=runner.log.emit.call_args
+            self.assertEqual(event.args,('DUNGEON_WAIT_TIMEOUT',))
+            self.assertEqual(event.kwargs['screen'],'FAMILIAR_OFFER')
+            self.assertEqual(event.kwargs['familiar'],'Sitra')
+            snapshot=cv2.imread(str(path/event.kwargs['snapshot']))
+            self.assertEqual(runner.vision.familiar_name(snapshot),'Sitra')
+            self.assertFalse(snapshot[800:900,200:300].any())
+            self.assertEqual(len(list(path.glob('wait-timeout-*.png'))),1)
+            self.assertEqual(pending.read_text(),'{"effect_confirmed":false}')
+            io.click.assert_not_called();io.escape.assert_not_called()
+            self.assertEqual(runner.budget.payload()['entries_reserved'],0)
+
+    def test_wait_never_takes_an_extra_capture_after_focus_loss_or_f8(self):
+        for error in (SafetyStop('focus'),KeyboardInterrupt('F8')):
+            with tempfile.TemporaryDirectory() as tmp:
+                runner,io,_=self.runner(Path(tmp));runner.capture=Mock(side_effect=error)
+                with self.assertRaises(type(error)):DungeonRunner.wait(runner,'HOME')
+                runner.capture.assert_called_once();runner.log.emit.assert_not_called()
+                self.assertEqual(list(Path(tmp).iterdir()),[])
+                io.click.assert_not_called()
+
+    def test_wait_remains_stopped_without_a_frame_or_when_evidence_cannot_be_written(self):
+        import cv2
+        for timeout,error in ((0,None),(2,False),(2,cv2.error('disk')),(2,OSError('disk'))):
+            with self.subTest(timeout=timeout,error=error),tempfile.TemporaryDirectory() as tmp:
+                runner,io,_=self.runner(Path(tmp))
+                runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+                with patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=[0,1,3]), \
+                        patch('fishing_core.dungeon_runtime.time.sleep'), \
+                        patch('fishing_core.dungeon_runtime.cv2.imwrite',return_value=False,
+                              side_effect=error if isinstance(error,Exception) else None) as write:
+                    with self.assertRaisesRegex(SafetyStop,'Pantalla no confirmada'):
+                        DungeonRunner.wait(runner,'HOME',timeout=timeout)
+                event=runner.log.emit.call_args.kwargs
+                self.assertIsNone(event['snapshot'])
+                self.assertEqual(event['screen'],'TEAM' if timeout else 'SIN_LECTURA')
+                self.assertEqual(write.call_count,1 if timeout else 0)
+                self.assertEqual(runner.capture.call_count,1 if timeout else 0)
+                io.click.assert_not_called();io.escape.assert_not_called()
+
+    def test_click_leaves_the_button_before_reading_its_new_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));vision.screen.return_value='AUTO_OFF'
+            steps=[]
+            def click(xy):
+                steps.append(('click',xy));vision.screen.return_value='UNKNOWN'  # Botón resaltado.
+            def move(xy):
+                steps.append(('move',xy));vision.screen.return_value='AUTO_ON'
+            io.click.side_effect=click;io._move.side_effect=move
+            with patch('fishing_core.dungeon_runtime.time.sleep',side_effect=lambda duration:steps.append(('settle',duration))):
+                runner.click('AUTO_OFF',(1880,530))
+            self.assertEqual(vision.screen(runner.capture()),'AUTO_ON')
+            self.assertEqual(steps,[('click',(1880,530)),('settle',.25),('move',(960,1070))])
+
+    def test_auto_activation_requires_confirmation_and_is_never_retried(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            vision.screen.return_value='AUTO_OFF';runner.click=Mock();requested=[]
+            def wait(screen,timeout=10):
+                requested.append(screen)
+                if screen=='AUTO_ON':raise SafetyStop('Auto no confirmado')
+                if len(requested)>1:raise SafetyStop('La observación continuó sin confirmar Auto')
+                return runner.capture.return_value
+            runner.wait=wait
+            with self.assertRaisesRegex(SafetyStop,'Auto no confirmado'):runner.observe('test:1',1)
+            self.assertEqual(requested,['AUTO_OFF','AUTO_ON'])
+            runner.click.assert_called_once_with('AUTO_OFF',(1880,530))
+
+    def test_town_can_return_to_quest_map_before_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            vision.screen.return_value='MAP_Z5';io.escape.side_effect=lambda:setattr(vision.screen,'return_value','HOME')
+            runner.go_home()
+            io.escape.assert_called_once();io.click.assert_not_called()
+
+    def test_escape_closes_only_recognized_navigation_and_never_retries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            for screen in ('UNKNOWN','FAMILIAR_OFFER','DECLINE_CONFIRM','VICTORY','AUTO_OFF','HOME'):
+                vision.screen.return_value=screen
+                with self.assertRaises(SafetyStop):runner.close_menu(screen)
+            io.escape.assert_not_called();io.click.assert_not_called()
+            vision.screen.return_value='SETTINGS';runner.wait=Mock(side_effect=['frame',SafetyStop('Destino no confirmado')])
+            with self.assertRaisesRegex(SafetyStop,'Destino no confirmado'):runner.close_menu('SETTINGS')
+            io.escape.assert_called_once();io.click.assert_not_called()
+
+    def test_f8_focus_loss_and_stop_block_escape(self):
+        for failure in ('F8','focus','stop'):
+            with tempfile.TemporaryDirectory() as tmp:
+                runner,io,vision=self.runner(Path(tmp));vision.screen.return_value='SETTINGS'
+                if failure=='F8':io.emergency.side_effect=KeyboardInterrupt('F8')
+                if failure=='focus':io.check_game.side_effect=SafetyStop('focus')
+                if failure=='stop':runner.channel.stop_path.write_text('{}')
+                with self.assertRaises((SafetyStop,KeyboardInterrupt)):runner.close_menu('SETTINGS')
+                io.escape.assert_not_called()
+
+    def test_go_home_unwinds_zones_then_any_known_map_with_escape_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));states=iter(['MAP_Z20','HOME'])
+            vision.screen.return_value='ZONES'
+            io.escape.side_effect=lambda:setattr(vision.screen,'return_value',next(states))
+            runner.go_home()
+            self.assertEqual(vision.screen.return_value,'HOME')
+            self.assertEqual(io.escape.call_count,2);io.click.assert_not_called()
+
+    def test_zone_selection_uses_real_names_after_scroll_and_confirms_the_destination(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.vision=vision=DungeonVision()
+            with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+                frames={k:data[k] for k in data.files}
+            state=['MAP_Z20',16]
+            def capture():return frames['zones_list_bottom' if state[0]=='ZONES' and state[1]==16 else
+                                        'zones_list_top' if state[0]=='ZONES' else f'zones_map_{state[1]}']
+            state[1]=20;runner.capture=capture
+            def wait(predicate,timeout=10):
+                for _ in range(2):
+                    frame=capture()
+                    okay=predicate(frame) if callable(predicate) else vision.screen(frame)==predicate
+                    if not okay:raise SafetyStop('Destino no confirmado')
+                return frame
+            runner.wait=wait
+            def click(xy):
+                if state[0]!='ZONES':
+                    self.assertEqual(xy,(440,153));state[:]=['ZONES',16]
+                else:
+                    self.assertEqual(xy,vision.zone_choice(capture(),5));state[:]=['MAP_Z5',5]
+            io.click.side_effect=click
+            runner.scroll_menu=Mock(side_effect=lambda screen,amount:state.__setitem__(1,1))
+            runner.select_zone(5)
+            self.assertEqual(vision.map_zone(capture()),5)
+            self.assertEqual(io.click.call_count,2)
+            self.assertEqual(runner.budget.payload()['entries_reserved'],0)
+            io.click.reset_mock();runner.select_zone(5);io.click.assert_not_called()
+            for zone in (0,21,True,'5'):
+                with self.assertRaises(ValueError):runner.select_zone(zone)
+                io.click.assert_not_called()
+
+    def test_changed_zone_name_and_failed_map_confirmation_block_further_actions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));vision.screen.return_value='ZONES'
+            vision.zone_choice.return_value=(930,830)
+            runner.wait=Mock(return_value='frame');vision.zone_choice.return_value=None
+            with self.assertRaises(SafetyStop):runner.click('ZONES',(930,830),expected_zone=5)
+            io.click.assert_not_called()
+            vision.zone_choice.return_value=(930,830);vision.screen.return_value='MAP_Z1';runner.scroll_menu=Mock()
+            runner.click=Mock()
+            def wait(screen,timeout=10):
+                if screen=='MAP_Z5':raise SafetyStop('Mapa elegido no confirmado')
+                if screen=='ZONES':vision.screen.return_value='ZONES'
+                return 'frame'
+            runner.wait=wait
+            with self.assertRaisesRegex(SafetyStop,'Mapa elegido no confirmado'):runner.select_zone(5)
+            self.assertEqual([call.args[0] for call in runner.click.call_args_list],['MAP_Z1','ZONES'])
+            self.assertEqual(runner.budget.payload()['entries_reserved'],0)
+
+    def test_zone_not_found_stops_after_bounded_scroll_without_selecting_another(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));vision.screen.return_value='MAP_Z1'
+            vision.zone_choice.return_value=None;runner.wait=Mock(return_value='frame')
+            runner.click=Mock();runner.scroll_menu=Mock()
+            with self.assertRaisesRegex(SafetyStop,'Zona no encontrada'):runner.select_zone(20)
+            runner.click.assert_called_once_with('MAP_Z1',(440,153),'ZONES_BUTTON',(315,100,565,205))
+            self.assertEqual(runner.scroll_menu.call_count,20)
+            self.assertEqual(runner.budget.payload()['entries_reserved'],0)
+
+    def test_settings_scroll_uses_fewer_reads_without_skipping_spending_and_duplicates_guards(self):
+        for unsafe in (None,'gold','gems','duplicates','unknown'):
+            with tempfile.TemporaryDirectory() as tmp:
+                runner,io,vision=self.runner(Path(tmp));runner.plan['target']='Tealk'
+                position=[0];runner.click=Mock();runner.close_menu=Mock()
+                def scroll(screen,amount):
+                    self.assertEqual(screen,'SETTINGS')
+                    position[0]=0 if amount<0 else position[0]+amount
+                runner.scroll_menu=Mock(side_effect=scroll)
+                def setting(frame,name):
+                    start={'gold':30,'gems':42,'duplicates':48}[name]
+                    return name==unsafe if unsafe!='unknown' and start<=position[0]<start+12 else None
+                vision.setting.side_effect=setting
+                if unsafe:
+                    with self.assertRaises(SafetyStop):runner.verify_settings()
+                    self.assertFalse(runner.safety_checked);runner.close_menu.assert_not_called()
+                else:
+                    runner.verify_settings()
+                    self.assertTrue(runner.safety_checked)
+                    self.assertLessEqual(runner.scroll_menu.call_count,10)  # Reset + como máximo 9 avances.
+                    runner.close_menu.assert_called_once_with('SETTINGS')
+                io.click.assert_not_called()
+                self.assertEqual(runner.budget.payload()['entries_reserved'],0)
+
+    def test_familiar_offer_always_pauses_before_persuade_or_bribe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            vision.screen.return_value='FAMILIAR_OFFER'
+            with self.assertRaisesRegex(SafetyStop,'Oferta de familiar'):
+                runner.observe('test:1',1)
+            io.click.assert_not_called()
+            self.assertEqual(runner.budget.gold_reserved,0)
+
+    def test_decline_only_a_stable_known_non_target_and_confirm_that_action(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk')
+            vision.familiar_name.return_value='Brute';runner.click=Mock();runner.wait=Mock(return_value='frame')
+            self.assertTrue(runner.decline_other('frame','test:1',1))
+            self.assertEqual([call.args[0] for call in runner.click.call_args_list],['FAMILIAR_OFFER','DECLINE_CONFIRM'])
+            self.assertEqual(runner.budget.gold_reserved,0)
+            self.assertTrue((Path(tmp)/'decline-1.intent.json').exists())
+            runner.click.reset_mock()
+            for name in (None,'Tealk','tealk'):
+                vision.familiar_name.return_value=name
+                self.assertFalse(runner.decline_other('frame','test:1',2))
+                runner.click.assert_not_called()
+            runner.plan['target']='';vision.familiar_name.return_value='Brute'
+            self.assertFalse(runner.decline_other('frame','test:1',2));runner.click.assert_not_called()
+
+    def test_changed_familiar_before_decline_and_wrong_confirm_never_send_yes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));vision.screen.return_value='FAMILIAR_OFFER'
+            vision.familiar_name.return_value='Tealk'
+            with self.assertRaises(SafetyStop):
+                runner.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015),expected_familiar='Brute')
+            io.click.assert_not_called()
+            runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');vision.familiar_name.return_value='Brute'
+            def wait(screen,timeout=10):
+                if screen=='DECLINE_CONFIRM':raise SafetyStop('Confirmación distinta')
+                return 'frame'
+            runner.wait=wait
+            with self.assertRaises(SafetyStop):runner.decline_other('frame','test:1',1)
+            io.click.assert_called_once_with((755,955))
+
+    def test_decline_closes_on_a_different_known_next_offer_but_never_the_same_or_unknown_one(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('offer_brute','offer_sitra','offer','decline_confirm')}
+        for next_offer in ('offer_sitra','offer_brute','offer','decline_confirm'):
+            with self.subTest(next_offer=next_offer),tempfile.TemporaryDirectory() as tmp:
+                runner,io,_=self.runner(Path(tmp));runner.plan['target']='Tealk';runner.vision=vision=DungeonVision()
+                state=['offer_brute'];runner.capture=lambda:frames[state[0]]
+                def wait(predicate,timeout=10):
+                    for _ in range(2):
+                        frame=runner.capture()
+                        okay=predicate(frame) if callable(predicate) else vision.screen(frame)==predicate
+                        if not okay:raise SafetyStop('Cierre no confirmado')
+                    return frame
+                runner.wait=wait
+                def click(xy):
+                    if xy==(755,955):
+                        self.assertEqual(state[0],'offer_brute');state[0]='decline_confirm'
+                    else:
+                        self.assertEqual(xy,(818,752));self.assertEqual(state[0],'decline_confirm');state[0]=next_offer
+                io.click.side_effect=click
+                with patch('fishing_core.dungeon_runtime.time.sleep'):
+                    if next_offer=='offer_sitra':self.assertTrue(runner.decline_other(frames['offer_brute'],'test:1','1-1'))
+                    else:
+                        with self.assertRaises(SafetyStop):runner.decline_other(frames['offer_brute'],'test:1','1-1')
+                    self.assertEqual(io.click.call_count,2)
+                    intent=json.loads((Path(tmp)/'decline-1-1.intent.json').read_text())
+                    self.assertIs(intent['effect_confirmed'],next_offer=='offer_sitra')
+                    state[0]='offer_brute'
+                    with self.assertRaisesRegex(SafetyStop,'Rechazo ya registrado'):
+                        runner.decline_other(frames['offer_brute'],'test:1','1-1')
+                    self.assertEqual(io.click.call_count,2)
+                self.assertEqual(runner.budget.payload()['entries_reserved'],0)
+                self.assertEqual(runner.budget.gold_reserved,0)
+
+    def test_battle_auto_does_not_claim_that_map_auto_was_started(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));frame=np.zeros((1080,1920,3),np.uint8)
+            runner.capture=Mock(return_value=frame);runner.wait=Mock(return_value=frame)
+            runner.click=Mock();runner.go_home=Mock()
+            runner.budget.reserve_entry('test:1',resource='ENERGY',balance=100,cost=10)
+            vision.screen.side_effect=['AUTO_ON_BATTLE','AUTO_OFF','VICTORY']
+            runner.observe('test:1',1)
+            self.assertEqual(runner.click.call_args_list[0].args,('AUTO_OFF',(1880,530)))
+            runner.click.reset_mock();vision.screen.side_effect=['AUTO_ON','AUTO_ON_BATTLE']+['AUTO_OFF']*10
+            with patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=range(100)), \
+                    patch('fishing_core.dungeon_runtime.time.sleep'):
+                with self.assertRaisesRegex(SafetyStop,'Auto se desactivó'):runner.observe('test:1',2)
+            runner.click.assert_not_called()
+
+    def test_transient_map_auto_off_during_battle_transition_never_reactivates_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));frame=np.zeros((1080,1920,3),np.uint8)
+            runner.capture=Mock(return_value=frame);runner.wait=Mock(return_value=frame)
+            runner.click=Mock();runner.go_home=Mock()
+            runner.budget.reserve_entry('test:1',resource='ENERGY',balance=100,cost=10)
+            vision.screen.side_effect=['AUTO_OFF','AUTO_ON_BATTLE','VICTORY']
+            runner.observe('test:1',1,auto_started=True)
+            self.assertEqual(runner.budget.payload()['completed_runs'],1)
+            self.assertEqual([c.args[0] for c in runner.click.call_args_list],['VICTORY'])
+
+    def test_supervised_continuation_keeps_decline_ids_and_blocks_uncertain_intents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            path=Path(tmp)/'decline-1-1.intent.json';path.write_text('{"effect_confirmed":false}')
+            with self.assertRaisesRegex(SafetyStop,'Rechazo previo sin confirmar'):runner.observe('test:1',1)
+            io.click.assert_not_called()
+            path.write_text('{"effect_confirmed":true}');vision.screen.side_effect=['FAMILIAR_OFFER','FAMILIAR_OFFER']
+            runner.decline_other=Mock(side_effect=[True,False])
+            with self.assertRaises(SafetyStop):runner.observe('test:1',1)
+            self.assertEqual(runner.decline_other.call_args_list[0].args[-1],'1-2')
+
+    def test_victory_is_counted_only_after_town_and_map_are_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            runner.wait=Mock(return_value=runner.capture.return_value)
+            vision.screen.return_value='VICTORY'
+            runner.budget.reserve_entry('test:1',resource='ENERGY',balance=100,cost=10)
+            def close():
+                self.assertEqual(runner.budget.payload()['completed_runs'],0)
+            runner.go_home=close
+            runner.observe('test:1',1)
+            self.assertEqual(runner.budget.payload()['completed_runs'],1)
+            io.click.assert_called_once_with((1150,1000))
+
+
+if __name__=='__main__':unittest.main()

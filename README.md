@@ -1,7 +1,14 @@
 # 🎣 Bit Heroes Fishing Bot
 
 Automatización de la pesca de Bit Heroes para **Windows**, con un panel oscuro,
-dos motores separados y parada de emergencia con **F8**.
+dos motores separados y parada de emergencia con **F8**. Esta rama también incluye
+soporte experimental **Linux + Steam + niri/XWayland**: [guía y validación](docs/LINUX.md).
+
+**Esta rama inicia ahora Bit Heroes Farm Bot:** `./ABRIR_BOT.sh` abre Dungeons
+como modo principal y conserva Fishing en la segunda pestaña. Incluye catálogo
+de 77 dungeons/220 familiares y rutas **Z5D2 Normal / Z5D3 Heroic (Tealk, 1 run)**,
+con límites de runs/energía y F8. Las otras rutas todavía son catálogo, no automatización
+certificada. [Uso, evidencia y límites del farmeo](docs/FARM_BOT.md).
 
 <!-- PROJECT_LINKS_START -->
 [![Estado](https://img.shields.io/badge/estado-beta-555555?style=for-the-badge)](#limitaciones)
@@ -33,7 +40,7 @@ dos motores separados y parada de emergencia con **F8**.
   Steam tiene cinco pescas completas comprobadas en una configuración concreta;
   sigue siendo beta, no una certificación para todas las cuentas.
 
-No compra ni reclama cebos gratis, no abre Shop/Events, no entra en otros modos,
+El modo Fishing no compra ni reclama cebos gratis, no abre Shop/Events, no entra en otros modos,
 no cambia equipo ni selecciona rarezas automáticamente.
 F8, DETENER y cerrar el panel detienen la sesión; no la reinician solos.
 

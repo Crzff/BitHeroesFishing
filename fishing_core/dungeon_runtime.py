@@ -1,0 +1,315 @@
+"""Runner Steam/niri: rutas locales calibradas, sin compras ni motores de pesca."""
+
+import json
+import os
+import subprocess
+import time
+
+import cv2
+import numpy as np
+
+from .control_flow import SafetyStop
+from .dungeon_catalog import dungeon,farm_plan,normalize
+from .dungeon_vision import DungeonVision
+from .farm_budget import FarmBudget
+from .game_window import ENV_WINDOW,WindowGuard
+from .processes import Mutex,child_options,close_children,python_executable
+from .protocol import Channel,atomic_json
+from .telemetry import ROOT,Telemetry,run_environment
+
+ROUTE_COSTS={('Z5D2','Normal'):10,('Z5D3','Heroic'):30}
+MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
+MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
+              'DIFFICULTY_Z5D2':('MAP_Z5',),'DIFFICULTY_Z5D3':('MAP_Z5',),'ZONES':MAP_SCREENS,
+              **{screen:('HOME',) for screen in MAP_SCREENS}}
+
+
+def validate_supported(plan):
+    checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],plan.get('target',''))
+    if (checked['dungeon_id'],checked['difficulty']) not in ROUTE_COSTS:
+        raise ValueError('Ruta aún no calibrada: disponibles Z5D2 · Normal y Z5D3 · Heroic. No se cambia tu objetivo.')
+    if checked['dungeon_id']=='Z5D3' and checked['runs']!=1:
+        raise ValueError('Z5D3 · Heroic: solo una run por sesión hasta validar la repetición')
+    return checked
+
+
+def start_dungeon(game,plan):
+    plan=validate_supported(plan)
+    if os.name=='nt':raise ValueError('Runner de dungeon todavía no certificado en Windows; Fishing se conserva')
+    mutex=Mutex('LAUNCHER');process=channel=guard=None
+    try:
+        guard=WindowGuard(game);guard.check()
+        env=run_environment();env[ENV_WINDOW]=game.serialize();env['FARM_LAUNCHER_PID']=str(os.getpid())
+        channel=Channel(env['FISHING_RUN_ID']);atomic_json(channel.directory/'farm_plan.json',plan)
+        process=subprocess.Popen([python_executable(),'-B','-u',str(ROOT/'FARM_DUNGEON_PROCESS.py')],
+                                 cwd=str(ROOT),env=env,**child_options())
+        return process,channel,mutex
+    except (Exception,KeyboardInterrupt):
+        try:close_children((process,),channel)
+        finally:mutex.close()
+        raise
+    finally:
+        if guard is not None:guard.api.close()
+
+
+class DungeonRunner:
+    def __init__(self,io,capture,vision,channel,log,plan):
+        self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
+        self.plan=validate_supported(plan);self.cost=None;self.safety_checked=False
+        self.deadline=time.monotonic()+900
+        self.budget=FarmBudget(max_runs=plan['runs'],max_energy=plan['energy_limit'],max_seconds=900,max_gold=0)
+
+    def check(self):
+        self.io.emergency();self.io.check_game();self.log.check()
+        if self.channel.stop_path.exists():raise SafetyStop('Parada solicitada')
+        parent=os.environ.get('FARM_LAUNCHER_PID')
+        if parent and os.getppid()!=int(parent):raise SafetyStop('El panel terminó; no se continúa sin supervisor')
+        if time.monotonic()>=self.deadline:raise SafetyStop('Límite de sesión: 15 minutos')
+
+    def capture(self):
+        self.check();shot=self.cap.grab({'left':0,'top':0,'width':1920,'height':1080})
+        return np.frombuffer(shot.bgra,np.uint8).reshape(1080,1920,4)[:,:,:3].copy()
+
+    def wait(self,predicate,timeout=10):
+        deadline=time.monotonic()+timeout;stable=0;frame=None
+        while time.monotonic()<deadline:
+            frame=self.capture()
+            okay=predicate(frame) if callable(predicate) else self.vision.screen(frame)==predicate
+            stable=stable+1 if okay else 0
+            if stable>=2:return frame
+            time.sleep(.12)
+        expected=predicate if isinstance(predicate,str) else 'lectura estable'
+        screen=self.vision.screen(frame) if frame is not None else 'SIN_LECTURA'
+        familiar=self.vision.familiar_name(frame) if screen=='FAMILIAR_OFFER' else None
+        snapshot=None
+        if frame is not None:
+            clean=np.zeros_like(frame)
+            boxes=[(645,90,1280,215),(1000,930,1420,1055)]
+            if screen=='HOME':boxes += [(15,15,165,190),(1760,910,1920,1080)]
+            elif screen.startswith('AUTO_') or screen=='BATTLE_VICTORY':boxes += [(1680,130,1920,680)]
+            if screen=='FAMILIAR_OFFER':
+                boxes += [(350,130,1570,205),(360,640,720,780),(1240,640,1535,780),(550,890,965,1015)]
+            elif screen=='DECLINE_CONFIRM':boxes += [(700,455,1220,620),(670,695,955,805)]
+            for x,y,x1,y1 in boxes:clean[y:y1,x:x1]=frame[y:y1,x:x1]
+            path=self.channel.directory/f'wait-timeout-{time.perf_counter_ns()}.png'
+            try:
+                if cv2.imwrite(str(path),clean):snapshot=path.name
+            except (cv2.error,OSError):pass  # La falta de evidencia nunca permite continuar.
+        self.log.emit('DUNGEON_WAIT_TIMEOUT',expected=expected,screen=screen,familiar=familiar,
+                      snapshot=snapshot,timeout_seconds=timeout)
+        raise SafetyStop(f'Pantalla no confirmada: {expected}; observada {screen}'+(f' · {familiar}' if familiar else ''))
+
+    def click(self,screen,xy,key=None,roi=None,expected_familiar=None,expected_zone=None):
+        self.check();frame=self.capture()
+        if (self.vision.screen(frame)!=screen or (key and self.vision.locate(frame,key,roi) is None) or
+                (expected_familiar is not None and self.vision.familiar_name(frame)!=expected_familiar) or
+                (expected_zone is not None and self.vision.zone_choice(frame,expected_zone)!=xy)):
+            raise SafetyStop('La pantalla cambió antes del clic; no se reintenta')
+        self.check();self.io.click(xy)
+        self.log.emit('DUNGEON_INPUT',screen=screen,xy=xy)
+        time.sleep(.25)  # Unity debe procesar la suelta antes de abandonar el botón.
+        self.io._move((960,1070))  # Zona neutra: no confundir hover con cambio de estado.
+
+    def close_menu(self,screen):
+        if screen not in MENU_PARENTS:raise SafetyStop('Escape no autorizado en esta pantalla')
+        self.wait(screen);self.check()
+        if self.vision.screen(self.capture())!=screen:raise SafetyStop('La ventana cambió antes de Escape')
+        self.check();self.io.escape();self.log.emit('DUNGEON_KEY',screen=screen,key='ESCAPE')
+        return self.wait(lambda frame:self.vision.screen(frame) in MENU_PARENTS[screen])
+
+    def scroll_menu(self,screen,amount):
+        from Xlib import X
+        from Xlib.ext import xtest
+        if screen not in ('SETTINGS','ZONES') or self.vision.screen(self.capture())!=screen:
+            raise SafetyStop('Menú de scroll no confirmado')
+        if type(amount) is not int or not 0<abs(amount)<=80:raise SafetyStop('Scroll fuera de límite')
+        xy=(1250,600) if screen=='SETTINGS' else (1150,600)
+        self.io._move(xy)
+        for _ in range(abs(amount)):
+            self.check()
+            if self.io.game_guard.api.cursor()!=xy:raise SafetyStop('Cursor cambió durante scroll')
+            button=5 if amount>0 else 4
+            xtest.fake_input(self.io.game_guard.api.display,X.ButtonPress,button)
+            xtest.fake_input(self.io.game_guard.api.display,X.ButtonRelease,button)
+            self.io.game_guard.api.display.sync();time.sleep(.025)
+        time.sleep(.12)
+        self.io._move((960,1070))
+
+    def verify_settings(self):
+        self.safety_checked=False;self.wait('HOME')
+        self.click('HOME',(1830,986),'HOME_SETTINGS',(1760,910,1920,1080));self.wait('SETTINGS')
+        self.scroll_menu('SETTINGS',-80);seen={}
+        for _ in range(35):
+            frame=self.wait('SETTINGS')
+            for name in ('gold','gems','duplicates'):
+                value=self.vision.setting(frame,name)
+                if value is not None:
+                    second=self.capture()
+                    if self.vision.setting(second,name)!=value:raise SafetyStop('Ajuste nativo inestable')
+                    seen[name]=value
+                    if name in ('gold','gems') and value:raise SafetyStop(f'Gasto nativo activado: {name}; no se entra')
+            if len(seen)==3:break
+            self.scroll_menu('SETTINGS',6)  # Calibrado: 8 salta una lectura; 6 conserva solape.
+        if len(seen)!=3:raise SafetyStop('No se pudieron comprobar todos los ajustes anti-gasto')
+        if self.plan['target'] and seen['duplicates']:
+            raise SafetyStop('Desactiva Decline duplicate familiars antes de farmear copias; no se entra')
+        atomic_json(self.channel.directory/'native_settings.json',{'checked':seen,'changed_by_bot':False})
+        self.close_menu('SETTINGS');self.safety_checked=True
+        self.log.emit('DUNGEON_STATUS',message='Ajustes comprobados · cero oro/gemas',settings=seen)
+
+    def go_home(self):
+        frame=self.wait(lambda frame:self.vision.screen(frame)=='HOME' or self.vision.screen(frame) in MENU_PARENTS,12)
+        for _ in range(4):
+            screen=self.vision.screen(frame)
+            if screen=='HOME':return
+            frame=self.close_menu(screen)
+        raise SafetyStop('Demasiados niveles de menú; no se envía otro Escape')
+
+    def select_zone(self,zone):
+        if type(zone) is not int or not 1<=zone<=20:raise ValueError('Zona sin referencia; no se sustituye')
+        frame=self.wait(lambda frame:self.vision.screen(frame) in MAP_SCREENS)
+        screen=self.vision.screen(frame)
+        if screen==f'MAP_Z{zone}':return
+        self.click(screen,(440,153),'ZONES_BUTTON',(315,100,565,205));frame=self.wait('ZONES')
+        if self.vision.zone_choice(frame,zone) is None:self.scroll_menu('ZONES',-40)
+        for step in range(20):
+            frame=self.wait('ZONES');xy=self.vision.zone_choice(frame,zone)
+            if xy is not None:
+                self.wait(lambda frame:self.vision.zone_choice(frame,zone)==xy)
+                self.click('ZONES',xy,expected_zone=zone);self.wait(f'MAP_Z{zone}')
+                self.log.emit('ZONE_SELECTED',zone=zone,message=f'Zona {zone} confirmada; sin entrada')
+                return
+            if step<19:self.scroll_menu('ZONES',1)
+        raise SafetyStop('Zona no encontrada o bloqueada; no se elige otra')
+
+    def select_route(self):
+        identifier=self.plan['dungeon_id'];difficulty=self.plan['difficulty'];screen='DIFFICULTY_'+identifier
+        self.click('HOME',(90,90),'HOME_QUEST',(15,15,165,190))
+        self.select_zone(dungeon(identifier)['zone'])
+        xy,roi=((990,810),(880,675,1110,955)) if identifier=='Z5D2' else ((1457,480),(1330,380,1575,610))
+        self.click('MAP_Z5',xy,'NODE_'+identifier,roi)
+        frame=self.wait(screen);self.cost=self.vision.cost(frame,difficulty)
+        expected=ROUTE_COSTS[(identifier,difficulty)]
+        if self.cost!=expected or self.vision.cost(self.capture(),difficulty)!=self.cost:
+            raise SafetyStop(f'Coste/dificultad no confirmado: esta calibración exige {expected} de energía')
+        xy,roi=((550,495),(400,450,715,550)) if difficulty=='Normal' else ((1365,495),(1200,450,1530,550))
+        self.click(screen,xy,difficulty.upper(),roi);self.wait('TEAM')
+
+    def enter(self,cycle):
+        if not self.safety_checked or self.cost!=ROUTE_COSTS[(self.plan['dungeon_id'],self.plan['difficulty'])]:
+            raise SafetyStop('Ruta o ajustes sin confirmar')
+        balance=None
+        def known(frame):
+            nonlocal balance
+            current=self.vision.energy(frame)
+            okay=self.vision.screen(frame)=='TEAM' and current is not None and current==balance
+            balance=current
+            return okay
+        frame=self.wait(known,10)
+        if balance is None or self.vision.screen(frame)!='TEAM':raise SafetyStop('Energía desconocida')
+        attempt=f'{self.channel.run_id}:{cycle}'
+        if not self.budget.reserve_entry(attempt,resource='ENERGY',balance=balance[0],cost=self.cost):
+            raise SafetyStop('Entrada ya reservada; no repetir ACCEPT')
+        atomic_json(self.channel.directory/f'entry-{cycle}.intent.json',
+                    {'attempt_id':attempt,'plan':self.plan,'balance':balance,'cost':self.cost,
+                     'budget':self.budget.payload(),'perf_ns':time.perf_counter_ns(),'effect_confirmed':False})
+        self.click('TEAM',(1215,982),'ACCEPT',(1000,930,1420,1035))
+        self.log.emit('DUNGEON_ENTERED',attempt_id=attempt,energy_before=balance[0],energy_reserved=self.cost)
+        return attempt
+
+    def decline_other(self,frame,attempt,offer):
+        name=self.vision.familiar_name(frame);target=self.plan['target']
+        if not target or not isinstance(name,str) or normalize(name)==normalize(target):return False
+        frame=self.wait('FAMILIAR_OFFER')
+        if self.vision.familiar_name(frame)!=name:raise SafetyStop('Nombre de familiar inestable; no se rechaza')
+        path=self.channel.directory/f'decline-{offer}.intent.json'
+        if path.exists():raise SafetyStop('Rechazo ya registrado; no se repite una decisión incierta')
+        intent={'attempt_id':attempt,'familiar':name,'target':target,'action':'DECLINE','effect_confirmed':False}
+        atomic_json(path,intent)
+        self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015),expected_familiar=name)
+        self.wait('DECLINE_CONFIRM')
+        self.click('DECLINE_CONFIRM',(818,752),'DECLINE_YES',(670,695,955,805))
+        def closed(frame):
+            screen=self.vision.screen(frame)
+            return (screen in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','VICTORY','LOADING') or
+                    (screen=='FAMILIAR_OFFER' and self.vision.familiar_name(frame) not in (None,name)))
+        self.wait(closed)  # Otra oferta conocida acredita cierre; la misma o ilegible no.
+        atomic_json(path,{**intent,'effect_confirmed':True})
+        self.log.emit('FAMILIAR_DECLINED',message=f'{name} rechazado · objetivo {target}',familiar=name,target=target)
+        return True
+
+    def observe(self,attempt,cycle,*,auto_started=False):
+        previous=list(self.channel.directory.glob(f'decline-{cycle}-*.intent.json'))
+        if any(json.loads(path.read_text()).get('effect_confirmed') is not True for path in previous):
+            raise SafetyStop('Rechazo previo sin confirmar; no se continúa')
+        unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180
+        while time.monotonic()<deadline:
+            frame=self.capture();screen=self.vision.screen(frame)
+            if screen=='FAMILIAR_OFFER':
+                cv2.imwrite(str(self.channel.directory/'familiar-offer.png'),frame[110:900,350:1600])
+                if declined>=20:raise SafetyStop('Demasiadas ofertas de familiar; no se continúa')
+                if not self.decline_other(frame,attempt,f'{cycle}-{declined+1}'):
+                    raise SafetyStop('Oferta de familiar objetivo o desconocido: pausa para decidir; no se gasta oro ni gemas')
+                declined+=1;unknown_since=None;continue
+            if screen=='VICTORY':
+                frame=self.wait('VICTORY')
+                cv2.imwrite(str(self.channel.directory/f'result-{cycle}.png'),frame[110:930,1070:1600])
+                atomic_json(self.channel.directory/f'result-{cycle}.json',
+                            {'attempt_id':attempt,'outcome':'VICTORY','loot':None,'gold_gain':None,'xp_gain':None,
+                             'closure_confirmed':False})
+                self.click('VICTORY',(1150,1000),'TOWN',(990,940,1320,1060));self.go_home()
+                self.budget.finish_run(attempt,'VICTORY',closure_confirmed=True)
+                atomic_json(self.channel.directory/f'result-{cycle}.json',
+                            {'attempt_id':attempt,'outcome':'VICTORY','loot':None,'gold_gain':None,'xp_gain':None,
+                             'closure_confirmed':True,'budget':self.budget.payload()})
+                self.log.emit('DUNGEON_COMPLETE',message=f'Dungeon {cycle} completada y cerrada',budget=self.budget.payload())
+                return
+            if screen=='AUTO_OFF':
+                if auto_started:
+                    # El mapa pasa brevemente a OFF al iniciar combate. Esperar sin input.
+                    unknown_since=unknown_since or time.monotonic()
+                    if time.monotonic()-unknown_since>8:
+                        raise SafetyStop('Auto se desactivó de forma estable: revisar posible muerte/derrota; no se reactiva')
+                else:
+                    self.wait('AUTO_OFF');self.click('AUTO_OFF',(1880,530));self.wait('AUTO_ON');auto_started=True
+            elif screen=='AUTO_ON':auto_started=True  # Auto de combate no acredita Auto del mapa.
+            elif screen=='STORY_ZORUL':
+                signature=hash(frame[420:813,780:1590].tobytes())
+                if signature not in story_sent:
+                    if len(story_sent)>=4:raise SafetyStop('Demasiados diálogos de historia')
+                    self.wait('STORY_ZORUL');story_sent.add(signature)
+                    self.click('STORY_ZORUL',(1665,646),'STORY_ARROW',(1620,575,1720,720))
+            elif screen not in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','LOADING'):
+                unknown_since=unknown_since or time.monotonic()
+                if time.monotonic()-unknown_since>8:
+                    cv2.imwrite(str(self.channel.directory/'unknown.png'),frame[100:915,320:1600])
+                    raise SafetyStop('Pantalla/oferta/derrota no reconocida: pausa sin Persuade ni gasto')
+            if screen in ('AUTO_ON','AUTO_ON_BATTLE','BATTLE_VICTORY','STORY_ZORUL','LOADING'):unknown_since=None
+            time.sleep(.12)
+        raise SafetyStop('Dungeon sin cierre confirmado en 3 minutos; no se repite')
+
+    def run(self):
+        self.go_home()
+        for cycle in range(1,self.plan['runs']+1):
+            if self.budget.energy_reserved+ROUTE_COSTS[(self.plan['dungeon_id'],self.plan['difficulty'])]>self.plan['energy_limit']:
+                self.log.emit('DUNGEON_STATUS',message='Límite de energía alcanzado');return
+            self.verify_settings();self.select_route();attempt=self.enter(cycle);self.observe(attempt,cycle)
+        self.log.emit('DUNGEON_STATUS',message='Límite de runs alcanzado · detenido',budget=self.budget.payload())
+
+
+def run_dungeon():
+    from .linux import LinuxIO,LinuxCapture
+    channel=Channel(os.environ['FISHING_RUN_ID']);io=log=None;locks=[]
+    try:
+        plan=validate_supported(json.loads((channel.directory/'farm_plan.json').read_text()))
+        for role in ('CONTROL','CATCH'):locks.append(Mutex(role))
+        log=Telemetry('DUNGEON',channel.run_id);io=LinuxIO();io.control_mode=True
+        with LinuxCapture(io.game_guard) as capture:
+            DungeonRunner(io,capture,DungeonVision(),channel,log,plan).run()
+    except (Exception,KeyboardInterrupt) as exc:
+        if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
+        channel.stop('DUNGEON',str(exc) or 'F8')
+    finally:
+        if io:io.close()
+        if log:log.close()
+        for lock in reversed(locks):lock.close()

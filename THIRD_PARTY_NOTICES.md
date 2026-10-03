@@ -16,6 +16,14 @@ La licencia del código no concede derechos sobre los recursos del juego. Este
 aviso tampoco sustituye permisos de redistribución ni una revisión legal. Si
 eres titular y tienes una objeción, contacta al mantenedor mediante el repositorio.
 
+`assets/dungeon_templates.npz` y `tests/fixtures/dungeons.npz` derivan también
+de Bit Heroes: referencias y capturas locales sanitizadas para pruebas, no
+recursos MIT. No se han publicado. El catálogo `assets/dungeons.json` utiliza
+nombres/rutas de https://bit-heroes.fandom.com/wiki/Zones y
+https://bit-heroes.fandom.com/wiki/Familiar, consultadas el 2026-10-02; conservar
+atribución y revisar las condiciones/licencia comunitarias antes de redistribuir
+datos derivados. No incluye textos completos de artículos.
+
 ## Python y paquetes
 
 El ZIP de código no incorpora Python ni copias instaladas de los paquetes.

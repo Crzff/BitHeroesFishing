@@ -1,0 +1,808 @@
+{
+  "schema": 1,
+  "source": "Steam/niri local 2026-10-02",
+  "source_sha256": {
+    "home": "372b7740380b471c9f0db7357aa47af24408c8a66e7dce2ac1d11c47c33d4267",
+    "map": "aca5f5c6611507cb00498a54ce9035b46e6a975b4fb50dbee581ce7f7b616fc4",
+    "difficulty": "90749287db9bb3c9617ea04c6d8c6d464fe534226a793d2474cd2d48838a16bc",
+    "team": "7a1bc8e1c0deb19727d6545d5854d9a115400843ac6c909c127e26e23274d3b6",
+    "energy": "2003719602cea66c70939186fddb815e24d361fafa601ddd31912e37fe5011d4",
+    "timer": "e21b6aa1e08122351355faad0dcf706a23be7c75b6729dceeb9979d7ae9eea56",
+    "settings_gold": "986bf29b13c38fca1d34a39f5c55f272cbc92fe6479253eb7755fac06cb6f8e1",
+    "settings_gems": "26906c05a78e56dded168706937ea99534bfc4b248608d413d6dcaac658b6d34",
+    "settings_duplicates": "25922aaa3691e914e8f2eb91656e79268a7e4580e7106976a3ab1a2c80238aab",
+    "settings_top": "70af877732efa6fb077e88bfa8ae03d21d9c0ca15f602c1662812a85c1f8c1d6",
+    "auto_off": "517c29cf8f7c419bac4f62926b558e0e21834949b286350e1abc546a814db4ee",
+    "auto_on": "546b4d3fb840085d3fa19afcbd10557ea44693458c8e21e8f1d6ab229eab10dd",
+    "battle": "ced225cc16cd4342a8d345f0171e4fa72fb06c71e665a36aa4e4eb08c11204d4",
+    "story": "46c4aab3e3d67e4887565557ce089be14d9d3e18be16d404ad8d16fdb1f821ef",
+    "result": "4d6fb57c1b4ef9b812f150b3a63c1a51cd96d6c795c2c30818a1b74796b5d364",
+    "tealk_map": "2c8be358485fc523550754a0e177ea6f27e5add14470ce419eab5c84cdb89fc0",
+    "tealk_difficulty": "ea3a580ed15d066c45431ab17d63eccf9d7a7658748bd4a182e9cb371e84e78c",
+    "tealk_team": "8243f0c63413bbd9e4fbfaf3703881a45d44fbf7a54b082b5d5af499230a7915",
+    "tealk_gold": "e23dc7f75d0870e65375ed8de974738eedfcb524b2fd5f6474528cd699926925",
+    "tealk_gems": "e357b2cad97f6d1c725959b33e47563b94750bdcfac5bbfda8686a214d371eb5",
+    "tealk_duplicates_on": "34d0df43de6a79b1c582aee55e403da68b1fef899aec21eaade15d9558d56145",
+    "tealk_duplicates_off": "3004c668b3a2118b1242f731b05cc5a9a63cfc76eedf4036b6c955ee78dc1d2e",
+    "tealk_home": "59ae45ff499d92c176d81b8df7630a9cb88aae1adbfa2d3beac037efc4529aca",
+    "offer_mummih": "84f7bb878dd776203c82ad49f6eb1acd58984ce7faacd35d377bc8856103448a",
+    "offer_brute": "5710c0aef98c1f98bbedaac363f4fce1379d7340c7e96b7d9dbdd74439dd4dd4",
+    "decline_confirm": "0dc66f33fe8e8e95ea611d5ecfdb274b2dd2a001cf5e1a932ddb7790433d7afb",
+    "tealk_battle_victory": "d9e29042313490e87739502344adbe3e20874e4c47db851eb1774bd7a8d8d1ee",
+    "home_town_moved": "5e3593f4ec18027f63a905c4d55d8756028e15703a13fcc9b3a92ac651a761d1",
+    "offer_sitra": "31935c25c20d13091d9768f5b4313b6672a6cb4e082855545bb9d75b6e0adcdd",
+    "tealk_difficulty_idle": "82841c386a8a5bcb318042f0995dcd5e242bd979e583d15794ffea3ceb484c5c",
+    "zones_map_1": "b42b0aaddb23a4f88f7d19f0fa0e88721915fe5dea63d0f47cc62dc9920d4d74",
+    "zones_map_2": "b001690fd50d2b48861e40d8a88eae422708efc3b16829cc20179aa0cbf6dd23",
+    "zones_map_3": "07a0ef222ff5f36d92f0d2187cc2e7908421a82cdbed3028722253247b32fe04",
+    "zones_map_4": "9bbf777a66ae50cce0c3564bd5d883c453213ad4d8ae89c6ae2495a80aa8ee8c",
+    "zones_map_5": "554ce955684f6ec95d7b380266fb13db251995ca328f0098cd81ba91d5f5591e",
+    "zones_map_6": "8985ff674cab07663969a07ef657a950ca4bb85e6b1c7edc38bbb98bc8082def",
+    "zones_map_7": "b100e82683e7a9d56795cda132b0da406c21efaf46c5d7b9984f1b971a5632f7",
+    "zones_map_8": "2c95d0c8852ff25912926f238fc43aae322794915d28f1ea773867581c94d6d2",
+    "zones_map_9": "873a11d3a453d71e8c3a3fea4ef3ec44267992c12bb08bbde2f5e19d0d6d1247",
+    "zones_map_10": "d15587e3c9ddcf8551c11504da92edfc9f2ec20e8db7145dd8c06e22b718858a",
+    "zones_map_11": "c61811cdbb692319397629f5d8206055ddce3ca244f385a2e2c2965a654c461e",
+    "zones_map_12": "99b9d26f6ca94acfa9fca4e0ff9ebe4c4189e306b09a937998ca439ca0b50c39",
+    "zones_map_13": "3cb5e061b3932175fcfde167ca36288587ca61076d72142ccbc38081c0c422cd",
+    "zones_map_14": "327b6cac136f1921fafe60adf30a9d449766e836844dcfeb7b0c73edf1295d07",
+    "zones_map_15": "8b6f071df5765cec09a7459e8890faec4786f6673a6170a209620f2961834824",
+    "zones_map_16": "72455dc77a53378ceb75b0d12e48f86d4c6e0de1f68e45fcc0a7ad28875dae0b",
+    "zones_map_17": "5fc1a6fa2828cbc3de565f94d55731ec316d0936d2b93ff562a69d80d64e9f21",
+    "zones_map_18": "dabe102aef88a0dc879e6922acb95c085d346768b386ab6cdef3a6c9b779a27a",
+    "zones_map_19": "9becca045dc6c97a7c9e54fb0bebf5bfe226753deafe2baf70cb3310c480cdcb",
+    "zones_map_20": "dcc876001e5f36b33cc3d24f8127e2864c8086b298a179fe3af667c28dd505aa",
+    "zones_list_top": "e755561d204514835dba375a84efd689d3bbfb2201283966bfd031b2670ff4e3",
+    "zones_list_middle-b": "7cb40fed523b516be634bf668301fdd2169c313822ad495fb6bd92abb982ae09",
+    "zones_list_middle-a": "787c4783d11c443b3e5531014ddc39140baadd60bd20d0283b7628559fff3de2",
+    "zones_list_bottom": "8a5e3d6481c0bdc41df51e91c376e729e2305dd48d22beb8b00fe7f89b14745f",
+    "zones_reopened": "0957861c45b1ac74ed51cc45a2e8cb437883a8806db00d082e3cd05de82ea54a",
+    "energy_team_large": "82a79750eb382478aa85c409c96d21abe90399a6da5f8cdc650ced1849cb3489",
+    "energy_team_timer": "a13a0252d6d16762bab8209c938be9a8337ec2212c1ecda92a83fd8cb37cb34a"
+  },
+  "regions": {
+    "HOME_QUEST": [
+      "home",
+      [
+        22,
+        24,
+        155,
+        174
+      ]
+    ],
+    "HOME_SETTINGS": [
+      "home",
+      [
+        1780,
+        932,
+        1896,
+        1075
+      ]
+    ],
+    "MAP_Z5": [
+      "map",
+      [
+        775,
+        110,
+        1130,
+        165
+      ]
+    ],
+    "NODE_Z5D2": [
+      "map",
+      [
+        900,
+        695,
+        1090,
+        935
+      ]
+    ],
+    "DIFFICULTY_Z5D2": [
+      "difficulty",
+      [
+        577,
+        177,
+        1340,
+        242
+      ]
+    ],
+    "NORMAL": [
+      "difficulty",
+      [
+        411,
+        459,
+        700,
+        536
+      ]
+    ],
+    "TEAM": [
+      "team",
+      [
+        858,
+        107,
+        1065,
+        171
+      ]
+    ],
+    "ACCEPT": [
+      "team",
+      [
+        1040,
+        943,
+        1395,
+        1015
+      ]
+    ],
+    "SETTINGS": [
+      "settings_gold",
+      [
+        790,
+        122,
+        1127,
+        185
+      ]
+    ],
+    "GOLD": [
+      "settings_gold",
+      [
+        557,
+        662,
+        1278,
+        707
+      ]
+    ],
+    "GEMS": [
+      "settings_gems",
+      [
+        557,
+        776,
+        1178,
+        822
+      ]
+    ],
+    "DUPLICATES": [
+      "settings_duplicates",
+      [
+        557,
+        607,
+        1347,
+        653
+      ]
+    ],
+    "EMPTY": [
+      "settings_gold",
+      [
+        478,
+        653,
+        542,
+        717
+      ]
+    ],
+    "CHECKED": [
+      "settings_duplicates",
+      [
+        478,
+        597,
+        542,
+        661
+      ]
+    ],
+    "ENERGY_ICON": [
+      "energy",
+      [
+        974,
+        19,
+        1020,
+        62
+      ]
+    ],
+    "AUTO_OFF": [
+      "auto_off",
+      [
+        1848,
+        428,
+        1914,
+        588
+      ]
+    ],
+    "AUTO_ON": [
+      "auto_on",
+      [
+        1848,
+        428,
+        1914,
+        588
+      ]
+    ],
+    "STORY_ZORUL": [
+      "story",
+      [
+        1265,
+        446,
+        1430,
+        489
+      ]
+    ],
+    "STORY_ARROW": [
+      "story",
+      [
+        1640,
+        605,
+        1696,
+        694
+      ]
+    ],
+    "VICTORY": [
+      "result",
+      [
+        821,
+        126,
+        1118,
+        180
+      ]
+    ],
+    "TOWN": [
+      "result",
+      [
+        1018,
+        963,
+        1296,
+        1033
+      ]
+    ],
+    "PERSUADE": [
+      "offer",
+      [
+        388,
+        672,
+        670,
+        733
+      ]
+    ],
+    "BRIBE": [
+      "offer",
+      [
+        1296,
+        675,
+        1468,
+        733
+      ]
+    ],
+    "DECLINE": [
+      "offer",
+      [
+        581,
+        921,
+        939,
+        982
+      ]
+    ],
+    "LOADING": [
+      "loading",
+      [
+        805,
+        480,
+        1110,
+        538
+      ]
+    ],
+    "NODE_Z5D3": [
+      "tealk_map",
+      [
+        1360,
+        397,
+        1558,
+        601
+      ]
+    ],
+    "DIFFICULTY_Z5D3": [
+      "tealk_difficulty",
+      [
+        620,
+        177,
+        1295,
+        242
+      ]
+    ],
+    "HEROIC": [
+      "tealk_difficulty",
+      [
+        1220,
+        459,
+        1510,
+        536
+      ]
+    ],
+    "EMPTY_HOVER": [
+      "tealk_duplicates_off",
+      [
+        478,
+        506,
+        542,
+        570
+      ]
+    ],
+    "HOME_QUEST_TOWN": [
+      "tealk_home",
+      [
+        22,
+        24,
+        155,
+        174
+      ]
+    ],
+    "HOME_SETTINGS_TOWN": [
+      "tealk_home",
+      [
+        1780,
+        932,
+        1896,
+        1075
+      ]
+    ],
+    "DECLINE_CONFIRM": [
+      "decline_confirm",
+      [
+        715,
+        465,
+        1205,
+        608
+      ]
+    ],
+    "DECLINE_YES": [
+      "decline_confirm",
+      [
+        688,
+        710,
+        943,
+        787
+      ]
+    ],
+    "AUTO_ON_BATTLE": [
+      "offer_brute",
+      [
+        1848,
+        435,
+        1910,
+        595
+      ]
+    ],
+    "BATTLE_VICTORY": [
+      "tealk_battle_victory",
+      [
+        831,
+        83,
+        1100,
+        137
+      ]
+    ],
+    "BATTLE_CONTINUE": [
+      "tealk_battle_victory",
+      [
+        1020,
+        966,
+        1293,
+        1036
+      ]
+    ],
+    "CONFIRM_HEADER": [
+      "decline_confirm",
+      [
+        800,
+        285,
+        1115,
+        350
+      ]
+    ],
+    "DUNGEON_MAP_HUD": [
+      "auto_off",
+      [
+        1715,
+        142,
+        1820,
+        160
+      ]
+    ],
+    "HEROIC_IDLE": [
+      "tealk_difficulty_idle",
+      [
+        1220,
+        459,
+        1510,
+        536
+      ]
+    ],
+    "ZONES_MENU": [
+      "zones_list_top",
+      [
+        840,
+        135,
+        1080,
+        199
+      ]
+    ],
+    "ZONES_BUTTON": [
+      "zones_map_5",
+      [
+        323,
+        112,
+        550,
+        194
+      ]
+    ],
+    "MAP_Z1": [
+      "zones_map_1",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z2": [
+      "zones_map_2",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z3": [
+      "zones_map_3",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z4": [
+      "zones_map_4",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z6": [
+      "zones_map_6",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z7": [
+      "zones_map_7",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z8": [
+      "zones_map_8",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z9": [
+      "zones_map_9",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z10": [
+      "zones_map_10",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z11": [
+      "zones_map_11",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z12": [
+      "zones_map_12",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z13": [
+      "zones_map_13",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z14": [
+      "zones_map_14",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z15": [
+      "zones_map_15",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z16": [
+      "zones_map_16",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z17": [
+      "zones_map_17",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z18": [
+      "zones_map_18",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z19": [
+      "zones_map_19",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "MAP_Z20": [
+      "zones_map_20",
+      [
+        645,
+        100,
+        1280,
+        171
+      ]
+    ],
+    "SLASH_LARGE": [
+      "energy_team_large",
+      [
+        1106,
+        30,
+        1129,
+        52
+      ]
+    ]
+  },
+  "notes": [
+    "LOADING reconstruido solo en la ROI desde captura sanitizada del run 20261002_140836_70c52d4b0fe5",
+    "home_town_moved: fixture m\u00ednima Quest/Settings del fallo UNKNOWN en pueblo; reconoce p\u00edxeles invariantes sin rebajar .97/12",
+    "DUNGEON_MAP_HUD: etiqueta SHOP visible en exploraci\u00f3n, no en combate; solo referencia de contexto, nunca autoriza compras",
+    "Zones: 20 nombres/t\u00edtulos observados en Steam/niri 2026-10-03; abrir mapa no acredita dungeon desbloqueada. Choices compara texto blanco con los mismos umbrales .97/12, sin OCR.",
+    "Energ\u00eda TEAM 2026-10-03: saldo 317/368, slash 23\u00d722; normalizar sombreado al 50 % y binarizar blanco >=170. Reloj 2:09 no es saldo. Referencia previa 21\u00d720 y filtros intactos."
+  ],
+  "familiar_name_sources": {
+    "Mummih": "offer_mummih",
+    "Brute": "offer_brute",
+    "Sitra": "offer_sitra"
+  },
+  "zone_choice_sources": {
+    "1": [
+      "zones_list_top",
+      [
+        670,
+        291,
+        1200,
+        341
+      ]
+    ],
+    "2": [
+      "zones_list_top",
+      [
+        670,
+        419,
+        1200,
+        469
+      ]
+    ],
+    "3": [
+      "zones_list_top",
+      [
+        670,
+        547,
+        1200,
+        597
+      ]
+    ],
+    "4": [
+      "zones_list_top",
+      [
+        670,
+        675,
+        1200,
+        725
+      ]
+    ],
+    "5": [
+      "zones_list_top",
+      [
+        670,
+        803,
+        1200,
+        853
+      ]
+    ],
+    "6": [
+      "zones_list_middle-b",
+      [
+        670,
+        323,
+        1200,
+        373
+      ]
+    ],
+    "7": [
+      "zones_list_middle-b",
+      [
+        670,
+        451,
+        1200,
+        501
+      ]
+    ],
+    "8": [
+      "zones_list_middle-b",
+      [
+        670,
+        579,
+        1200,
+        629
+      ]
+    ],
+    "9": [
+      "zones_list_middle-b",
+      [
+        670,
+        707,
+        1200,
+        757
+      ]
+    ],
+    "10": [
+      "zones_list_middle-b",
+      [
+        670,
+        835,
+        1200,
+        885
+      ]
+    ],
+    "11": [
+      "zones_list_middle-a",
+      [
+        670,
+        291,
+        1200,
+        341
+      ]
+    ],
+    "12": [
+      "zones_list_middle-a",
+      [
+        670,
+        419,
+        1200,
+        469
+      ]
+    ],
+    "13": [
+      "zones_list_middle-a",
+      [
+        670,
+        547,
+        1200,
+        597
+      ]
+    ],
+    "14": [
+      "zones_list_middle-a",
+      [
+        670,
+        675,
+        1200,
+        725
+      ]
+    ],
+    "15": [
+      "zones_list_middle-a",
+      [
+        670,
+        803,
+        1200,
+        853
+      ]
+    ],
+    "16": [
+      "zones_list_bottom",
+      [
+        670,
+        323,
+        1200,
+        373
+      ]
+    ],
+    "17": [
+      "zones_list_bottom",
+      [
+        670,
+        451,
+        1200,
+        501
+      ]
+    ],
+    "18": [
+      "zones_list_bottom",
+      [
+        670,
+        579,
+        1200,
+        629
+      ]
+    ],
+    "19": [
+      "zones_list_bottom",
+      [
+        670,
+        707,
+        1200,
+        757
+      ]
+    ],
+    "20": [
+      "zones_list_bottom",
+      [
+        670,
+        835,
+        1200,
+        885
+      ]
+    ]
+  }
+}
