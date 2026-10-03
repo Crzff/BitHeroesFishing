@@ -65,7 +65,7 @@ def quantity_mask(image):
     """Conserva los digitos y separa fragmentos blancos del icono de fondo.
 
     Solo excluye componentes cortos, con halo fuertemente coloreado, que
-    invaden la parte inferior de un glifo alto con contorno neutro. No
+    invaden la parte inferior o quedan junto a su columna izquierda. No
     descarta ruido neutro, trazos sueltos del 4 ni componentes truncados.
     Sin glifo alto de referencia no excluye nada ni fabrica un singleton.
     """
@@ -89,8 +89,10 @@ def quantity_mask(image):
         if not (3<=h<20 and area>=12 and colored>=.35 and x>0 and y>0
                 and x+w<mask.shape[1] and y+h<mask.shape[0]):
             continue
-        overlaps=any(max(0,min(x+w,ax+aw)-max(x,ax))>=.8*w and y>=ay+ah//3
-                     and y+h<=ay+ah for ax,ay,aw,ah,_ in anchors)
+        # Hooked Spoon toca la columna del 9 y queda a cuatro del 8. Solo
+        # excluir brillo con halo coloreado, junto a un glifo alto neutro.
+        overlaps=any((max(0,min(x+w,ax+aw)-max(x,ax))>=.8*w or 0<=ax-x-w<=aw//3) and y>=ay+ah//3
+                      and y+h<=ay+ah for ax,ay,aw,ah,_ in anchors)
         if overlaps:
             mask[labels==index]=0
             ignored.append(box)
