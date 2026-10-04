@@ -121,7 +121,14 @@ class DungeonRunner:
     def set_cost(self,screen,cost,menu_key):
         """Fija el coste (filas 1-5 del desplegable de PvP/Expedition/Trials) y lo confirma leyéndolo."""
         if type(cost) is not int or not 1<=cost<=5:raise SafetyStop('Coste fuera de 1-5')
-        if self.cost_shown(self.wait(screen))!=cost:
+        shown=None
+        def stable(f):
+            nonlocal shown
+            current=self.cost_shown(f) if self.vision.screen(f)==screen else None
+            okay=current is not None and current==shown;shown=current
+            return okay
+        self.wait(stable,10,'coste actual')  # la ventana entra animada
+        if shown!=cost:
             self.click(screen,COST_DROPDOWN)
             menu=lambda f:self.vision.locate(f,menu_key,(760,95,1160,240)) is not None
             self.wait(menu,10,'menú de coste');time.sleep(.6)  # el menú entra deslizándose
@@ -131,7 +138,9 @@ class DungeonRunner:
                 self.io._move((960,1070))  # bajo la fila 5 hay familiares con tooltip que tapan la ventana
                 try:self.wait(lambda f:not menu(f),4,'menú de coste cerrado');break
                 except SafetyStop:pass
-            else:raise SafetyStop('El menú de coste no responde; no se insiste')
+            else:
+                # Pulsar la fila ya marcada no cierra el menú: cerrarlo con su X y confirmar leyendo.
+                self.check();self.io.click((1310,182));self.wait(lambda f:not menu(f),5,'menú de coste cerrado')
         self.wait(lambda f:self.vision.screen(f)==screen and self.cost_shown(f)==cost,10,f'coste {cost}')
         return cost
 
