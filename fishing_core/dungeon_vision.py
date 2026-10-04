@@ -27,7 +27,9 @@ class DungeonVision:
         with np.load(path,allow_pickle=False) as data:
             self.templates={key:data[key] for key in data.files}
         # ponytail: dos fondos observados; máscara alfa etiquetada si otro fondo falla.
-        self.home_masks={key:np.all(self.templates[key]==self.templates[key+'_TOWN'],axis=2).astype(np.uint8)
+        # El fondo de la ciudad cambia: comparar solo los píxeles comunes a todas las variantes observadas.
+        self.home_masks={key:np.all([np.all(self.templates[key]==self.templates[v],axis=2) for v in self.templates
+                                     if v.startswith(key+'_TOWN')],axis=0).astype(np.uint8)
                          for key in ('HOME_QUEST','HOME_SETTINGS','HOME_BOSS')}
         self.digits=BaitReader(extra={k:v for k,v in self.templates.items() if k.startswith('DIGIT_')})
 

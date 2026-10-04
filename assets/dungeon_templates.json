@@ -85,7 +85,8 @@
     "pvp_window_cost1": "fe3013abbfba1e3406735407ace8d081aaed6b5dd7348ef64327cc1e088a07be",
     "pvp_select": "2dabb35c654fd32f4f8819679df875c8741219db3ec087640a7ed42f3f1c7ba1",
     "pvp_team": "6c36d4744ffe0a4a8bf3aa7492d389c445d40a98d5c68da16fd023b90a22e84f",
-    "pvp_cost_menu": "fa4848a2da77ea0dc243e59e40211842343247b7d90461fecac007e395597abb"
+    "pvp_cost_menu": "fa4848a2da77ea0dc243e59e40211842343247b7d90461fecac007e395597abb",
+    "boss_home_town2": "0e7d83bc7f30a1b300f12c28d10636fb1534d18d06675573b051447bb71d29ba"
   },
   "regions": {
     "HOME_QUEST": [
@@ -886,6 +887,10 @@
         1120,
         200
       ]
+    ],
+    "HOME_BOSS_TOWN2": [
+      "hb3",
+      "Home con tercer fondo 2026-10-04"
     ]
   },
   "notes": [
