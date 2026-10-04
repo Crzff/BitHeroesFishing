@@ -364,8 +364,12 @@ class DungeonRunner:
         self.click('FAMILIAR_OFFER',(528,704),'PERSUADE',(360,640,720,780),expected_familiar=name)
         self.wait('PERSUADE_CONFIRM',10)
         self.click('PERSUADE_CONFIRM',(814,750),'DECLINE_YES',(670,695,955,805))
-        frame=self.wait(lambda f:self.vision.screen(f) in ('CAPTURE_SUCCESS','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','LOADING',
-                                                          'BATTLE_VICTORY','VICTORY','AUTO_ON','AUTO_OFF'),20,'resultado de Persuade')
+        def outcome(f):
+            screen=self.vision.screen(f)
+            if screen=='FAMILIAR_OFFER':  # no se unió y el juego ofrece el siguiente; el mismo nombre es ambiguo
+                other=self.vision.familiar_name(f);return other is not None and other!=name
+            return screen in ('CAPTURE_SUCCESS','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','LOADING','BATTLE_VICTORY','VICTORY','AUTO_ON','AUTO_OFF')
+        frame=self.wait(outcome,20,'resultado de Persuade')
         captured=self.vision.screen(frame)=='CAPTURE_SUCCESS'
         if captured:self.click('CAPTURE_SUCCESS',(958,962),'CAPTURE_CLOSE',(780,890,1140,1040))
         self.budget.finish_gold(action,effect_confirmed=True)

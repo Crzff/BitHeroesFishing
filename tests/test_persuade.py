@@ -14,7 +14,7 @@ from fishing_core.dungeon_runtime import DungeonRunner, validate_supported
 from fishing_core.dungeon_vision import DungeonVision
 
 with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
-    FRAMES={k:data[k] for k in ('offer_tealk_cost','persuade_confirm','capture_success','battle','decline_confirm')}
+    FRAMES={k:data[k] for k in ('offer_tealk_cost','persuade_confirm','capture_success','battle','decline_confirm','offer_sitra')}
 VISION=DungeonVision()
 BRIBE=(1390,704)
 
@@ -59,6 +59,16 @@ class PersuadeTests(unittest.TestCase):
         game=FakeGame(result='battle');runner,path=self.run_offer(game,10_000)
         self.assertEqual(game.clicks,[(528,704),(814,750)])
         self.assertFalse(json.loads((path/'persuade-1-1.intent.json').read_text())['captured'])
+
+    def test_failed_persuade_followed_by_another_offer_counts_as_not_joined(self):
+        game=FakeGame(result='offer_sitra');runner,path=self.run_offer(game,10_000)
+        self.assertEqual(game.clicks,[(528,704),(814,750)]);self.assertIsNone(runner.budget.pending_gold)
+        self.assertFalse(json.loads((path/'persuade-1-1.intent.json').read_text())['captured'])
+
+    def test_the_same_target_offer_after_yes_is_ambiguous_and_stops(self):
+        game=FakeGame(result='offer_tealk_cost')
+        with self.assertRaises(SafetyStop):self.run_offer(game,10_000)
+        self.assertEqual(game.clicks,[(528,704),(814,750)])
 
     def test_without_gold_quota_the_target_is_declined_not_paid(self):
         game=FakeGame();runner,path=self.run_offer(game,0)
