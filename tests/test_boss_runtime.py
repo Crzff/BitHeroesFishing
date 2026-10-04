@@ -19,7 +19,7 @@ VISION=DungeonVision()
 
 class FakeGame:
     def __init__(self,summon='boss_summon_normal',lobby='boss_lobby',result='boss_victory',home='boss_home'):
-        self.state=home;self.starts=0
+        self.state=home;self.starts=0;self.regroups=0;self.lobby=lobby
         self.moves={('boss_home',(90,430)):'boss_list',('boss_home_town',(90,430)):'boss_list',('boss_list',(1180,966)):'boss_carousel',
                     ('boss_list',(1536,214)):'boss_home',('boss_carousel',(1260,786)):summon,
                     (summon,(1130,842)):lobby,(lobby,(920,984)):'boss_not_full',
@@ -27,20 +27,22 @@ class FakeGame:
 
     def click(self,xy):
         if self.state in ('boss_victory','boss_defeat'):
-            x,y=VISION.locate(FRAMES[self.state],'RESULT_TOWN',(970,915,1500,1080))
-            h,w=VISION.templates['RESULT_TOWN'].shape[:2]
-            assert tuple(xy)==(x+w//2,y+h//2),xy
-            self.state='boss_list';return
+            for key,roi,target in (('RESULT_TOWN',(970,915,1500,1080),'boss_list'),
+                                   ('RESULT_REGROUP',(650,915,1250,1080),self.lobby)):
+                x,y=VISION.locate(FRAMES[self.state],key,roi);h,w=VISION.templates[key].shape[:2]
+                if tuple(xy)==(x+w//2,y+h//2):
+                    self.regroups+=key=='RESULT_REGROUP';self.state=target;return
+            raise AssertionError(xy)
         self.starts+=tuple(xy)==(920,984)
         self.state=self.moves[(self.state,tuple(xy))]
 
 
 class BossRuntimeTests(unittest.TestCase):
-    def run_boss(self,game,runs=1):
+    def run_boss(self,game,runs=1,difficulty='Normal'):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp);io=Mock();io.click.side_effect=game.click
             channel=SimpleNamespace(directory=path,run_id='test',stop_path=path/'stop.json')
-            runner=BossRunner(io,Mock(),VISION,channel,Mock(),runs)
+            runner=BossRunner(io,Mock(),VISION,channel,Mock(),runs,difficulty)
             runner.capture=lambda:FRAMES[game.state]
             clock=[0.0]
             def sleep(seconds):clock[0]+=seconds
@@ -56,10 +58,17 @@ class BossRuntimeTests(unittest.TestCase):
         self.assertEqual(runner.budget.payload()['completed_runs'],2)
         self.assertEqual(runner.budget.energy_reserved,2);self.assertEqual(runner.budget.gold_reserved,0)
         self.assertEqual(self.events.count('BOSS_COMPLETE'),2)
+        self.assertEqual(game.regroups,1)  # la segunda run sale por REGROUP, la última por TOWN
 
     def test_home_button_is_found_over_a_different_town_background(self):
         game=FakeGame(home='boss_home_town');self.run_boss(game)
         self.assertEqual(game.starts,1)
+
+    def test_heroic_only_runs_when_heroic_was_chosen(self):
+        game=FakeGame(summon='boss_summon_heroic')
+        with self.assertRaises(SafetyStop):self.run_boss(game,difficulty='Heroic')  # sala pública: Private falta
+        self.assertEqual(game.starts,0)
+        with self.assertRaises(ValueError):BossRunner(Mock(),Mock(),VISION,Mock(),Mock(),1,'Hard')
 
     def test_wrong_summon_config_or_shared_lobby_never_press_start(self):
         for game in (FakeGame(summon='boss_summon_heroic'),FakeGame(lobby='boss_lobby_public'),

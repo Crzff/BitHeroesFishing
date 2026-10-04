@@ -802,6 +802,23 @@
     "HOME_BOSS_TOWN": [
       "demo6",
       "Home con otro fondo 2026-10-03"
+    ],
+    "WB_HEROIC": [
+      "b2",
+      "captura Steam 2026-10-03"
+    ],
+    "WB_LOBBY_HEROIC": [
+      "b3",
+      "captura Steam 2026-10-03"
+    ],
+    "RESULT_REGROUP": [
+      "victory",
+      [
+        900,
+        970,
+        1090,
+        1025
+      ]
     ]
   },
   "notes": [

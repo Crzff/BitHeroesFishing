@@ -19,18 +19,30 @@ START=((920,984),'WB_START',(735,945,1100,1025))
 NOT_FULL_YES=((816,750),'DECLINE_YES',(670,695,955,805))
 AUTO=(1880,530)
 TOWN_ROI=(970,915,1500,1080)
-# La configuración se comprueba; el bot nunca la cambia (Heroic T9 perdía en segundos).
-SUMMON_CONFIG=(('WB_TIER_9',(775,415,1080,470)),('WB_NORMAL',(775,585,1080,640)),('WB_PRIVATE_ON',(800,690,875,760)))
-LOBBY_CONFIG=(('WB_LOBBY_NORMAL',(715,230,1100,285)),('WB_LOBBY_PRIVATE_ON',(1130,950,1200,1010)),
-              ('WB_SLOT2_EMPTY',(830,465,1065,530)))
+REGROUP_ROI=(650,915,1250,1080)
+# La configuración se comprueba; el bot nunca la cambia. Heroic T9 en solitario
+# perdió en segundos en una prueba; Normal gana en ~8 s. El usuario elige.
+DIFFICULTIES=('Normal','Heroic')
+
+
+def summon_config(difficulty):
+    return (('WB_TIER_9',(775,415,1080,470)),(f'WB_{difficulty.upper()}',(775,585,1080,640)),
+            ('WB_PRIVATE_ON',(800,690,875,760)))
+
+
+def lobby_config(difficulty):
+    return ((f'WB_LOBBY_{difficulty.upper()}',(715,230,1100,285)),('WB_LOBBY_PRIVATE_ON',(1130,950,1200,1010)),
+            ('WB_SLOT2_EMPTY',(830,465,1065,530)))
 XEALS_LOBBY=(370,130,520,175)
 XEALS_LIST=(860,70,1060,120)
 BATTLE_LIMIT=300  # T9 Normal real terminó en segundos; holgura acotada.
 
 
 class BossRunner(DungeonRunner):
-    def __init__(self,io,capture,vision,channel,log,runs):
+    def __init__(self,io,capture,vision,channel,log,runs,difficulty='Normal'):
+        if difficulty not in DIFFICULTIES:raise ValueError('Dificultad de World Boss no soportada')
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
+        self.difficulty=difficulty
         self.runs=runs;self.deadline=time.monotonic()+60*60
         self.budget=FarmBudget(max_runs=runs,max_energy=runs*XEAL_COST,max_seconds=60*60,max_gold=0)
 
@@ -55,8 +67,13 @@ class BossRunner(DungeonRunner):
     def xeals(self,frame,roi):
         x,y,x1,y1=roi;return self.vision.number(frame[y:y1,x:x1])
 
-    def enter(self,cycle):
+    def enter(self,cycle,in_lobby=False):
         """Devuelve el intento, o None si no quedan xeals (sin invocar sala)."""
+        if not in_lobby:
+            if not self.summon():return None
+        return self.start(cycle)
+
+    def summon(self):
         self.to_list();seen=None
         def known(frame):
             nonlocal seen
@@ -65,14 +82,17 @@ class BossRunner(DungeonRunner):
             return okay
         self.wait(known,30,'saldo de xeals en la lista')
         if seen<XEAL_COST:
-            self.close_list();self.log.emit('BOSS_STATUS',message=f'Sin xeals ({seen}); nada que gastar');return None
+            self.close_list();self.log.emit('BOSS_STATUS',message=f'Sin xeals ({seen}); nada que gastar');return False
         self.press('WB_LIST',LIST_SUMMON)
         frame=self.wait('WB_CAROUSEL')
         if self.vision.locate(frame,'WB_NETHERWORLD',(545,740,920,785)) is None:
             raise SafetyStop('El carrusel no muestra Netherworld; no se cambia de jefe')
         self.press('WB_CAROUSEL',CAROUSEL_SUMMON)
-        self.configured('WB_SUMMON',SUMMON_CONFIG,'Summon Tier 9 · Normal · Private')
+        self.configured('WB_SUMMON',summon_config(self.difficulty),f'Summon Tier 9 · {self.difficulty} · Private')
         self.press('WB_SUMMON',SUMMON)
+        return True
+
+    def start(self,cycle):
         balance=None
         def lobby(frame):
             nonlocal balance
@@ -81,7 +101,7 @@ class BossRunner(DungeonRunner):
             okay=current is not None and current==balance;balance=current
             return okay
         self.wait(lobby,30,'sala con saldo de xeals')
-        self.configured('WB_LOBBY',LOBBY_CONFIG,'sala privada, Normal y en solitario')
+        self.configured('WB_LOBBY',lobby_config(self.difficulty),f'sala privada, {self.difficulty} y en solitario')
         attempt=f'{self.channel.run_id}:{cycle}'
         if not self.budget.reserve_entry(attempt,resource='XEALS',balance=balance,cost=XEAL_COST):
             raise SafetyStop('Entrada ya reservada; no repetir START')
@@ -90,31 +110,42 @@ class BossRunner(DungeonRunner):
         self.press('WB_LOBBY',START)
         self.wait('WB_NOT_FULL');self.press('WB_NOT_FULL',NOT_FULL_YES)
         self.log.emit('BOSS_STARTED',attempt_id=attempt,xeals_before=balance)
+        self.balance=balance
         return attempt
 
-    def battle(self,attempt,cycle):
+    def result_button(self,frame,key,roi):
+        x,y=self.vision.locate(frame,key,roi);h,w=self.vision.templates[key].shape[:2]
+        self.click(self.vision.screen(frame),(x+w//2,y+h//2),key,roi)
+
+    def battle(self,attempt,cycle,again=False):
+        """Devuelve True si volvió a la sala con REGROUP para otra run."""
         results=('WB_VICTORY','WB_DEFEAT')
         frame=self.wait(lambda f:self.vision.screen(f) in ('AUTO_OFF_BATTLE','AUTO_ON_BATTLE')+results,30,'combate del jefe')
         if self.vision.screen(frame)=='AUTO_OFF_BATTLE':self.click('AUTO_OFF_BATTLE',AUTO)
         frame=self.wait(lambda f:self.vision.screen(f) in results,BATTLE_LIMIT,'resultado del jefe')
         screen=self.vision.screen(frame);outcome='VICTORY' if screen=='WB_VICTORY' else 'DEFEAT'
-        # TOWN cambia de sitio entre victoria (3 botones) y derrota (2): se usa el localizado.
-        x,y=self.vision.locate(frame,'RESULT_TOWN',TOWN_ROI);h,w=self.vision.templates['RESULT_TOWN'].shape[:2]
-        self.click(screen,(x+w//2,y+h//2),'RESULT_TOWN',TOWN_ROI);self.close_list()
+        # Botones localizados: cambian de sitio entre victoria (3) y derrota (2).
+        regroup=again and outcome=='VICTORY'
+        if regroup:self.result_button(frame,'RESULT_REGROUP',REGROUP_ROI);self.wait('WB_LOBBY',15)
+        else:self.result_button(frame,'RESULT_TOWN',TOWN_ROI);self.close_list()
         self.budget.finish_run(attempt,outcome,closure_confirmed=True)
         atomic_json(self.channel.directory/f'boss-{cycle}.intent.json',{'attempt_id':attempt,'outcome':outcome,'effect_confirmed':True})
         self.log.emit('BOSS_COMPLETE',message=f'Netherworld {cycle}: {outcome}',budget=self.budget.payload())
         if outcome=='DEFEAT':raise SafetyStop('Derrota en el jefe: no se repite')
+        return regroup
 
     def run(self):
+        in_lobby=False
         for cycle in range(1,self.runs+1):
-            attempt=self.enter(cycle)
+            attempt=self.enter(cycle,in_lobby)
             if attempt is None:return
-            self.battle(attempt,cycle)
+            # REGROUP solo si queda saldo para otra run; si no, TOWN y cerrar.
+            again=cycle<self.runs and self.balance-XEAL_COST>=XEAL_COST
+            in_lobby=self.battle(attempt,cycle,again)
         self.log.emit('BOSS_STATUS',message='Límite de runs alcanzado · detenido',budget=self.budget.payload())
 
 
-def run_boss(runs):
+def run_boss(runs,difficulty='Normal'):
     """Sesión de World Boss con F8, foco y exclusividad; sin panel todavía."""
     from .game_window import ENV_WINDOW,focus_window
     from .dungeon_vision import DungeonVision
@@ -129,7 +160,7 @@ def run_boss(runs):
         os.environ[ENV_WINDOW]=focus_window('Steam').serialize();os.environ.pop('FARM_LAUNCHER_PID',None)
         log=Telemetry('BOSS',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
-            BossRunner(io,capture,DungeonVision(),channel,log,runs).run()
+            BossRunner(io,capture,DungeonVision(),channel,log,runs,difficulty).run()
     except (Exception,KeyboardInterrupt) as exc:
         if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
         raise
@@ -141,4 +172,4 @@ def run_boss(runs):
 
 if __name__=='__main__':
     import sys
-    run_boss(int(sys.argv[1]))
+    run_boss(int(sys.argv[1]),*sys.argv[2:3])
