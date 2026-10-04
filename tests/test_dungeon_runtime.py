@@ -172,14 +172,14 @@ class DungeonRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,vision=self.runner(Path(tmp));runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
             vision.screen.return_value='AUTO_OFF';runner.click=Mock();requested=[]
-            def wait(screen,timeout=10):
-                requested.append(screen)
-                if screen=='AUTO_ON':raise SafetyStop('Auto no confirmado')
+            def wait(screen,timeout=10,expected=None):
+                requested.append(expected or screen)
+                if expected=='Auto del mapa activado':raise SafetyStop('Auto no confirmado')
                 if len(requested)>1:raise SafetyStop('La observación continuó sin confirmar Auto')
                 return runner.capture.return_value
             runner.wait=wait
             with self.assertRaisesRegex(SafetyStop,'Auto no confirmado'):runner.observe('test:1',1)
-            self.assertEqual(requested,['AUTO_OFF','AUTO_ON'])
+            self.assertEqual(requested,['AUTO_OFF','Auto del mapa activado'])
             runner.click.assert_called_once_with('AUTO_OFF',(1880,530))
 
     def test_town_can_return_to_quest_map_before_home(self):
@@ -432,7 +432,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(SafetyStop,'repetidamente'):runner.observe('test:1',1,auto_started=True)
             self.assertEqual(io.click.call_count,3)
 
-    def test_battle_auto_does_not_claim_that_map_auto_was_started(self):
+    def test_map_auto_stably_off_is_reactivated_but_not_endlessly(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,vision=self.runner(Path(tmp));frame=np.zeros((1080,1920,3),np.uint8)
             runner.capture=Mock(return_value=frame);runner.wait=Mock(return_value=frame)
@@ -442,10 +442,11 @@ class DungeonRuntimeTests(unittest.TestCase):
             runner.observe('test:1',1)
             self.assertEqual(runner.click.call_args_list[0].args,('AUTO_OFF',(1880,530)))
             runner.click.reset_mock();vision.screen.side_effect=['AUTO_ON','AUTO_ON_BATTLE']+['AUTO_OFF']*10
-            with patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=range(100)), \
+            vision.screen.side_effect=['AUTO_ON','AUTO_ON_BATTLE']+['AUTO_OFF']*40
+            with patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=range(200)), \
                     patch('fishing_core.dungeon_runtime.time.sleep'):
-                with self.assertRaisesRegex(SafetyStop,'Auto se desactivó'):runner.observe('test:1',2)
-            runner.click.assert_not_called()
+                with self.assertRaisesRegex(SafetyStop,'repetidamente'):runner.observe('test:1',2)
+            self.assertEqual(runner.click.call_count,4)
 
     def test_transient_map_auto_off_during_battle_transition_never_reactivates_it(self):
         with tempfile.TemporaryDirectory() as tmp:

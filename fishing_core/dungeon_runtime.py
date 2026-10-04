@@ -281,7 +281,7 @@ class DungeonRunner:
         previous=list(self.channel.directory.glob(f'decline-{cycle}-*.intent.json'))
         if any(json.loads(path.read_text()).get('effect_confirmed') is not True for path in previous):
             raise SafetyStop('Rechazo previo sin confirmar; no se continúa')
-        unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180;battle_autos=0
+        unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180;battle_autos=0;map_autos=0;map_off_since=None
         while time.monotonic()<deadline:
             frame=self.capture();screen=self.vision.screen(frame)
             if screen=='FAMILIAR_OFFER':
@@ -313,14 +313,17 @@ class DungeonRunner:
                               budget=self.budget.payload())
                 return again
             if screen=='AUTO_OFF':
-                if auto_started:
-                    # El mapa pasa brevemente a OFF al iniciar combate. Esperar sin input.
-                    unknown_since=unknown_since or time.monotonic()
-                    if time.monotonic()-unknown_since>8:
-                        raise SafetyStop('Auto se desactivó de forma estable: revisar posible muerte/derrota; no se reactiva')
-                else:
-                    self.wait('AUTO_OFF');self.click('AUTO_OFF',(1880,530));self.wait('AUTO_ON');auto_started=True
-            elif screen=='AUTO_OFF_BATTLE':
+                # El mapa pasa un instante por OFF al entrar y salir de combates: un clic ahí lo
+                # apaga. Solo se pulsa si sigue OFF 2 s; repetirlo más de 4 veces detiene.
+                map_off_since=map_off_since or time.monotonic()
+                if time.monotonic()-map_off_since>=(0 if not auto_started else 2):
+                    if map_autos>=4:raise SafetyStop('Auto del mapa se apaga repetidamente; revisar posible derrota')
+                    self.wait('AUTO_OFF');self.click('AUTO_OFF',(1880,530))
+                    self.wait(lambda f:self.vision.screen(f)!='AUTO_OFF',5,'Auto del mapa activado')
+                    auto_started=True;map_autos+=1;map_off_since=None
+                time.sleep(.12);continue
+            map_off_since=None
+            if screen=='AUTO_OFF_BATTLE':
                 # Un combate puede empezar sin Auto (p. ej. tras pausar el mapa): activarlo si sigue así.
                 if battle_autos>=3:raise SafetyStop('Auto de combate se apaga repetidamente; no se insiste')
                 self.wait('AUTO_OFF_BATTLE',5);self.click('AUTO_OFF_BATTLE',(1880,530))
