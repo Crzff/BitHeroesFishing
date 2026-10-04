@@ -97,7 +97,10 @@
     "exp_window_cost1": "6d2c249c086514522c815b7b6207e241f75cf6f611246315e4d75fc8bd3a43cf",
     "exp_cost_menu": "9894d7df97faa9b709495ec5a06bd8fce59f289289719bfef9f3702b0b6f44c0",
     "exp_map": "caf91ff312ae0960177f5678e887aa40463aa1dbe7b3428102eccca2c43b32f9",
-    "exp_portal": "9d4ddeba54d8d79faea71c2f77cd762fd3812c471d74feb6f6ab72f4ce16a665"
+    "exp_portal": "9d4ddeba54d8d79faea71c2f77cd762fd3812c471d74feb6f6ab72f4ce16a665",
+    "trials_home": "8b57176eb9322397a712fefbe08ce655b0209a5f9033f742ba4d8c58db4cb0b8",
+    "trials_window": "5fb06eee8d596313b92eaa1106ed620013e5d44d2bf50c92edbed43607ccdeee",
+    "trials_cost_menu": "1d42fde489d7435f066ec439822b0128941df2507c659e1a0a8a8413af2ad58c"
   },
   "regions": {
     "HOME_QUEST": [
@@ -1011,6 +1014,42 @@
         1120,
         200
       ]
+    ],
+    "HOME_TRIALS": [
+      "h8",
+      "captura Steam 2026-10-04"
+    ],
+    "TRIALS_TITLE": [
+      "tr0",
+      "captura Steam 2026-10-04"
+    ],
+    "TRIALS_PLAY": [
+      "tr0",
+      "captura Steam 2026-10-04"
+    ],
+    "TRIALS_CLOSE": [
+      "tr0",
+      "captura Steam 2026-10-04"
+    ],
+    "TRIALS_DIFF_499": [
+      "tr0",
+      "captura Steam 2026-10-04"
+    ],
+    "COST_MENU_TOKENS": [
+      "tr9",
+      "captura Steam 2026-10-04"
+    ],
+    "HOME_TRIALS_TOWN1": [
+      "variante",
+      "captura Steam 2026-10-04"
+    ],
+    "HOME_TRIALS_TOWN2": [
+      "variante",
+      "captura Steam 2026-10-04"
+    ],
+    "HOME_TRIALS_TOWN3": [
+      "variante",
+      "captura Steam 2026-10-04"
     ]
   },
   "notes": [

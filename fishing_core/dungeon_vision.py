@@ -24,7 +24,8 @@ MODE_SCREENS=(('PVP',(('PVP_TITLE',(600,140,1320,295)),('PVP_PLAY',(1120,440,144
               ('RAID_DIFFICULTY',(('RAID_DIFF_STORM',(780,135,1140,285)),('RAID_HEROIC',(1180,395,1560,575)))),
               ('EXPEDITION',(('EXP_TITLE',(680,150,1220,310)),('EXP_PLAY',(1120,440,1445,710)))),
               ('IDOL_MAP',(('IDOL_TITLE',(560,50,1420,215)),)),
-              ('PORTAL',(('PORTAL_TITLE',(710,130,1285,285)),('PORTAL_ENTER',(830,880,1150,1060)))))
+              ('PORTAL',(('PORTAL_TITLE',(710,130,1285,285)),('PORTAL_ENTER',(830,880,1150,1060)))),
+              ('TRIALS',(('TRIALS_TITLE',(620,150,1300,310)),('TRIALS_PLAY',(1120,450,1450,710)))))
 
 
 class DungeonVision:
@@ -35,7 +36,7 @@ class DungeonVision:
         # El fondo de la ciudad cambia: comparar solo los píxeles comunes a todas las variantes observadas.
         self.home_masks={key:np.all([np.all(self.templates[key]==self.templates[v],axis=2) for v in self.templates
                                      if v.startswith(key+'_TOWN')],axis=0).astype(np.uint8)
-                         for key in ('HOME_QUEST','HOME_SETTINGS','HOME_BOSS','HOME_PVP','HOME_RAID','HOME_EXPEDITION')
+                         for key in ('HOME_QUEST','HOME_SETTINGS','HOME_BOSS','HOME_PVP','HOME_RAID','HOME_EXPEDITION','HOME_TRIALS')
                          if any(v.startswith(key+'_TOWN') for v in self.templates)}
         self.digits=BaitReader(extra={k:v for k,v in self.templates.items() if k.startswith('DIGIT_')})
 
