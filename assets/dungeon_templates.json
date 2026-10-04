@@ -77,7 +77,8 @@
     "boss_battle_off": "b917e0035994a730c91879968e0fe4a60b1eaa656a66f5d0989c34d6b2286bcd",
     "boss_victory": "4e48d3c087039930c341665227581b96e49e175f6847f8621319a812f46cae00",
     "boss_defeat": "aeb4d92fe948db3e78800b49bdef31e06d2a3e635819615fb5fa4e0ba248cc1f",
-    "boss_home_town": "28ac2e1bf04f57d26f796974e68ac59b76242e969bbdb43f6612b990af526014"
+    "boss_home_town": "28ac2e1bf04f57d26f796974e68ac59b76242e969bbdb43f6612b990af526014",
+    "offer_tealk": "d341a0cc8a566e8f1d0fc17738294150f8de8913c8e79c60ef9ce17cb450c2f1"
   },
   "regions": {
     "HOME_QUEST": [
@@ -819,6 +820,10 @@
         1090,
         1025
       ]
+    ],
+    "NAME_Tealk": [
+      "offer_tealk",
+      "glifo del nombre 2026-10-04"
     ]
   },
   "notes": [
