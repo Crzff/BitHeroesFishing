@@ -1098,6 +1098,24 @@
     "RUNE_QUINDI_LEG": [
       "lista SWITCH sin hover",
       "captura Steam 2026-10-04"
+    ],
+    "WB_TIER_MENU": [
+      "ws1",
+      [
+        800,
+        135,
+        1120,
+        200
+      ]
+    ],
+    "WB_TIER_9_ROW": [
+      "ws1",
+      [
+        820,
+        800,
+        1040,
+        860
+      ]
     ]
   },
   "notes": [
