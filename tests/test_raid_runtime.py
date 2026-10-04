@@ -19,22 +19,24 @@ VISION=DungeonVision()
 
 class FakeGame:
     def __init__(self):
-        self.state='raid_home_sand';self.summons=0
-        self.moves={('raid_home_sand',(90,580)):'raid_window',('raid_window',(1260,786)):'raid_difficulty',
-                    ('raid_difficulty',(1370,482)):'raid_team',('raid_team',(1215,982)):'battle',
+        self.state='raid_home_sand';self.summons=0;self.picked=[]
+        self.moves={('raid_home_sand',(90,580)):'raid_astaroth',('raid_astaroth',(440,624)):'raid_window',
+                    ('raid_window',(1260,786)):'raid_difficulty',
+                    ('raid_difficulty',(1370,482)):'raid_team',('raid_difficulty',(958,482)):'raid_team',('raid_team',(1215,982)):'battle',
                     ('raid_window',(1468,236)):'raid_home_sand'}
 
     def click(self,xy):
         self.summons+=self.state=='raid_window' and tuple(xy)==(1260,786)
+        if self.state=='raid_difficulty':self.picked.append(tuple(xy))
         self.state=self.moves[(self.state,tuple(xy))]
 
 
 class RaidRuntimeTests(unittest.TestCase):
-    def run_raid(self,game,shards,runs=5):
+    def run_raid(self,game,shards,runs=5,difficulty='Heroic'):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp);io=Mock();io.click.side_effect=game.click
             channel=SimpleNamespace(directory=path,run_id='test',stop_path=path/'stop.json')
-            runner=RaidRunner(io,Mock(),VISION,channel,Mock(),runs)
+            runner=RaidRunner(io,Mock(),VISION,channel,Mock(),runs,'STORM',difficulty)
             runner.capture=lambda:FRAMES['raid_window' if game.state=='battle' else game.state]
             def observe(attempt,cycle,**kw):
                 assert game.state=='battle';game.state='raid_window'
@@ -53,9 +55,14 @@ class RaidRuntimeTests(unittest.TestCase):
         self.assertEqual(game.summons,2);self.assertEqual(game.state,'raid_home_sand')
         self.assertEqual(runner.budget.energy_reserved,2);self.assertEqual(runner.budget.gold_reserved,0)
 
+    def test_chosen_raid_is_found_by_name_and_difficulty_button_is_used(self):
+        game=FakeGame();self.run_raid(game,[1,0],difficulty='Hard')
+        self.assertEqual(game.picked,[(958,482)]);self.assertEqual(game.summons,1)
+
     def test_another_raid_on_screen_is_never_summoned(self):
         game=FakeGame()
-        with patch.object(VISION,'locate',side_effect=lambda f,k,r,*a:None if k=='RAID_STORM' else DungeonVision.locate(VISION,f,k,r,*a)):
+        with patch.object(VISION,'locate',side_effect=lambda f,k,r,*a:None if k=='RAID_NAME_STORM' else DungeonVision.locate(VISION,f,k,r,*a)):
+            game.moves[('raid_window',(440,624))]='raid_astaroth'
             with self.assertRaisesRegex(SafetyStop,'Storm'):self.run_raid(game,[3])
         self.assertEqual(game.summons,0)
 

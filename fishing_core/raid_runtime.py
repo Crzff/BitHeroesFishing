@@ -1,4 +1,4 @@
-"""Raid del tier del jugador (crzf: T13 = Storm) en Heroic: gasta todos los shards.
+"""Raid elegida por el jugador (crzf: Storm, su T13) en la dificultad elegida: gasta todos los shards.
 
 Una derrota no detiene: se cierra con TOWN y se sigue gastando (pedido por crzf).
 """
@@ -15,7 +15,13 @@ SHARD_COST=1
 HOME_RAID=((90,580),'HOME_RAID',(15,505,165,640))
 SUMMON=((1260,786),'RAID_SUMMON',(1095,650,1435,920))
 CLOSE=((1468,236),'RAID_CLOSE',(1380,150,1560,320))
-HEROIC=((1370,482),'RAID_HEROIC',(1180,395,1560,575))
+PREV=(440,624)
+DIFFICULTY_BUTTONS={'Normal':((554,482),'RAID_NORMAL',(360,395,750,575)),'Hard':((958,482),'RAID_HARD',(770,395,1150,575)),
+                    'Heroic':((1370,482),'RAID_HEROIC',(1180,395,1560,575))}
+RAIDS={'MINIONS_OF_TARANIS':'Minions of Taranis','CHARRED_EXPANSE':'Charred Expanse',
+       'GORBONS_ROCKIN_RUCKUS':"Gorbon's Rockin' Ruckus",'MALLOWDALE':'Mallowdale','ZOLS_LABYRINTH':"Zol's Labyrinth",
+       'A_HAILE_OF_A_MISTAKE':'A Haile of a Mistake','WOODBEARDS_BOOTY':"Woodbeard's Booty",
+       'HYPER_DIMENSION':'Hyper Dimension','ASTAROTHS_AWAKENING':"Astaroth's Awakening",'STORM':'Storm'}
 ACCEPT=((1215,982),'ACCEPT',(1000,930,1420,1035))
 SHARDS_ROI=(880,100,1050,145)
 
@@ -23,8 +29,10 @@ SHARDS_ROI=(880,100,1050,145)
 class RaidRunner(DungeonRunner):
     defeat_continues=True
 
-    def __init__(self,io,capture,vision,channel,log,runs):
+    def __init__(self,io,capture,vision,channel,log,runs,raid='STORM',difficulty='Heroic'):
+        if raid not in RAIDS or difficulty not in DIFFICULTY_BUTTONS:raise ValueError('Raid o dificultad no disponible')
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
+        self.raid,self.raid_difficulty=raid,difficulty
         self.runs=runs;self.deadline=time.monotonic()+60*60
         self.plan={'dungeon_id':'RAID_STORM','difficulty':'Heroic','runs':runs,'energy_limit':runs,'target':''}
         self.cost=SHARD_COST;self.balance=None
@@ -53,8 +61,12 @@ class RaidRunner(DungeonRunner):
     def open(self):
         screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','RAID'),12))
         if screen=='HOME':self.press('HOME',HOME_RAID);self.wait('RAID')
-        if self.vision.locate(self.capture(),'RAID_STORM',(500,695,780,830)) is None:
-            raise SafetyStop('La raid mostrada no es Storm (T13); no se cambia de raid')
+        named=lambda f:self.vision.locate(f,f'RAID_NAME_{self.raid}',(500,700,1170,830)) is not None
+        for _ in range(len(RAIDS)+1):  # una vuelta; nunca se invoca otra
+            self.wait('RAID');time.sleep(.5)
+            if named(self.capture()):return
+            self.click('RAID',PREV);time.sleep(1)
+        raise SafetyStop(f'{RAIDS[self.raid]} no aparece entre las raids; no se cambia de raid')
 
     def enter(self,cycle):
         self.open();balance=self.shards()
@@ -63,7 +75,7 @@ class RaidRunner(DungeonRunner):
         if not self.budget.reserve_entry(attempt,resource='SHARDS',balance=balance,cost=SHARD_COST):
             raise SafetyStop('Raid ya reservada; no repetir SUMMON')
         atomic_json(self.channel.directory/f'raid-{cycle}.intent.json',{'attempt_id':attempt,'shards':balance,'effect_confirmed':False})
-        self.press('RAID',SUMMON);self.press('RAID_DIFFICULTY',HEROIC);self.press('TEAM',ACCEPT)
+        self.press('RAID',SUMMON);self.press('RAID_DIFFICULTY',DIFFICULTY_BUTTONS[self.raid_difficulty]);self.press('TEAM',ACCEPT)
         self.log.emit('RAID_STARTED',attempt_id=attempt,shards_before=balance)
         return attempt
 
@@ -78,7 +90,7 @@ class RaidRunner(DungeonRunner):
         self.log.emit('RAID_STATUS',message='Shards gastados · detenido',budget=self.budget.payload())
 
 
-def run_raid(runs):
+def run_raid(runs,raid='STORM',difficulty='Heroic'):
     from .game_window import ENV_WINDOW,focus_window
     from .dungeon_vision import DungeonVision
     from .linux import LinuxIO,LinuxCapture
@@ -92,7 +104,7 @@ def run_raid(runs):
         os.environ[ENV_WINDOW]=focus_window('Steam').serialize();os.environ.pop('FARM_LAUNCHER_PID',None)
         log=Telemetry('RAID',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
-            RaidRunner(io,capture,DungeonVision(),channel,log,runs).run()
+            RaidRunner(io,capture,DungeonVision(),channel,log,runs,raid,difficulty).run()
     except (Exception,KeyboardInterrupt) as exc:
         if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
         raise
@@ -104,4 +116,4 @@ def run_raid(runs):
 
 if __name__=='__main__':
     import sys
-    run_raid(int(sys.argv[1]))
+    run_raid(int(sys.argv[1]),*sys.argv[2:4])  # runs [raid] [dificultad]

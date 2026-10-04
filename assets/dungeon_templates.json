@@ -87,11 +87,11 @@
     "pvp_team": "6c36d4744ffe0a4a8bf3aa7492d389c445d40a98d5c68da16fd023b90a22e84f",
     "pvp_cost_menu": "fa4848a2da77ea0dc243e59e40211842343247b7d90461fecac007e395597abb",
     "boss_home_town2": "0e7d83bc7f30a1b300f12c28d10636fb1534d18d06675573b051447bb71d29ba",
-    "raid_home_sand": "41706be1f9a099f8c0d0c49da095b10a6bd2453bce8200694d00b1c3de8bedd6",
-    "raid_window": "0ae2a652d4b4e1f52671aa20b51bbb74e409e635721fd0e0ed7bc59efcdf5b02",
-    "raid_window_after": "31447505ec2d37d4b1cc8fa49acb1d4c5ae906b2df5d271bea6035280a030e1c",
-    "raid_difficulty": "47aa8081d61f99a039c29d9486f906347267cbcaf6ed627e251a566ada37d91d",
-    "raid_team": "364d98f75ca4f1c94dc12d4d2cd800229c53b347888dec309c73cf12e0b57f2c",
+    "raid_home_sand": "7a47163f9c1b818e213f0eab1749a2ed540b508b99f3afb0cd12cadd8e85179b",
+    "raid_window": "6795aa281bcbbdf0025f775574b9b51dd23a60c7780dc16448a9361e810e731d",
+    "raid_window_after": "9e9f904da4bb305cf294ee0524b81afb58c0942b5159bb2997c485b6ecf99bd5",
+    "raid_difficulty": "799ceaf32e4337151e6c1211b5040b7dcc9b717d45e1cdd409104267f4cad79a",
+    "raid_team": "73450b5c631ad3bd47ac6f5b3fef60bbf0163d9dc1e93c734333ab041754c95a",
     "exp_home": "d6eacba19b3c870c114f2cea431dd2097ea9162ec363e0b366240494bc3df84d",
     "exp_window": "c5b8e361c7dae1e2602859eae8153d48cba6fe899fe5ca18552e204e83db191b",
     "exp_window_cost1": "6d2c249c086514522c815b7b6207e241f75cf6f611246315e4d75fc8bd3a43cf",
@@ -104,7 +104,8 @@
     "offer_tealk_cost": "d3fe626107a6872234319768b3ea53b25d631ddd093b6f00dae5dc7c11a434ac",
     "persuade_confirm": "48be9730fcebfb118fbf788ae9cd328b89fcdfb6b7887e50bba054597d6700e8",
     "capture_success": "017b1784b4c5270791845ec44679981500291fd381c4f0b0fe26800511133b79",
-    "boss_diff_menu": "99dfeed01cdc04f165a2b55e032d788e33e3e663f17a76d86abe8abe4c42c138"
+    "boss_diff_menu": "99dfeed01cdc04f165a2b55e032d788e33e3e663f17a76d86abe8abe4c42c138",
+    "raid_astaroth": "9da064f8026f440bfdc1ab9f458c2ed38d2b61c68739de791353200d6a843f79"
   },
   "regions": {
     "HOME_QUEST": [
@@ -1230,6 +1231,114 @@
         135,
         1120,
         200
+      ]
+    ],
+    "RAID_NAME_MINIONS_OF_TARANIS": [
+      "r1",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_CHARRED_EXPANSE": [
+      "r2",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_GORBONS_ROCKIN_RUCKUS": [
+      "r3",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_MALLOWDALE": [
+      "r4",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_ZOLS_LABYRINTH": [
+      "r5",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_A_HAILE_OF_A_MISTAKE": [
+      "r6",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_WOODBEARDS_BOOTY": [
+      "r7",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_HYPER_DIMENSION": [
+      "r8",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_ASTAROTHS_AWAKENING": [
+      "r9",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NAME_STORM": [
+      "r10",
+      [
+        540,
+        735,
+        1130,
+        795
+      ]
+    ],
+    "RAID_NORMAL": [
+      "ra2",
+      [
+        400,
+        435,
+        710,
+        535
+      ]
+    ],
+    "RAID_HARD": [
+      "ra2",
+      [
+        810,
+        435,
+        1110,
+        535
       ]
     ]
   },

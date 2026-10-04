@@ -11,6 +11,7 @@ MODES=('quest','pvp','boss','raid','expedition','trials')  # orden de ejecución
 DEFAULT={'modes':{mode:True for mode in MODES},
          'quest':{'dungeon':'Z5D3','difficulty':'Heroic','targets':['Tealk'],'max_gold':50_000},
          'boss':{'boss':'NETHERWORLD','tier':9,'difficulty':'Heroic'},
+         'raid':{'raid':'STORM','difficulty':'Heroic'},
          'runes':True}
 
 
