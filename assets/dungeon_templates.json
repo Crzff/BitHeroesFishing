@@ -824,6 +824,24 @@
     "NAME_Tealk": [
       "offer_tealk",
       "glifo del nombre 2026-10-04"
+    ],
+    "HARD": [
+      "tealk_difficulty",
+      [
+        815,
+        460,
+        1105,
+        530
+      ]
+    ],
+    "RERUN": [
+      "result",
+      [
+        700,
+        960,
+        970,
+        1035
+      ]
     ]
   },
   "notes": [

@@ -17,7 +17,11 @@ from .processes import Mutex,child_options,close_children,python_executable
 from .protocol import Channel,atomic_json
 from .telemetry import ROOT,Telemetry,run_environment
 
-ROUTE_COSTS={('Z5D2','Normal'):10,('Z5D3','Normal'):10,('Z5D3','Heroic'):30}
+ROUTE_COSTS={(d,level):cost for d in ('Z5D2','Z5D3') for level,cost in (('Normal',10),('Hard',20),('Heroic',30))}
+LADDER=('Heroic','Hard','Normal')
+DIFFICULTY_BUTTONS={'Normal':((550,495),(400,450,715,550)),'Hard':((958,495),(780,430,1140,570)),
+                    'Heroic':((1365,495),(1200,450,1530,550))}
+SESSION_SECONDS=3600
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
@@ -28,7 +32,7 @@ MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
 def validate_supported(plan):
     checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],plan.get('target',''))
     if (checked['dungeon_id'],checked['difficulty']) not in ROUTE_COSTS:
-        raise ValueError('Ruta aún no calibrada: disponibles Z5D2 · Normal y Z5D3 · Normal/Heroic. No se cambia tu objetivo.')
+        raise ValueError('Ruta aún no calibrada: disponibles Z5D2 y Z5D3 · Normal/Hard/Heroic. No se cambia tu objetivo.')
     return checked
 
 
@@ -55,15 +59,15 @@ class DungeonRunner:
     def __init__(self,io,capture,vision,channel,log,plan):
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.plan=validate_supported(plan);self.cost=None;self.safety_checked=False
-        self.deadline=time.monotonic()+900
-        self.budget=FarmBudget(max_runs=plan['runs'],max_energy=plan['energy_limit'],max_seconds=900,max_gold=0)
+        self.deadline=time.monotonic()+SESSION_SECONDS;self.difficulty=self.plan['difficulty'];self.balance=None
+        self.budget=FarmBudget(max_runs=plan['runs'],max_energy=plan['energy_limit'],max_seconds=SESSION_SECONDS,max_gold=0)
 
     def check(self):
         self.io.emergency();self.io.check_game();self.log.check()
         if self.channel.stop_path.exists():raise SafetyStop('Parada solicitada')
         parent=os.environ.get('FARM_LAUNCHER_PID')
         if parent and os.getppid()!=int(parent):raise SafetyStop('El panel terminó; no se continúa sin supervisor')
-        if time.monotonic()>=self.deadline:raise SafetyStop('Límite de sesión: 15 minutos')
+        if time.monotonic()>=self.deadline:raise SafetyStop(f'Límite de sesión: {SESSION_SECONDS//60} minutos')
 
     def capture(self):
         self.check();shot=self.cap.grab({'left':0,'top':0,'width':1920,'height':1080})
@@ -182,7 +186,7 @@ class DungeonRunner:
         raise SafetyStop('Zona no encontrada o bloqueada; no se elige otra')
 
     def select_route(self):
-        identifier=self.plan['dungeon_id'];difficulty=self.plan['difficulty'];screen='DIFFICULTY_'+identifier
+        identifier=self.plan['dungeon_id'];difficulty=self.difficulty;screen='DIFFICULTY_'+identifier
         self.click('HOME',(90,90),'HOME_QUEST',(15,15,165,190))
         self.select_zone(dungeon(identifier)['zone'])
         xy,roi=((990,810),(880,675,1110,955)) if identifier=='Z5D2' else ((1457,480),(1330,380,1575,610))
@@ -191,12 +195,27 @@ class DungeonRunner:
         expected=ROUTE_COSTS[(identifier,difficulty)]
         if self.cost!=expected or self.vision.cost(self.capture(),difficulty)!=self.cost:
             raise SafetyStop(f'Coste/dificultad no confirmado: esta calibración exige {expected} de energía')
-        xy,roi=((550,495),(400,450,715,550)) if difficulty=='Normal' else ((1365,495),(1200,450,1530,550))
-        self.click(screen,xy,difficulty.upper(),roi);self.wait('TEAM')
+        xy,roi=DIFFICULTY_BUTTONS[difficulty];self.click(screen,xy,difficulty.upper(),roi);self.wait('TEAM')
 
-    def enter(self,cycle):
-        if not self.safety_checked or self.cost!=ROUTE_COSTS[(self.plan['dungeon_id'],self.plan['difficulty'])]:
-            raise SafetyStop('Ruta o ajustes sin confirmar')
+    def affordable(self,balance):
+        """Dificultad más alta, sin superar la elegida, que paga el saldo; None si ninguna."""
+        options=LADDER[LADDER.index(self.plan['difficulty']):]
+        return next((d for d in options if ROUTE_COSTS[(self.plan['dungeon_id'],d)]<=balance),None)
+
+    def lower_difficulty(self,balance):
+        """En TEAM sin saldo: Escape a la dificultad y elegir otra pagable; False si no queda ninguna."""
+        level=self.affordable(balance)
+        screen='DIFFICULTY_'+self.plan['dungeon_id']
+        self.close_menu('TEAM')
+        if level is None:return False
+        frame=self.wait(screen);cost=self.vision.cost(frame,level)
+        if cost!=ROUTE_COSTS[(self.plan['dungeon_id'],level)]:raise SafetyStop(f'Coste de {level} no confirmado')
+        xy,roi=DIFFICULTY_BUTTONS[level];self.click(screen,xy,level.upper(),roi);self.wait('TEAM')
+        self.difficulty,self.cost=level,cost
+        self.log.emit('DUNGEON_STATUS',message=f'Energía {balance}: se baja a {level}')
+        return True
+
+    def read_team_energy(self):
         balance=None
         def known(frame):
             nonlocal balance
@@ -207,6 +226,17 @@ class DungeonRunner:
         # La barra puede mostrar el reloj de recarga en vez del saldo; nunca se usa como saldo.
         frame=self.wait(known,ENERGY_WAIT,'saldo de energía en TEAM')
         if balance is None or self.vision.screen(frame)!='TEAM':raise SafetyStop('Energía desconocida')
+        return balance
+
+    def enter(self,cycle):
+        """Entra con la dificultad pagable más alta; None si no queda energía para ninguna."""
+        if not self.safety_checked or self.cost!=ROUTE_COSTS[(self.plan['dungeon_id'],self.difficulty)]:
+            raise SafetyStop('Ruta o ajustes sin confirmar')
+        balance=self.read_team_energy()
+        while balance[0]<self.cost:
+            if not self.lower_difficulty(balance[0]):
+                self.balance=balance[0];return None
+            balance=self.read_team_energy()
         attempt=f'{self.channel.run_id}:{cycle}'
         if not self.budget.reserve_entry(attempt,resource='ENERGY',balance=balance[0],cost=self.cost):
             raise SafetyStop('Entrada ya reservada; no repetir ACCEPT')
@@ -214,7 +244,8 @@ class DungeonRunner:
                     {'attempt_id':attempt,'plan':self.plan,'balance':balance,'cost':self.cost,
                      'budget':self.budget.payload(),'perf_ns':time.perf_counter_ns(),'effect_confirmed':False})
         self.click('TEAM',(1215,982),'ACCEPT',(1000,930,1420,1035))
-        self.log.emit('DUNGEON_ENTERED',attempt_id=attempt,energy_before=balance[0],energy_reserved=self.cost)
+        self.balance=balance[0]-self.cost  # cota inferior: la regeneración solo suma
+        self.log.emit('DUNGEON_ENTERED',attempt_id=attempt,energy_before=balance[0],energy_reserved=self.cost,difficulty=self.difficulty)
         return attempt
 
     def decline_other(self,frame,attempt,offer):
@@ -245,7 +276,8 @@ class DungeonRunner:
         self.log.emit('FAMILIAR_DECLINED',message=f'{label} rechazado · objetivo {target or "ninguno"}',familiar=name,target=target)
         return True
 
-    def observe(self,attempt,cycle,*,auto_started=False):
+    def observe(self,attempt,cycle,*,auto_started=False,rerun=False):
+        """Cierra la run; True si volvió a TEAM con RERUN para la siguiente."""
         previous=list(self.channel.directory.glob(f'decline-{cycle}-*.intent.json'))
         if any(json.loads(path.read_text()).get('effect_confirmed') is not True for path in previous):
             raise SafetyStop('Rechazo previo sin confirmar; no se continúa')
@@ -268,13 +300,18 @@ class DungeonRunner:
                 atomic_json(self.channel.directory/f'result-{cycle}.json',
                             {'attempt_id':attempt,'outcome':'VICTORY','loot':None,'gold_gain':None,'xp_gain':None,
                              'closure_confirmed':False})
-                self.click('VICTORY',(1150,1000),'TOWN',(990,940,1320,1060));self.go_home()
+                # RERUN solo si el saldo estimado (cota inferior) paga otra run igual.
+                again=(rerun and self.balance is not None and self.balance>=self.cost and
+                       self.budget.energy_reserved+self.cost<=self.plan['energy_limit'])
+                if again:self.click('VICTORY',(834,996),'RERUN',(650,920,1020,1075));self.wait('TEAM',20)
+                else:self.click('VICTORY',(1150,1000),'TOWN',(990,940,1320,1060));self.go_home()
                 self.budget.finish_run(attempt,'VICTORY',closure_confirmed=True)
                 atomic_json(self.channel.directory/f'result-{cycle}.json',
                             {'attempt_id':attempt,'outcome':'VICTORY','loot':None,'gold_gain':None,'xp_gain':None,
                              'closure_confirmed':True,'budget':self.budget.payload()})
-                self.log.emit('DUNGEON_COMPLETE',message=f'Dungeon {cycle} completada y cerrada',budget=self.budget.payload())
-                return
+                self.log.emit('DUNGEON_COMPLETE',message=f'Dungeon {cycle} completada'+(' · RERUN' if again else ' y cerrada'),
+                              budget=self.budget.payload())
+                return again
             if screen=='AUTO_OFF':
                 if auto_started:
                     # El mapa pasa brevemente a OFF al iniciar combate. Esperar sin input.
@@ -300,11 +337,23 @@ class DungeonRunner:
         raise SafetyStop('Dungeon sin cierre confirmado en 3 minutos; no se repite')
 
     def run(self):
-        self.go_home()
-        for cycle in range(1,self.plan['runs']+1):
-            if self.budget.energy_reserved+ROUTE_COSTS[(self.plan['dungeon_id'],self.plan['difficulty'])]>self.plan['energy_limit']:
-                self.log.emit('DUNGEON_STATUS',message='Límite de energía alcanzado');return
-            self.verify_settings();self.select_route();attempt=self.enter(cycle);self.observe(attempt,cycle)
+        self.go_home();self.verify_settings()  # Ajustes nativos: una vez por sesión.
+        in_team=False;runs=self.plan['runs']
+        for cycle in range(1,runs+1):
+            if not in_team:
+                if self.balance is not None:
+                    level=self.affordable(self.balance)
+                    if level is None:
+                        self.log.emit('DUNGEON_STATUS',message=f'Energía agotada ({self.balance}) · detenido');return
+                    self.difficulty=level
+                if self.budget.energy_reserved+ROUTE_COSTS[(self.plan['dungeon_id'],self.difficulty)]>self.plan['energy_limit']:
+                    self.log.emit('DUNGEON_STATUS',message='Límite de energía alcanzado');return
+                self.select_route()
+            attempt=self.enter(cycle)
+            if attempt is None:
+                self.go_home();self.log.emit('DUNGEON_STATUS',message=f'Energía agotada ({self.balance}) · detenido');return
+            in_team=self.observe(attempt,cycle,rerun=cycle<runs)
+        if in_team:self.close_menu('TEAM');self.go_home()
         self.log.emit('DUNGEON_STATUS',message='Límite de runs alcanzado · detenido',budget=self.budget.payload())
 
 

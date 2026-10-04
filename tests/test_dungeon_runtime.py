@@ -21,14 +21,14 @@ class DungeonRuntimeTests(unittest.TestCase):
         validate_supported(farm_plan('Z5D3','Heroic',1,30,'Tealk'))
         validate_supported(farm_plan('Z5D3','Heroic',6,180,'Tealk'))  # repetición, como Z5D2
         validate_supported(farm_plan('Z5D3','Normal',17,170,'Tealk'))  # al agotarse Heroic
-        for args in [('Z1D2','Normal',1,30,'Bob'),('Z5D2','Heroic',1,30,''),
-                     ('Z5D3','Hard',1,30,'')]:
+        validate_supported(farm_plan('Z5D3','Hard',1,30,'Tealk'));validate_supported(farm_plan('Z5D2','Heroic',1,30))
+        for args in [('Z1D2','Normal',1,30,'Bob'),('Z5D1','Normal',1,30,'')]:
             with self.assertRaises(ValueError):validate_supported(farm_plan(*args))
 
     def test_tealk_heroic_reserves_thirty_once_and_rejects_the_normal_cost(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,vision=self.runner(Path(tmp))
-            runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk')
+            runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');runner.difficulty='Heroic'
             with self.assertRaises(SafetyStop):runner.enter(1)
             io.click.assert_not_called()
             runner.cost=30
@@ -39,7 +39,7 @@ class DungeonRuntimeTests(unittest.TestCase):
 
     def test_tealk_selection_never_clicks_another_dungeon_or_normal(self):
         with tempfile.TemporaryDirectory() as tmp:
-            runner,io,vision=self.runner(Path(tmp));runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk')
+            runner,io,vision=self.runner(Path(tmp));runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');runner.difficulty='Heroic'
             runner.wait=Mock(return_value='frame');runner.click=Mock();runner.select_zone=Mock()
             vision.cost.return_value=30
             runner.select_route()
@@ -317,7 +317,7 @@ class DungeonRuntimeTests(unittest.TestCase):
     def test_decline_only_a_stable_known_non_target_and_confirm_that_action(self):
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:offer=data['offer_brute']
         with tempfile.TemporaryDirectory() as tmp:
-            runner,io,vision=self.runner(Path(tmp));runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk')
+            runner,io,vision=self.runner(Path(tmp));runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');runner.difficulty='Heroic'
             vision.familiar_name.return_value='Brute';runner.click=Mock();runner.wait=Mock(return_value=offer)
             self.assertTrue(runner.decline_other(offer,'test:1',1))
             self.assertEqual([call.args[0] for call in runner.click.call_args_list],['FAMILIAR_OFFER','DECLINE_CONFIRM'])
@@ -344,7 +344,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             with self.assertRaises(SafetyStop):
                 runner.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015),expected_familiar='Brute')
             io.click.assert_not_called()
-            runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');vision.familiar_name.return_value='Brute'
+            runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');runner.difficulty='Heroic';vision.familiar_name.return_value='Brute'
             def wait(screen,timeout=10,expected=None):
                 if screen=='DECLINE_CONFIRM':raise SafetyStop('Confirmación distinta')
                 return offer
@@ -499,10 +499,51 @@ class DungeonRuntimeTests(unittest.TestCase):
             io.click.assert_not_called()
             self.assertEqual(runner.budget.energy_reserved,0)
 
+    def test_settings_are_checked_once_and_reruns_skip_navigation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.plan=farm_plan('Z5D2','Normal',3,30)
+            runner.go_home=Mock();runner.verify_settings=Mock();runner.select_route=Mock()
+            def enter(cycle):
+                runner.budget.energy_reserved+=10;runner.balance=50;return f'test:{cycle}'
+            runner.enter=Mock(side_effect=enter)
+            runner.observe=Mock(side_effect=lambda attempt,cycle,rerun:rerun)
+            runner.run()
+            runner.verify_settings.assert_called_once();runner.select_route.assert_called_once()
+            self.assertEqual([c.kwargs['rerun'] for c in runner.observe.call_args_list],[True,True,False])
+
+    def test_low_energy_lowers_difficulty_in_team_and_stops_below_the_cheapest(self):
+        for energy,expected in ((25,'Hard'),(12,'Normal'),(5,None)):
+            with self.subTest(energy=energy),tempfile.TemporaryDirectory() as tmp:
+                runner,io,vision=self.runner(Path(tmp))
+                runner.plan=farm_plan('Z5D3','Heroic',1,30,'Tealk');runner.difficulty='Heroic';runner.cost=30
+                vision.energy.return_value=(energy,369)
+                vision.cost.side_effect=lambda frame,level:{'Normal':10,'Hard':20,'Heroic':30}[level]
+                runner.close_menu=Mock();clicked=[]
+                runner.click=Mock(side_effect=lambda screen,xy,key=None,*a,**k:clicked.append(key))
+                attempt=runner.enter(1)
+                self.assertEqual(runner.difficulty if attempt else None,expected)
+                if expected:
+                    self.assertEqual(clicked,[expected.upper(),'ACCEPT'])
+                    self.assertEqual(runner.budget.energy_reserved,{'Hard':20,'Normal':10}[expected])
+                else:
+                    self.assertNotIn('ACCEPT',clicked);self.assertEqual(runner.budget.energy_reserved,0)
+
+    def test_victory_reruns_only_when_the_estimated_balance_pays_another_run(self):
+        for balance,rerun,expected in ((40,True,(834,996)),(5,True,(1150,1000)),(40,False,(1150,1000))):
+            with self.subTest(balance=balance,rerun=rerun),tempfile.TemporaryDirectory() as tmp:
+                runner,io,vision=self.runner(Path(tmp))
+                runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+                runner.wait=Mock(return_value=runner.capture.return_value);runner.go_home=Mock()
+                vision.screen.return_value='VICTORY';runner.balance=balance
+                runner.budget.reserve_entry('test:1',resource='ENERGY',balance=100,cost=10)
+                self.assertIs(runner.observe('test:1',1,rerun=rerun),expected==(834,996))
+                io.click.assert_called_once_with(expected)
+                self.assertEqual(runner.budget.payload()['completed_runs'],1)
+
     def test_run_stops_before_navigating_when_the_next_entry_exceeds_the_energy_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,_=self.runner(Path(tmp));runner.plan=farm_plan('Z5D2','Normal',3,15)
-            runner.go_home=Mock();runner.verify_settings=Mock();runner.select_route=Mock();runner.observe=Mock()
+            runner.go_home=Mock();runner.verify_settings=Mock();runner.select_route=Mock();runner.observe=Mock(return_value=False)
             def enter(cycle):
                 runner.budget.energy_reserved+=10
                 return f'test:{cycle}'
@@ -532,7 +573,7 @@ class DungeonRuntimeTests(unittest.TestCase):
     def test_check_stops_after_the_session_time_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,_=self.runner(Path(tmp));runner.deadline=time.monotonic()-1
-            with self.assertRaisesRegex(SafetyStop,'15 minutos'):runner.check()
+            with self.assertRaisesRegex(SafetyStop,'60 minutos'):runner.check()
 
 
 if __name__=='__main__':unittest.main()
