@@ -423,6 +423,15 @@ class DungeonRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(SafetyStop,'fin de prueba'):runner.observe('test:1',1)
             self.assertEqual(seen,['Brute']);io.click.assert_not_called()
 
+    def test_battle_waiting_without_auto_is_switched_on_but_not_endlessly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            runner.wait=Mock(return_value=runner.capture.return_value)
+            vision.screen.return_value='AUTO_OFF_BATTLE'
+            with self.assertRaisesRegex(SafetyStop,'repetidamente'):runner.observe('test:1',1,auto_started=True)
+            self.assertEqual(io.click.call_count,3)
+
     def test_battle_auto_does_not_claim_that_map_auto_was_started(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,vision=self.runner(Path(tmp));frame=np.zeros((1080,1920,3),np.uint8)

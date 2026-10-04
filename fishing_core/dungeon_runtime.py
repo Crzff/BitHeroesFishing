@@ -281,7 +281,7 @@ class DungeonRunner:
         previous=list(self.channel.directory.glob(f'decline-{cycle}-*.intent.json'))
         if any(json.loads(path.read_text()).get('effect_confirmed') is not True for path in previous):
             raise SafetyStop('Rechazo previo sin confirmar; no se continúa')
-        unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180
+        unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180;battle_autos=0
         while time.monotonic()<deadline:
             frame=self.capture();screen=self.vision.screen(frame)
             if screen=='FAMILIAR_OFFER':
@@ -320,6 +320,12 @@ class DungeonRunner:
                         raise SafetyStop('Auto se desactivó de forma estable: revisar posible muerte/derrota; no se reactiva')
                 else:
                     self.wait('AUTO_OFF');self.click('AUTO_OFF',(1880,530));self.wait('AUTO_ON');auto_started=True
+            elif screen=='AUTO_OFF_BATTLE':
+                # Un combate puede empezar sin Auto (p. ej. tras pausar el mapa): activarlo si sigue así.
+                if battle_autos>=3:raise SafetyStop('Auto de combate se apaga repetidamente; no se insiste')
+                self.wait('AUTO_OFF_BATTLE',5);self.click('AUTO_OFF_BATTLE',(1880,530))
+                self.wait(lambda f:self.vision.screen(f)!='AUTO_OFF_BATTLE',5,'Auto de combate activado')
+                battle_autos+=1;unknown_since=None;continue
             elif screen=='AUTO_ON':auto_started=True  # Auto de combate no acredita Auto del mapa.
             elif screen=='STORY_ZORUL':
                 signature=hash(frame[420:813,780:1590].tobytes())
