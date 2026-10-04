@@ -324,3 +324,22 @@ TOWN y la X de la lista. Sin xeals cierra la lista sin invocar.
 
 Pendiente: Trials (coste 5 tokens; con 3 el juego ofrece comprar con gemas → siempre
 NO), integración en el panel y un orquestador que repita cada modo al regenerarse.
+
+## Exploración de modos — 2026-10-04
+
+Una run de cada modo, supervisada y sin compras. Coordenadas a 1920×1080.
+
+| Modo | Recurso | Entrada | Combate | Cierre |
+|---|---|---|---|---|
+| Trials (Nyxn's) | Tokens, coste 1–5 (desplegable), dificultad 499 | HOME TRIALS (1830,710) → PLAY (1280,580) → TEAM ACCEPT | Mapa tipo dungeon: AUTO del mapa (1880,530) y combates | CLEARED → TOWN (994,998) vuelve a la ventana |
+| Raid Storm (T13) | Shards, 1 por dificultad | HOME RAID (90,580) → abre en Storm → SUMMON (1260,786) → Normal/Hard/Heroic → TEAM ACCEPT | Mapa con AUTO activo, varios combates | CLEARED → RERUN o TOWN (1154,996) |
+| PvP Arena | Tickets, coste 5 (desplegable) | HOME PVP (90,280) → PLAY (1280,568) → SELECT OPPONENT (4 rivales, FIGHT) → TEAM ACCEPT | Un combate (~4 s) | VICTORY → STATS / TOWN |
+| Expedition (Idol Dimension) | Badges, coste 5 | HOME EXPEDITION (1830,560) → PLAY → 4 portales → ENTER (958,966) → TEAM ACCEPT | Mapa con AUTO y combates | CLEARED → TOWN; la dificultad sube sola (10.330→10.335) |
+
+- Con tokens < coste, PLAY de Trials ofrece comprar con gemas: siempre NO (1100,750).
+- Cambiar el coste: el selector de Trials muestra filas 1–5; pulsar la fila ya marcada no lo
+  cierra, se cierra con su X.
+- El clic en AUTO del mapa justo al empezar un combate apaga el AUTO del combate: esperar a
+  que el combate esté estable antes de tocarlo.
+- Preferencias de crzf: Trials coste 5 bajando hasta 1; Raid del tier del jugador (T13 =
+  Storm); PvP 5 tickets eligiendo rival; Netherworld T9 Heroic con REGROUP.
