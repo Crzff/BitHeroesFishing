@@ -76,7 +76,8 @@
     "boss_not_full": "ee072961480ead9b2a5d20ec3d323f4eea958a03d6408c871e78d1c9cb23c4d2",
     "boss_battle_off": "b917e0035994a730c91879968e0fe4a60b1eaa656a66f5d0989c34d6b2286bcd",
     "boss_victory": "4e48d3c087039930c341665227581b96e49e175f6847f8621319a812f46cae00",
-    "boss_defeat": "aeb4d92fe948db3e78800b49bdef31e06d2a3e635819615fb5fa4e0ba248cc1f"
+    "boss_defeat": "aeb4d92fe948db3e78800b49bdef31e06d2a3e635819615fb5fa4e0ba248cc1f",
+    "boss_home_town": "28ac2e1bf04f57d26f796974e68ac59b76242e969bbdb43f6612b990af526014"
   },
   "regions": {
     "HOME_QUEST": [
@@ -797,6 +798,10 @@
     "WB_VICTORY": [
       "victory",
       "captura Steam 2026-10-03"
+    ],
+    "HOME_BOSS_TOWN": [
+      "demo6",
+      "Home con otro fondo 2026-10-03"
     ]
   },
   "notes": [
@@ -806,7 +811,8 @@
     "Zones: 20 nombres/t\u00edtulos observados en Steam/niri 2026-10-03; abrir mapa no acredita dungeon desbloqueada. Choices compara texto blanco con los mismos umbrales .97/12, sin OCR.",
     "Energ\u00eda TEAM 2026-10-03: saldo 317/368, slash 23\u00d722; normalizar sombreado al 50 % y binarizar blanco >=170. Reloj 2:09 no es saldo. Referencia previa 21\u00d720 y filtros intactos.",
     "Energ\u00eda TEAM 2026-10-03: el lector de cebos confund\u00eda 0/6 con 8 en la fuente de energ\u00eda (rechazo por huecos). Variantes sueltas de 0 u 8 desplazaban el error (61/369 fallaba). Se a\u00f1ade el juego completo DIGIT_0..9_ENERGY de saldos/relojes reales etiquetados, solo para dungeons. Umbrales, margen, huecos y rechazo de reloj intactos.",
-    "World Boss 2026-10-03: Netherworld T9 Normal privado en solitario (Heroic perd\u00eda en segundos; Normal gan\u00f3 en segundos). Plantillas WB_* y HOME_BOSS de capturas reales; TOWN cambia de posici\u00f3n entre victoria y derrota y se localiza. Fixtures boss_* conservan solo las ROI le\u00eddas."
+    "World Boss 2026-10-03: Netherworld T9 Normal privado en solitario (Heroic perd\u00eda en segundos; Normal gan\u00f3 en segundos). Plantillas WB_* y HOME_BOSS de capturas reales; TOWN cambia de posici\u00f3n entre victoria y derrota y se localiza. Fixtures boss_* conservan solo las ROI le\u00eddas.",
+    "HOME_BOSS: el fondo de arena cambia con otros personajes; m\u00e1scara de p\u00edxeles comunes con HOME_BOSS_TOWN, como HOME_QUEST/SETTINGS."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

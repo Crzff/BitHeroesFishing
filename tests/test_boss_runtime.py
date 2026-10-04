@@ -18,9 +18,9 @@ VISION=DungeonVision()
 
 
 class FakeGame:
-    def __init__(self,summon='boss_summon_normal',lobby='boss_lobby',result='boss_victory'):
-        self.state='boss_home';self.starts=0
-        self.moves={('boss_home',(90,430)):'boss_list',('boss_list',(1180,966)):'boss_carousel',
+    def __init__(self,summon='boss_summon_normal',lobby='boss_lobby',result='boss_victory',home='boss_home'):
+        self.state=home;self.starts=0
+        self.moves={('boss_home',(90,430)):'boss_list',('boss_home_town',(90,430)):'boss_list',('boss_list',(1180,966)):'boss_carousel',
                     ('boss_list',(1536,214)):'boss_home',('boss_carousel',(1260,786)):summon,
                     (summon,(1130,842)):lobby,(lobby,(920,984)):'boss_not_full',
                     ('boss_not_full',(816,750)):'boss_battle_off',('boss_battle_off',(1880,530)):result}
@@ -56,6 +56,10 @@ class BossRuntimeTests(unittest.TestCase):
         self.assertEqual(runner.budget.payload()['completed_runs'],2)
         self.assertEqual(runner.budget.energy_reserved,2);self.assertEqual(runner.budget.gold_reserved,0)
         self.assertEqual(self.events.count('BOSS_COMPLETE'),2)
+
+    def test_home_button_is_found_over_a_different_town_background(self):
+        game=FakeGame(home='boss_home_town');self.run_boss(game)
+        self.assertEqual(game.starts,1)
 
     def test_wrong_summon_config_or_shared_lobby_never_press_start(self):
         for game in (FakeGame(summon='boss_summon_heroic'),FakeGame(lobby='boss_lobby_public'),
