@@ -78,10 +78,10 @@ class BossRuntimeTests(unittest.TestCase):
                 with self.assertRaises(SafetyStop):self.run_boss(game)
                 self.assertEqual(game.starts,0)
 
-    def test_defeat_closes_once_and_stops_without_another_start(self):
-        game=FakeGame(result='boss_defeat')
-        with self.assertRaisesRegex(SafetyStop,'Derrota'):self.run_boss(game,runs=3)
-        self.assertEqual(game.starts,1);self.assertEqual(game.state,'boss_home')
+    def test_defeat_keeps_spending_xeals(self):
+        game=FakeGame(result='boss_defeat');runner=self.run_boss(game,runs=3)
+        self.assertEqual(game.starts,3);self.assertEqual(game.state,'boss_home')
+        self.assertEqual(runner.budget.payload()['completed_runs'],3)
 
     def test_no_xeals_closes_the_list_without_summoning(self):
         game=FakeGame()

@@ -1,6 +1,6 @@
 """Raid del tier del jugador (crzf: T13 = Storm) en Heroic: gasta todos los shards.
 
-Una derrota detiene la sesión: en Raid no se espera perder.
+Una derrota no detiene: se cierra con TOWN y se sigue gastando (pedido por crzf).
 """
 
 import os
@@ -21,12 +21,14 @@ SHARDS_ROI=(880,100,1050,145)
 
 
 class RaidRunner(DungeonRunner):
+    defeat_continues=True
+
     def __init__(self,io,capture,vision,channel,log,runs):
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.runs=runs;self.deadline=time.monotonic()+60*60
         self.plan={'dungeon_id':'RAID_STORM','difficulty':'Heroic','runs':runs,'energy_limit':runs,'target':''}
         self.cost=SHARD_COST;self.balance=None
-        self.budget=FarmBudget(max_runs=runs,max_energy=runs*SHARD_COST,max_seconds=60*60,max_gold=0)
+        self.budget=FarmBudget(max_runs=runs,max_energy=runs*SHARD_COST,max_seconds=60*60,max_gold=0,stop_on_defeat=False)
 
     def press(self,screen,action):
         xy,key,roi=action

@@ -45,7 +45,7 @@ class BossRunner(DungeonRunner):
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.difficulty=difficulty
         self.runs=runs;self.deadline=time.monotonic()+60*60
-        self.budget=FarmBudget(max_runs=runs,max_energy=runs*XEAL_COST,max_seconds=60*60,max_gold=0)
+        self.budget=FarmBudget(max_runs=runs,max_energy=runs*XEAL_COST,max_seconds=60*60,max_gold=0,stop_on_defeat=False)
 
     def configured(self,screen,checks,message):
         """Espera lectura estable de toda la configuración: los diálogos entran animados."""
@@ -133,13 +133,12 @@ class BossRunner(DungeonRunner):
         frame=self.wait(lambda f:self.vision.screen(f) in results,BATTLE_LIMIT,'resultado del jefe')
         screen=self.vision.screen(frame);outcome='VICTORY' if screen=='WB_VICTORY' else 'DEFEAT'
         # Botones localizados: cambian de sitio entre victoria (3) y derrota (2).
-        regroup=again and outcome=='VICTORY'
+        regroup=again  # crzf: una derrota no detiene, se sigue gastando
         if regroup:self.result_button(frame,'RESULT_REGROUP',REGROUP_ROI);self.wait('WB_LOBBY',15)
         else:self.result_button(frame,'RESULT_TOWN',TOWN_ROI);self.close_list()
         self.budget.finish_run(attempt,outcome,closure_confirmed=True)
         atomic_json(self.channel.directory/f'boss-{cycle}.intent.json',{'attempt_id':attempt,'outcome':outcome,'effect_confirmed':True})
         self.log.emit('BOSS_COMPLETE',message=f'Netherworld {cycle}: {outcome}',budget=self.budget.payload())
-        if outcome=='DEFEAT':raise SafetyStop('Derrota en el jefe: no se repite')
         return regroup
 
     def run(self):
