@@ -337,6 +337,19 @@ class DungeonRuntimeTests(unittest.TestCase):
             self.assertEqual(runner.click.call_count,4);self.assertEqual(runner.budget.gold_reserved,0)
             self.assertFalse(runner.decline_other(np.zeros_like(offer),'test:1',5))
 
+    def test_several_targets_pause_on_any_of_them_and_decline_the_rest(self):
+        plan=validate_supported({'dungeon_id':'Z5D3','difficulty':'Heroic','runs':1,'energy_limit':30,'targets':['Mummih','Tealk']})
+        self.assertEqual(plan['targets'],['Mummih','Tealk'])
+        with self.assertRaises(ValueError):
+            validate_supported({'dungeon_id':'Z5D3','difficulty':'Heroic','runs':1,'energy_limit':30,'targets':['Bob']})
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:offer=data['offer_brute']
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));runner.plan=plan
+            runner.click=Mock();runner.wait=Mock(return_value=offer)
+            for name,declined in (('Mummih',False),('tealk',False),('Brute',True),('Sitra',True)):
+                vision.familiar_name.return_value=name
+                self.assertIs(runner.decline_other(offer,'test:1',name),declined,name)
+
     def test_changed_familiar_before_decline_and_wrong_confirm_never_send_yes(self):
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:offer=data['offer_brute']
         with tempfile.TemporaryDirectory() as tmp:

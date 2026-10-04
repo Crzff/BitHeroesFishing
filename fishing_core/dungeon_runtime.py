@@ -32,7 +32,10 @@ MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
 
 
 def validate_supported(plan):
-    checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],plan.get('target',''))
+    targets=[str(name).strip() for name in plan.get('targets') or ([plan['target']] if plan.get('target') else []) if str(name).strip()]
+    for name in targets:farm_plan(plan['dungeon_id'],plan['difficulty'],1,1,name)  # cada objetivo debe salir en esa ruta
+    checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],targets[0] if targets else '')
+    checked['targets']=targets
     if (checked['dungeon_id'],checked['difficulty']) not in ROUTE_COSTS:
         raise ValueError('Ruta aún no calibrada: disponibles Z5D2 y Z5D3 · Normal/Hard/Heroic. No se cambia tu objetivo.')
     return checked
@@ -58,6 +61,12 @@ def start_dungeon(game,plan):
 
 
 class DungeonRunner:
+    @property
+    def targets(self):
+        """Familiares objetivo: lista nueva o el campo único anterior."""
+        plan=getattr(self,'plan',None) or {}
+        return list(plan.get('targets') or ([plan['target']] if plan.get('target') else []))
+
     def __init__(self,io,capture,vision,channel,log,plan):
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.plan=validate_supported(plan);self.cost=None;self.safety_checked=False
@@ -186,7 +195,7 @@ class DungeonRunner:
             if len(seen)==3:break
             self.scroll_menu('SETTINGS',6)  # Calibrado: 8 salta una lectura; 6 conserva solape.
         if len(seen)!=3:raise SafetyStop('No se pudieron comprobar todos los ajustes anti-gasto')
-        if self.plan['target'] and seen['duplicates']:
+        if self.targets and seen['duplicates']:
             raise SafetyStop('Desactiva Decline duplicate familiars antes de farmear copias; no se entra')
         atomic_json(self.channel.directory/'native_settings.json',{'checked':seen,'changed_by_bot':False})
         self.close_menu('SETTINGS');self.safety_checked=True
@@ -282,9 +291,10 @@ class DungeonRunner:
 
     def decline_other(self,frame,attempt,offer):
         """Sin objetivo se rechaza toda oferta legible; con objetivo, solo otro nombre conocido."""
-        name=self.vision.familiar_name(frame);target=self.plan['target'];glyph=familiar_glyph(frame)
+        name=self.vision.familiar_name(frame);targets={normalize(n) for n in self.targets}
+        target=', '.join(self.targets);glyph=familiar_glyph(frame)
         if glyph is None:return False
-        if target and (not isinstance(name,str) or normalize(name)==normalize(target)):return False
+        if targets and (not isinstance(name,str) or normalize(name) in targets):return False
         same=lambda f:(lambda g:g is not None and np.array_equal(g,glyph))(familiar_glyph(f))
         frame=self.wait('FAMILIAR_OFFER')
         if not same(frame):raise SafetyStop('Nombre de familiar inestable; no se rechaza')
@@ -319,7 +329,7 @@ class DungeonRunner:
             if screen=='FAMILIAR_OFFER':
                 cv2.imwrite(str(self.channel.directory/'familiar-offer.png'),frame[110:900,350:1600])
                 if declined>=20:raise SafetyStop('Demasiadas ofertas de familiar; no se continúa')
-                if self.plan['target'] and self.vision.familiar_name(frame) is None:
+                if self.targets and self.vision.familiar_name(frame) is None:
                     # La oferta entra animada: esperar el nombre legible; uno desconocido sigue pausando.
                     try:frame=self.wait(lambda f:self.vision.familiar_name(f) is not None,3,'nombre de familiar')
                     except SafetyStop:pass
