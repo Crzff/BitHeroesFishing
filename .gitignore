@@ -4,6 +4,7 @@ runs/
 *_SAMPLES.csv
 *.signal
 fishing_bot_config.json
+farm_config.json
 # Entornos y generados.
 .venv/
 venv/
@@ -23,5 +24,7 @@ htmlcov/
 *.key
 .vscode/
 .idea/
+# Permisos de Claude propios de este equipo.
+.claude/settings.local.json
 Thumbs.db
 desktop.ini

@@ -1,10 +1,7 @@
-"""Acceso principal: dungeons primero; pesca existente en la segunda pestaña."""
+"""Acceso principal: Farm Bot multimodo con aspecto de Bit Heroes. Abrir no inicia el bot."""
 
-import customtkinter as ctk
-from FISHING_BOT_APP import FishingBotApp
+from fishing_core.farm_app import main
 
 
 if __name__=='__main__':
-    ctk.set_appearance_mode('dark')
-    app=FishingBotApp(farm_primary=True)
-    app.mainloop()
+    main()

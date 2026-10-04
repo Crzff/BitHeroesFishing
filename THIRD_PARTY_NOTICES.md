@@ -68,3 +68,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Interfaz del Farm Bot
+
+- `assets/fonts/Silkscreen-*.ttf`: fuente Silkscreen de Jason Kottke, SIL Open Font
+  License 1.1 (texto en `assets/fonts/OFL-Silkscreen.txt`), obtenida de
+  https://github.com/google/fonts/tree/main/ofl/silkscreen.
+- `assets/ui/*.png`: iconos de modo recortados de capturas locales de Bit Heroes para
+  la app; derivan del juego, no son recursos MIT y no deben redistribuirse sin revisar
+  los derechos del titular.
