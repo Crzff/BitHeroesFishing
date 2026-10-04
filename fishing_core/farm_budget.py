@@ -27,13 +27,13 @@ def _seconds(value):
     return seconds
 
 
-ENTRY_RESOURCES = ("ENERGY", "XEALS", "TOKENS", "SHARDS")
+ENTRY_RESOURCES = ("ENERGY", "XEALS", "TOKENS", "SHARDS", "TICKETS", "BADGES")
 
 
 class FarmBudget:
     # ponytail: un controlador y estado en memoria; diario transaccional para reanudar.
     def __init__(self, *, max_runs, max_energy, max_seconds, energy_reserve=0,
-                 max_gold=0, gold_reserve=0, clock=None):
+                 max_gold=0, gold_reserve=0, clock=None, stop_on_defeat=True):
         self.max_runs = _quantity(max_runs, "Limite de runs", 1)
         self.max_energy = _quantity(max_energy, "Limite de energia", 1)
         self.energy_reserve = _quantity(energy_reserve, "Reserva de energia")
@@ -57,6 +57,8 @@ class FarmBudget:
         self.active_attempt = None
         self.pending_gold = None
         self.stop_reason = None
+        # PvP, Expedition y Trials pueden perder con normalidad; Raid y World Boss no.
+        self.stop_on_defeat = stop_on_defeat
 
     def _check_open(self):
         if self.stop_reason:
@@ -115,7 +117,7 @@ class FarmBudget:
             raise ValueError("Gasto de oro previo sin resolver")
         self._results[attempt_id] = outcome
         self.active_attempt = None
-        if outcome == "DEFEAT":
+        if outcome == "DEFEAT" and self.stop_on_defeat:
             self.stop_reason = "DEFEAT"
         return True
 

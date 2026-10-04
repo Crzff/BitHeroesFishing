@@ -27,7 +27,7 @@ class FakeGame:
 
     def click(self,xy):
         if self.state in ('boss_victory','boss_defeat'):
-            for key,roi,target in (('RESULT_TOWN',(970,915,1500,1080),'boss_list'),
+            for key,roi,target in (('RESULT_TOWN',(700,915,1500,1080),'boss_list'),
                                    ('RESULT_REGROUP',(650,915,1250,1080),self.lobby)):
                 x,y=VISION.locate(FRAMES[self.state],key,roi);h,w=VISION.templates[key].shape[:2]
                 if tuple(xy)==(x+w//2,y+h//2):

@@ -276,5 +276,16 @@ class EntryResourceTests(unittest.TestCase):
         budget.finish_run("wb:2","VICTORY",closure_confirmed=True)
         with self.assertRaises(ValueError):budget.reserve_entry("wb:3",resource="XEALS",balance=1,cost=1)
 
+class DefeatPolicyTests(unittest.TestCase):
+    def test_modes_where_losing_is_normal_keep_spending_after_a_defeat(self):
+        budget=FarmBudget(max_runs=3,max_energy=15,max_seconds=60,stop_on_defeat=False)
+        budget.reserve_entry("pvp:1",resource="TICKETS",balance=15,cost=5)
+        budget.finish_run("pvp:1","DEFEAT",closure_confirmed=True)
+        self.assertTrue(budget.reserve_entry("pvp:2",resource="TICKETS",balance=10,cost=5))
+        strict=FarmBudget(max_runs=3,max_energy=3,max_seconds=60)
+        strict.reserve_entry("wb:1",resource="XEALS",balance=3,cost=1)
+        strict.finish_run("wb:1","DEFEAT",closure_confirmed=True)
+        with self.assertRaises(ValueError):strict.reserve_entry("wb:2",resource="XEALS",balance=2,cost=1)
+
 if __name__ == "__main__":
     unittest.main()

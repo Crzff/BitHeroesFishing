@@ -18,7 +18,7 @@ SUMMON=((1130,842),'WB_SUMMON_BUTTON',(1015,800,1250,885))
 START=((920,984),'WB_START',(735,945,1100,1025))
 NOT_FULL_YES=((816,750),'DECLINE_YES',(670,695,955,805))
 AUTO=(1880,530)
-TOWN_ROI=(970,915,1500,1080)
+TOWN_ROI=(700,915,1500,1080)
 REGROUP_ROI=(650,915,1250,1080)
 # La configuración se comprueba; el bot nunca la cambia. Heroic T9 en solitario
 # perdió en segundos en una prueba; Normal gana en ~8 s. El usuario elige.

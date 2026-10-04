@@ -78,7 +78,14 @@
     "boss_victory": "4e48d3c087039930c341665227581b96e49e175f6847f8621319a812f46cae00",
     "boss_defeat": "aeb4d92fe948db3e78800b49bdef31e06d2a3e635819615fb5fa4e0ba248cc1f",
     "boss_home_town": "28ac2e1bf04f57d26f796974e68ac59b76242e969bbdb43f6612b990af526014",
-    "offer_tealk": "d341a0cc8a566e8f1d0fc17738294150f8de8913c8e79c60ef9ce17cb450c2f1"
+    "offer_tealk": "d341a0cc8a566e8f1d0fc17738294150f8de8913c8e79c60ef9ce17cb450c2f1",
+    "pvp_defeat": "d5cbf804b497cd920c107f9ab439f652b914870da73ca4673c68de07a7d553c8",
+    "pvp_home": "84b782b05b146b6e28142fcaaae2f79f809d85fbf30873413e2fd48c7cc57b65",
+    "pvp_window": "488c891d70c12ffd74cda63313be18a358d1c405567ac29b3202ef671c8c3333",
+    "pvp_window_cost1": "fe3013abbfba1e3406735407ace8d081aaed6b5dd7348ef64327cc1e088a07be",
+    "pvp_select": "2dabb35c654fd32f4f8819679df875c8741219db3ec087640a7ed42f3f1c7ba1",
+    "pvp_team": "6c36d4744ffe0a4a8bf3aa7492d389c445d40a98d5c68da16fd023b90a22e84f",
+    "pvp_cost_menu": "fa4848a2da77ea0dc243e59e40211842343247b7d90461fecac007e395597abb"
   },
   "regions": {
     "HOME_QUEST": [
@@ -842,6 +849,43 @@
         970,
         1035
       ]
+    ],
+    "HOME_PVP": [
+      "hp0",
+      "captura Steam 2026-10-04"
+    ],
+    "PVP_TITLE": [
+      "pv0",
+      "captura Steam 2026-10-04"
+    ],
+    "PVP_PLAY": [
+      "pv0",
+      "captura Steam 2026-10-04"
+    ],
+    "PVP_COST_5": [
+      "pv0",
+      "captura Steam 2026-10-04"
+    ],
+    "PVP_CLOSE": [
+      "pv0",
+      "captura Steam 2026-10-04"
+    ],
+    "PVP_SELECT": [
+      "pv1",
+      "captura Steam 2026-10-04"
+    ],
+    "PVP_FIGHT": [
+      "pv1",
+      "captura Steam 2026-10-04"
+    ],
+    "COST_MENU_TICKETS": [
+      "pv8",
+      [
+        800,
+        135,
+        1120,
+        200
+      ]
     ]
   },
   "notes": [
@@ -852,7 +896,8 @@
     "Energ\u00eda TEAM 2026-10-03: saldo 317/368, slash 23\u00d722; normalizar sombreado al 50 % y binarizar blanco >=170. Reloj 2:09 no es saldo. Referencia previa 21\u00d720 y filtros intactos.",
     "Energ\u00eda TEAM 2026-10-03: el lector de cebos confund\u00eda 0/6 con 8 en la fuente de energ\u00eda (rechazo por huecos). Variantes sueltas de 0 u 8 desplazaban el error (61/369 fallaba). Se a\u00f1ade el juego completo DIGIT_0..9_ENERGY de saldos/relojes reales etiquetados, solo para dungeons. Umbrales, margen, huecos y rechazo de reloj intactos.",
     "World Boss 2026-10-03: Netherworld T9 Normal privado en solitario (Heroic perd\u00eda en segundos; Normal gan\u00f3 en segundos). Plantillas WB_* y HOME_BOSS de capturas reales; TOWN cambia de posici\u00f3n entre victoria y derrota y se localiza. Fixtures boss_* conservan solo las ROI le\u00eddas.",
-    "HOME_BOSS: el fondo de arena cambia con otros personajes; m\u00e1scara de p\u00edxeles comunes con HOME_BOSS_TOWN, como HOME_QUEST/SETTINGS."
+    "HOME_BOSS: el fondo de arena cambia con otros personajes; m\u00e1scara de p\u00edxeles comunes con HOME_BOSS_TOWN, como HOME_QUEST/SETTINGS.",
+    "PvP 2026-10-04: ventana PVP ARENA, coste 5, SELECT OPPONENT con 4 rivales; tickets en la barra superior roja (alterna con reloj)."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

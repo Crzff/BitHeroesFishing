@@ -17,6 +17,11 @@ def familiar_glyph(frame):
     return mask[ys.min():ys.max()+1,xs.min():xs.max()+1] if len(xs) else None
 
 
+# Ventanas de otros modos: cada una exige título y botón propios (ROI con holgura).
+MODE_SCREENS=(('PVP',(('PVP_TITLE',(600,140,1320,295)),('PVP_PLAY',(1120,440,1445,695)))),
+              ('PVP_SELECT',(('PVP_SELECT',(520,95,1400,250)),)))
+
+
 class DungeonVision:
     def __init__(self,path=ASSETS):
         with np.load(path,allow_pickle=False) as data:
@@ -68,6 +73,8 @@ class DungeonVision:
         if self.locate(frame,'ZONES_MENU',(820,120,1100,215)):return 'ZONES'
         boss=self.boss_screen(frame)
         if boss:return boss
+        for screen,checks in MODE_SCREENS:
+            if all(key in self.templates and self.locate(frame,key,roi) for key,roi in checks):return screen
         regions=[('VICTORY',(780,110,1150,210)),('SETTINGS',(760,100,1160,215)),
                  ('TEAM',(830,90,1100,200)),('DIFFICULTY_Z5D2',(540,160,1380,265)),
                  ('DIFFICULTY_Z5D3',(540,160,1380,265))]
@@ -91,7 +98,7 @@ class DungeonVision:
 
     def boss_screen(self,frame):
         """Ventanas del World Boss; cada una exige título y botón propios."""
-        if self.locate(frame,'RESULT_TOWN',(970,915,1500,1080)):
+        if self.locate(frame,'RESULT_TOWN',(700,915,1500,1080)):
             if self.locate(frame,'WB_DEFEAT',(760,75,1160,230)):return 'WB_DEFEAT'
             if 'WB_VICTORY' in self.templates and self.locate(frame,'WB_VICTORY',(760,75,1160,230)):return 'WB_VICTORY'
         if self.locate(frame,'WB_LOBBY_NETHERWORLD',(640,65,1290,210)) and self.locate(frame,'WB_START',(695,905,1140,1065)):

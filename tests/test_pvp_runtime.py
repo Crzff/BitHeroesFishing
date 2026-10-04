@@ -1,0 +1,72 @@
+"""PvP offline: capturas reales saneadas; tickets simulados como en la sesión real."""
+
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+import numpy as np
+
+from fishing_core.control_flow import SafetyStop
+from fishing_core.dungeon_vision import DungeonVision
+from fishing_core.pvp_runtime import PvpRunner
+
+with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+    FRAMES={k:data[k] for k in data.files if k.startswith(('pvp_','boss_victory'))}
+VISION=DungeonVision()
+
+
+class FakeGame:
+    def __init__(self,results):
+        self.state='pvp_home';self.results=iter(results);self.plays=[];self.cost=5
+        self.moves={('pvp_home',(90,280)):'pvp_window',('pvp_select',(1390,768)):'pvp_team',
+                    ('pvp_window',(1370,416)):'pvp_cost_menu',('pvp_cost_menu',(930,316)):'pvp_window_cost1',
+                    ('pvp_window',(1494,226)):'pvp_home',('pvp_window_cost1',(1494,226)):'pvp_home'}
+
+    def click(self,xy):
+        xy=tuple(xy)
+        if self.state in ('pvp_window','pvp_window_cost1') and xy==(1280,568):
+            self.plays.append(1 if self.state.endswith('cost1') else 5);self.state='pvp_select';return
+        if self.state=='pvp_team' and xy==(1215,982):self.state=next(self.results);return
+        if self.state in ('boss_victory','pvp_defeat'):
+            x,y=VISION.locate(FRAMES[self.state],'RESULT_TOWN',(700,915,1500,1080))
+            h,w=VISION.templates['RESULT_TOWN'].shape[:2]
+            assert xy==(x+w//2,y+h//2),xy
+            self.state='pvp_window_cost1' if self.plays[-1]==1 else 'pvp_window';return
+        self.state=self.moves[(self.state,xy)]
+
+
+class PvpRuntimeTests(unittest.TestCase):
+    def run_pvp(self,game,tickets,fights=10):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp);io=Mock();io.click.side_effect=game.click
+            channel=SimpleNamespace(directory=path,run_id='test',stop_path=path/'stop.json')
+            runner=PvpRunner(io,Mock(),VISION,channel,Mock(),fights)
+            runner.capture=lambda:FRAMES[game.state]
+            clock=[0.0]
+            def sleep(seconds):clock[0]+=seconds
+            fake=SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep,perf_counter_ns=lambda:0)
+            with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.pvp_runtime.time',fake), \
+                    patch.object(PvpRunner,'tickets',side_effect=tickets):
+                runner.run()
+            return runner
+
+    def test_spends_every_ticket_lowering_the_cost_and_keeps_going_after_a_defeat(self):
+        game=FakeGame(['boss_victory','pvp_defeat','boss_victory'])
+        runner=self.run_pvp(game,[11,6,1,0])
+        self.assertEqual(game.plays,[5,5,1]);self.assertEqual(game.state,'pvp_home')
+        self.assertEqual(runner.budget.energy_reserved,11)
+        self.assertEqual(runner.budget.payload()['completed_runs'],3);self.assertEqual(runner.budget.gold_reserved,0)
+
+    def test_no_tickets_closes_the_window_without_playing(self):
+        game=FakeGame([]);self.run_pvp(game,[0])
+        self.assertEqual(game.plays,[]);self.assertEqual(game.state,'pvp_home')
+
+    def test_cost_that_does_not_change_never_presses_play(self):
+        game=FakeGame([]);game.moves[('pvp_cost_menu',(930,316))]='pvp_window'  # sigue en 5
+        with self.assertRaises(SafetyStop):self.run_pvp(game,[1])
+        self.assertEqual(game.plays,[])
+
+
+if __name__=='__main__':unittest.main()
