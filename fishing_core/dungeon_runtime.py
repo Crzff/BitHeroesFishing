@@ -131,7 +131,7 @@ class DungeonRunner:
         if shown!=cost:
             self.click(screen,COST_DROPDOWN)
             menu=lambda f:self.vision.locate(f,menu_key,(760,95,1160,240)) is not None
-            self.wait(menu,10,'menú de coste');time.sleep(.6)  # el menú entra deslizándose
+            self.wait(menu,10,'menú de coste');time.sleep(1.2)  # el menú entra deslizándose; antes se pierde
             xy=(930,316+128*(cost-1))
             for _ in range(2):  # un clic durante la animación se pierde: un reintento como máximo
                 self.check();self.io.click(xy);self.log.emit('DUNGEON_INPUT',screen=menu_key,xy=list(xy))
