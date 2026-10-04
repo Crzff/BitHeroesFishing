@@ -9,7 +9,6 @@ from .farm_budget import FarmBudget
 from .protocol import atomic_json
 
 TICKET_COST=5  # máximo; con menos tickets se baja hasta 1
-COST_ROI=(1200,385,1330,455)
 HOME_PVP=((90,280),'HOME_PVP',(15,205,165,355))
 PLAY=((1280,568),'PVP_PLAY',(1120,440,1445,695))
 CLOSE=((1494,226),'PVP_CLOSE',(1410,140,1580,310))
@@ -46,18 +45,6 @@ class PvpRunner(DungeonRunner):
         self.wait(known,30,'saldo de tickets')
         return seen
 
-    def cost(self,frame):
-        x,y,x1,y1=COST_ROI;return self.vision.number(frame[y:y1,x:x1])
-
-    def set_cost(self,cost):
-        """Fija el coste con el desplegable (filas 1-5) y lo confirma leyendo el número."""
-        if self.cost(self.wait('PVP'))!=cost:
-            self.click('PVP',(1370,416))
-            self.wait(lambda f:self.vision.locate(f,'COST_MENU_TICKETS',(760,95,1160,240)) is not None,10,'menú de coste')
-            self.check();self.io.click((930,316+128*(cost-1)));self.log.emit('DUNGEON_INPUT',screen='COST_MENU',xy=[930,316+128*(cost-1)])
-        self.wait(lambda f:self.vision.screen(f)=='PVP' and self.cost(f)==cost,10,f'coste PvP {cost}')
-        return cost
-
     def open(self):
         screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','PVP'),12))
         if screen=='HOME':self.press('HOME',HOME_PVP);self.wait('PVP')
@@ -66,7 +53,7 @@ class PvpRunner(DungeonRunner):
         """Un combate; None si no quedan tickets para el coste."""
         self.open();balance=self.tickets()
         if balance<1:return None
-        cost=self.set_cost(min(TICKET_COST,balance))
+        cost=self.set_cost('PVP',min(TICKET_COST,balance),'COST_MENU_TICKETS')
         attempt=f'{self.channel.run_id}:{cycle}'
         if not self.budget.reserve_entry(attempt,resource='TICKETS',balance=balance,cost=cost):
             raise SafetyStop('Combate ya reservado; no repetir PLAY')

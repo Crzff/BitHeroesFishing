@@ -54,7 +54,8 @@ class DungeonRuntimeTests(unittest.TestCase):
         plan=farm_plan('Z5D2','Normal',1,30)
         channel=SimpleNamespace(directory=path,run_id='test',stop_path=path/'stop.json')
         io=Mock();vision=Mock(screen=Mock(return_value='TEAM'),energy=Mock(return_value=(100,368)),
-                            locate=Mock(return_value=(1000,943)))
+                            locate=Mock(return_value=(1000,943)),
+                            templates={'TOWN':np.zeros((114,300,3),np.uint8)})  # centro de TOWN en (1150,1000)
         runner=DungeonRunner(io,Mock(),vision,channel,Mock(),plan)
         runner.capture=Mock(return_value='frame')
         def wait(predicate,timeout=10,expected=None):

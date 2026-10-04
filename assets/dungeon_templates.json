@@ -91,7 +91,13 @@
     "raid_window": "0ae2a652d4b4e1f52671aa20b51bbb74e409e635721fd0e0ed7bc59efcdf5b02",
     "raid_window_after": "31447505ec2d37d4b1cc8fa49acb1d4c5ae906b2df5d271bea6035280a030e1c",
     "raid_difficulty": "47aa8081d61f99a039c29d9486f906347267cbcaf6ed627e251a566ada37d91d",
-    "raid_team": "364d98f75ca4f1c94dc12d4d2cd800229c53b347888dec309c73cf12e0b57f2c"
+    "raid_team": "364d98f75ca4f1c94dc12d4d2cd800229c53b347888dec309c73cf12e0b57f2c",
+    "exp_home": "d6eacba19b3c870c114f2cea431dd2097ea9162ec363e0b366240494bc3df84d",
+    "exp_window": "c5b8e361c7dae1e2602859eae8153d48cba6fe899fe5ca18552e204e83db191b",
+    "exp_window_cost1": "6d2c249c086514522c815b7b6207e241f75cf6f611246315e4d75fc8bd3a43cf",
+    "exp_cost_menu": "9894d7df97faa9b709495ec5a06bd8fce59f289289719bfef9f3702b0b6f44c0",
+    "exp_map": "caf91ff312ae0960177f5678e887aa40463aa1dbe7b3428102eccca2c43b32f9",
+    "exp_portal": "9d4ddeba54d8d79faea71c2f77cd762fd3812c471d74feb6f6ab72f4ce16a665"
   },
   "regions": {
     "HOME_QUEST": [
@@ -944,6 +950,67 @@
     "HOME_RAID_TOWN2": [
       "demo6",
       "fondo de arena 2026-10-04"
+    ],
+    "HOME_EXPEDITION_TOWN1": [
+      "h8",
+      "variante de fondo"
+    ],
+    "HOME_EXPEDITION_TOWN2": [
+      "hr2",
+      "variante de fondo"
+    ],
+    "HOME_EXPEDITION_TOWN3": [
+      "demo6",
+      "variante de fondo"
+    ],
+    "HOME_EXPEDITION": [
+      "h8",
+      "captura Steam 2026-10-04"
+    ],
+    "EXP_TITLE": [
+      "ex0",
+      "captura Steam 2026-10-04"
+    ],
+    "EXP_PLAY": [
+      "ex0",
+      "captura Steam 2026-10-04"
+    ],
+    "EXP_CLOSE": [
+      "ex0",
+      "captura Steam 2026-10-04"
+    ],
+    "IDOL_TITLE": [
+      "ex1",
+      "captura Steam 2026-10-04"
+    ],
+    "IDOL_CLOSE": [
+      "ex1",
+      "captura Steam 2026-10-04"
+    ],
+    "PORTAL_COLISEUM": [
+      "ex1",
+      "captura Steam 2026-10-04"
+    ],
+    "PORTAL_TITLE": [
+      "ex2",
+      "captura Steam 2026-10-04"
+    ],
+    "PORTAL_ENTER": [
+      "ex2",
+      "captura Steam 2026-10-04"
+    ],
+    "PORTAL_CLOSE": [
+      "ex2",
+      "captura Steam 2026-10-04"
+    ],
+    "COST_MENU_BADGES": [
+      "xp3",
+      [
+        800,
+        135,
+        1120,
+        200
+      ]
     ]
   },
   "notes": [

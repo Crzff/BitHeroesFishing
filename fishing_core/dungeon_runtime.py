@@ -22,6 +22,8 @@ LADDER=('Heroic','Hard','Normal')
 DIFFICULTY_BUTTONS={'Normal':((550,495),(400,450,715,550)),'Hard':((958,495),(780,430,1140,570)),
                     'Heroic':((1365,495),(1200,450,1530,550))}
 SESSION_SECONDS=3600
+COST_ROI=(1210,392,1310,448)
+COST_DROPDOWN=(1370,416)
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
@@ -112,6 +114,19 @@ class DungeonRunner:
         self.log.emit('DUNGEON_INPUT',screen=screen,xy=xy)
         time.sleep(.25)  # Unity debe procesar la suelta antes de abandonar el botón.
         self.io._move((960,1070))  # Zona neutra: no confundir hover con cambio de estado.
+
+    def cost_shown(self,frame):
+        x,y,x1,y1=COST_ROI;return self.vision.number(frame[y:y1,x:x1])
+
+    def set_cost(self,screen,cost,menu_key):
+        """Fija el coste (filas 1-5 del desplegable de PvP/Expedition/Trials) y lo confirma leyéndolo."""
+        if type(cost) is not int or not 1<=cost<=5:raise SafetyStop('Coste fuera de 1-5')
+        if self.cost_shown(self.wait(screen))!=cost:
+            self.click(screen,COST_DROPDOWN)
+            self.wait(lambda f:self.vision.locate(f,menu_key,(760,95,1160,240)) is not None,10,'menú de coste')
+            xy=(930,316+128*(cost-1));self.check();self.io.click(xy);self.log.emit('DUNGEON_INPUT',screen=menu_key,xy=list(xy))
+        self.wait(lambda f:self.vision.screen(f)==screen and self.cost_shown(f)==cost,10,f'coste {cost}')
+        return cost
 
     def close_menu(self,screen):
         if screen not in MENU_PARENTS:raise SafetyStop('Escape no autorizado en esta pantalla')
@@ -294,6 +309,14 @@ class DungeonRunner:
                 if not self.decline_other(frame,attempt,f'{cycle}-{declined+1}'):
                     raise SafetyStop('Oferta de familiar objetivo o desconocido: pausa para decidir; no se gasta oro ni gemas')
                 declined+=1;unknown_since=None;continue
+            if screen=='WB_DEFEAT' and getattr(self,'defeat_continues',False):
+                # Expedition/Trials: perder es normal. Cerrar con TOWN y seguir gastando.
+                frame=self.wait('WB_DEFEAT');x,y=self.vision.locate(frame,'RESULT_TOWN',(700,915,1500,1080))
+                h,w=self.vision.templates['RESULT_TOWN'].shape[:2]
+                self.click('WB_DEFEAT',(x+w//2,y+h//2),'RESULT_TOWN',(700,915,1500,1080));self.go_home()
+                self.budget.finish_run(attempt,'DEFEAT',closure_confirmed=True)
+                self.log.emit('DUNGEON_COMPLETE',message=f'Run {cycle}: derrota (normal en este modo)',budget=self.budget.payload())
+                return False
             if screen=='VICTORY':
                 frame=self.wait('VICTORY')
                 cv2.imwrite(str(self.channel.directory/f'result-{cycle}.png'),frame[110:930,1070:1600])
@@ -304,7 +327,10 @@ class DungeonRunner:
                 again=(rerun and self.balance is not None and self.balance>=self.cost and
                        self.budget.energy_reserved+self.cost<=self.plan['energy_limit'])
                 if again:self.click('VICTORY',(834,996),'RERUN',(650,920,1020,1075));self.wait('TEAM',20)
-                else:self.click('VICTORY',(1150,1000),'TOWN',(990,940,1320,1060));self.go_home()
+                else:
+                    # TOWN cambia de sitio: a la derecha con RERUN (Quest/Raid), centrado sin él (Expedition).
+                    x,y=self.vision.locate(frame,'TOWN',(700,900,1500,1080));h,w=self.vision.templates['TOWN'].shape[:2]
+                    self.click('VICTORY',(x+w//2,y+h//2),'TOWN',(700,900,1500,1080));self.go_home()
                 self.budget.finish_run(attempt,'VICTORY',closure_confirmed=True)
                 atomic_json(self.channel.directory/f'result-{cycle}.json',
                             {'attempt_id':attempt,'outcome':'VICTORY','loot':None,'gold_gain':None,'xp_gain':None,
