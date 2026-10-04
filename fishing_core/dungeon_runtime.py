@@ -123,9 +123,15 @@ class DungeonRunner:
         if type(cost) is not int or not 1<=cost<=5:raise SafetyStop('Coste fuera de 1-5')
         if self.cost_shown(self.wait(screen))!=cost:
             self.click(screen,COST_DROPDOWN)
-            self.wait(lambda f:self.vision.locate(f,menu_key,(760,95,1160,240)) is not None,10,'menú de coste')
-            xy=(930,316+128*(cost-1));self.check();self.io.click(xy);self.log.emit('DUNGEON_INPUT',screen=menu_key,xy=list(xy))
-            self.io._move((960,1070))  # bajo la fila 5 hay familiares con tooltip que tapan la ventana
+            menu=lambda f:self.vision.locate(f,menu_key,(760,95,1160,240)) is not None
+            self.wait(menu,10,'menú de coste');time.sleep(.6)  # el menú entra deslizándose
+            xy=(930,316+128*(cost-1))
+            for _ in range(2):  # un clic durante la animación se pierde: un reintento como máximo
+                self.check();self.io.click(xy);self.log.emit('DUNGEON_INPUT',screen=menu_key,xy=list(xy))
+                self.io._move((960,1070))  # bajo la fila 5 hay familiares con tooltip que tapan la ventana
+                try:self.wait(lambda f:not menu(f),4,'menú de coste cerrado');break
+                except SafetyStop:pass
+            else:raise SafetyStop('El menú de coste no responde; no se insiste')
         self.wait(lambda f:self.vision.screen(f)==screen and self.cost_shown(f)==cost,10,f'coste {cost}')
         return cost
 
