@@ -135,6 +135,7 @@ class DungeonRunner:
             xy=(930,316+128*(cost-1))
             for _ in range(2):  # un clic durante la animación se pierde: un reintento como máximo
                 self.check();self.io.click(xy);self.log.emit('DUNGEON_INPUT',screen=menu_key,xy=list(xy))
+                time.sleep(.25)  # Unity procesa la suelta por frames: no abandonar la fila al instante
                 self.io._move((960,1070))  # bajo la fila 5 hay familiares con tooltip que tapan la ventana
                 try:self.wait(lambda f:not menu(f),4,'menú de coste cerrado');break
                 except SafetyStop:pass

@@ -1,12 +1,12 @@
-"""EXPERIMENTAL: runas de farmeo en los dos huecos laterales del tablero (runas menores).
+"""Runas de farmeo en los dos huecos laterales del tablero (runas menores).
 
 Quest -> captura (Quindi); el resto -> Item Find (Vayn), según el jugador.
 La lista de SWITCH solo muestra las runas NO equipadas: si una deseada aparece,
 se pulsa; cuando ya no aparece ninguna, están equipadas. Si el jugador no tiene
 la runa, nada se mueve. BROWSE abre MELT y nunca se usa.
 
-Estado 2026-10-04: ITEM_FIND funcionó; un CAPTURE posterior se detuvo con la
-lista animada (clic perdido). Usar con supervisión hasta certificarlo.
+Estado 2026-10-04: los clics se perdían por apartar el ratón al instante (Unity
+procesa la suelta por frames); corregido, 3/3 cambios CAPTURE<->ITEM_FIND en vivo.
 """
 
 import os
@@ -63,12 +63,13 @@ class RunesRunner(DungeonRunner):
         for attempt in range(3):
             changed=False
             for slot in (0,1):
-                self.open_list(slot);time.sleep(.6)  # la lista termina de deslizarse
+                self.open_list(slot);time.sleep(1.5)  # la lista sigue asentándose aunque ya se vean los iconos
                 found=self.listed(self.capture(),wanted)
                 if found:
                     key,xy=found[0]
                     for _ in range(2):  # un clic durante la animación se pierde: un reintento como máximo
-                        self.check();self.io.click(xy);self.io._move((960,1070))  # el tooltip tapa el tablero
+                        # Unity procesa la suelta por frames: no abandonar el botón al instante.
+                        self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))  # el tooltip tapa el tablero
                         try:self.wait(self.on('RUNES_TITLE',(760,90,1160,245)),4,'tablero tras elegir runa');break
                         except SafetyStop:
                             if self.vision.locate(self.capture(),key,(xy[0]-70,xy[1]-70,xy[0]+70,xy[1]+70)) is None:raise
