@@ -17,7 +17,7 @@ from .processes import Mutex,child_options,close_children,python_executable
 from .protocol import Channel,atomic_json
 from .telemetry import ROOT,Telemetry,run_environment
 
-ROUTE_COSTS={('Z5D2','Normal'):10,('Z5D3','Heroic'):30}
+ROUTE_COSTS={('Z5D2','Normal'):10,('Z5D3','Normal'):10,('Z5D3','Heroic'):30}
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
@@ -28,7 +28,7 @@ MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
 def validate_supported(plan):
     checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],plan.get('target',''))
     if (checked['dungeon_id'],checked['difficulty']) not in ROUTE_COSTS:
-        raise ValueError('Ruta aún no calibrada: disponibles Z5D2 · Normal y Z5D3 · Heroic. No se cambia tu objetivo.')
+        raise ValueError('Ruta aún no calibrada: disponibles Z5D2 · Normal y Z5D3 · Normal/Heroic. No se cambia tu objetivo.')
     return checked
 
 

@@ -20,8 +20,9 @@ class DungeonRuntimeTests(unittest.TestCase):
         validate_supported(farm_plan('Z5D2','Normal',1,30))
         validate_supported(farm_plan('Z5D3','Heroic',1,30,'Tealk'))
         validate_supported(farm_plan('Z5D3','Heroic',6,180,'Tealk'))  # repetición, como Z5D2
+        validate_supported(farm_plan('Z5D3','Normal',17,170,'Tealk'))  # al agotarse Heroic
         for args in [('Z1D2','Normal',1,30,'Bob'),('Z5D2','Heroic',1,30,''),
-                     ('Z5D3','Normal',1,30,'')]:
+                     ('Z5D3','Hard',1,30,'')]:
             with self.assertRaises(ValueError):validate_supported(farm_plan(*args))
 
     def test_tealk_heroic_reserves_thirty_once_and_rejects_the_normal_cost(self):
