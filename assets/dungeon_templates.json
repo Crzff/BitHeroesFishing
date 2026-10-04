@@ -100,7 +100,10 @@
     "exp_portal": "9d4ddeba54d8d79faea71c2f77cd762fd3812c471d74feb6f6ab72f4ce16a665",
     "trials_home": "8b57176eb9322397a712fefbe08ce655b0209a5f9033f742ba4d8c58db4cb0b8",
     "trials_window": "5fb06eee8d596313b92eaa1106ed620013e5d44d2bf50c92edbed43607ccdeee",
-    "trials_cost_menu": "1d42fde489d7435f066ec439822b0128941df2507c659e1a0a8a8413af2ad58c"
+    "trials_cost_menu": "1d42fde489d7435f066ec439822b0128941df2507c659e1a0a8a8413af2ad58c",
+    "offer_tealk_cost": "d3fe626107a6872234319768b3ea53b25d631ddd093b6f00dae5dc7c11a434ac",
+    "persuade_confirm": "48be9730fcebfb118fbf788ae9cd328b89fcdfb6b7887e50bba054597d6700e8",
+    "capture_success": "017b1784b4c5270791845ec44679981500291fd381c4f0b0fe26800511133b79"
   },
   "regions": {
     "HOME_QUEST": [
@@ -1116,6 +1119,18 @@
         1040,
         860
       ]
+    ],
+    "PERSUADE_GOLD": [
+      "pz0",
+      "captura Steam 2026-10-04"
+    ],
+    "CAPTURE_SUCCESS": [
+      "pz2",
+      "captura Steam 2026-10-04"
+    ],
+    "CAPTURE_CLOSE": [
+      "pz2",
+      "captura Steam 2026-10-04"
     ]
   },
   "notes": [

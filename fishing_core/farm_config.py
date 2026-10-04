@@ -9,7 +9,7 @@ from .telemetry import ROOT
 PATH=ROOT/'farm_config.json'
 MODES=('quest','pvp','boss','raid','expedition','trials')  # orden de ejecución de crzf
 DEFAULT={'modes':{mode:True for mode in MODES},
-         'quest':{'dungeon':'Z5D3','difficulty':'Heroic','targets':['Tealk']},
+         'quest':{'dungeon':'Z5D3','difficulty':'Heroic','targets':['Tealk'],'max_gold':50_000},
          'boss':{'difficulty':'Heroic'},
          'runes':True}
 

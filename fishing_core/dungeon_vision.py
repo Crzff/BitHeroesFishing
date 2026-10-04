@@ -74,6 +74,10 @@ class DungeonVision:
                 self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'DECLINE_CONFIRM'
         if (self.locate(frame,'WB_NOT_FULL',(680,410,1240,575)) and
                 self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'WB_NOT_FULL'
+        if (self.locate(frame,'CONFIRM_HEADER',(770,270,1150,370)) and self.locate(frame,'PERSUADE_GOLD',(800,500,1320,640))
+                and self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'PERSUADE_CONFIRM'
+        if (self.locate(frame,'CAPTURE_SUCCESS',(540,50,1380,170)) and
+                self.locate(frame,'CAPTURE_CLOSE',(780,890,1140,1040))):return 'CAPTURE_SUCCESS'
         if self.locate(frame,'CONFIRM_HEADER',(770,270,1150,370)):return 'UNKNOWN'
         if (self.locate(frame,'PERSUADE',(360,640,720,780)) and
                 self.locate(frame,'BRIBE',(1240,640,1535,780)) and
@@ -118,6 +122,14 @@ class DungeonVision:
             if self.locate(frame,'WB_SUMMON_LIST',(995,890,1365,1045)):return 'WB_LIST'
             if self.locate(frame,'WB_CAROUSEL_SUMMON',(1100,660,1425,910)):return 'WB_CAROUSEL'
         return None
+
+    def offer_cost(self,frame):
+        """Oro de Persuade en la oferta ("4,000"); None si no se lee."""
+        if self.screen(frame)!='FAMILIAR_OFFER':return None
+        image=frame[560:630,490:665].copy();mask=(image.min(2)>=170).astype(np.uint8)
+        for x,y,w,h,_ in quantity_boxes(mask):
+            if h<20:image[y:y+h,x:x+w]=0  # coma de miles
+        return self.number(image)
 
     def familiar_name(self,frame):
         if self.screen(frame)!='FAMILIAR_OFFER':return None

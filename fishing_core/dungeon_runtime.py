@@ -36,6 +36,9 @@ def validate_supported(plan):
     for name in targets:farm_plan(plan['dungeon_id'],plan['difficulty'],1,1,name)  # cada objetivo debe salir en esa ruta
     checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],targets[0] if targets else '')
     checked['targets']=targets
+    gold=plan.get('max_gold',0)
+    if type(gold) is not int or not 0<=gold<=10_000_000:raise ValueError('Cuota de oro inválida (0-10.000.000)')
+    checked['max_gold']=gold
     if (checked['dungeon_id'],checked['difficulty']) not in ROUTE_COSTS:
         raise ValueError('Ruta aún no calibrada: disponibles Z5D2 y Z5D3 · Normal/Hard/Heroic. No se cambia tu objetivo.')
     return checked
@@ -71,7 +74,9 @@ class DungeonRunner:
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.plan=validate_supported(plan);self.cost=None;self.safety_checked=False
         self.deadline=time.monotonic()+SESSION_SECONDS;self.difficulty=self.plan['difficulty'];self.balance=None
-        self.budget=FarmBudget(max_runs=plan['runs'],max_energy=plan['energy_limit'],max_seconds=SESSION_SECONDS,max_gold=0)
+        # Oro solo para Persuade de objetivos, con cuota por sesión; nunca gemas (Bribe).
+        self.budget=FarmBudget(max_runs=plan['runs'],max_energy=plan['energy_limit'],max_seconds=SESSION_SECONDS,
+                               max_gold=int(self.plan.get('max_gold',0)))
 
     def check(self):
         self.io.emergency();self.io.check_game();self.log.check()
@@ -318,6 +323,44 @@ class DungeonRunner:
         self.log.emit('FAMILIAR_DECLINED',message=f'{label} rechazado · objetivo {target or "ninguno"}',familiar=name,target=target)
         return True
 
+    def persuade(self,frame,attempt,offer,name):
+        """Persuade con oro a un objetivo: coste leído, cuota de sesión, diálogo de oro confirmado.
+
+        Nunca BRIBE (gemas). Sin cuota o coste ilegible no se gasta: la oferta se rechaza.
+        """
+        frame=self.wait('FAMILIAR_OFFER');cost=self.vision.offer_cost(frame)
+        if self.vision.familiar_name(frame)!=name or cost is None or self.vision.offer_cost(self.capture())!=cost:
+            raise SafetyStop('Oferta del objetivo inestable o coste ilegible; no se gasta oro')
+        action=f'persuade-{offer}'
+        try:
+            # El saldo de oro se muestra abreviado (7,6M): la protección es la cuota de sesión.
+            self.budget.reserve_gold(action,currency='GOLD',purpose='PERSUADE',target=name,balance=cost,cost=cost)
+        except ValueError as exc:
+            self.log.emit('FAMILIAR_KEPT_GOLD',message=f'{name}: sin cuota de oro ({exc}); se rechaza',familiar=name)
+            if not self.decline_any(frame,attempt,offer,name):raise SafetyStop('No se pudo rechazar el objetivo sin cuota')
+            return
+        path=self.channel.directory/f'persuade-{offer}.intent.json'
+        intent={'attempt_id':attempt,'familiar':name,'cost':cost,'currency':'GOLD','effect_confirmed':False}
+        atomic_json(path,intent)
+        self.click('FAMILIAR_OFFER',(528,704),'PERSUADE',(360,640,720,780),expected_familiar=name)
+        self.wait('PERSUADE_CONFIRM',10)
+        self.click('PERSUADE_CONFIRM',(814,750),'DECLINE_YES',(670,695,955,805))
+        frame=self.wait(lambda f:self.vision.screen(f) in ('CAPTURE_SUCCESS','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','LOADING',
+                                                          'BATTLE_VICTORY','VICTORY','AUTO_ON','AUTO_OFF'),20,'resultado de Persuade')
+        captured=self.vision.screen(frame)=='CAPTURE_SUCCESS'
+        if captured:self.click('CAPTURE_SUCCESS',(958,962),'CAPTURE_CLOSE',(780,890,1140,1040))
+        self.budget.finish_gold(action,effect_confirmed=True)
+        atomic_json(path,{**intent,'effect_confirmed':True,'captured':captured})
+        self.log.emit('FAMILIAR_PERSUADED',message=f'{name}: {"capturado" if captured else "no se unió"} · {cost} oro',
+                      familiar=name,captured=captured,gold=cost)
+
+    def decline_any(self,frame,attempt,offer,name):
+        """Rechazar un objetivo cuando no se puede pagar (misma secuencia verificada que decline_other)."""
+        saved=self.plan.get('targets'),self.plan.get('target')
+        self.plan['targets']=[];self.plan['target']=''
+        try:return self.decline_other(frame,attempt,offer)
+        finally:self.plan['targets'],self.plan['target']=saved
+
     def observe(self,attempt,cycle,*,auto_started=False,rerun=False):
         """Cierra la run; True si volvió a TEAM con RERUN para la siguiente."""
         previous=list(self.channel.directory.glob(f'decline-{cycle}-*.intent.json'))
@@ -333,8 +376,11 @@ class DungeonRunner:
                     # La oferta entra animada: esperar el nombre legible; uno desconocido sigue pausando.
                     try:frame=self.wait(lambda f:self.vision.familiar_name(f) is not None,3,'nombre de familiar')
                     except SafetyStop:pass
-                if not self.decline_other(frame,attempt,f'{cycle}-{declined+1}'):
-                    raise SafetyStop('Oferta de familiar objetivo o desconocido: pausa para decidir; no se gasta oro ni gemas')
+                offer=f'{cycle}-{declined+1}';name=self.vision.familiar_name(frame)
+                if not self.decline_other(frame,attempt,offer):
+                    if not (isinstance(name,str) and normalize(name) in {normalize(n) for n in self.targets}):
+                        raise SafetyStop('Oferta de familiar desconocido: pausa para decidir; no se gasta oro ni gemas')
+                    self.persuade(frame,attempt,offer,name)
                 declined+=1;unknown_since=None;continue
             if screen=='WB_DEFEAT' and getattr(self,'defeat_continues',False):
                 # Expedition/Trials: perder es normal. Cerrar con TOWN y seguir gastando.

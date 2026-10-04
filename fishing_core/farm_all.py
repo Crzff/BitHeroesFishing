@@ -17,7 +17,8 @@ def quest(config):
     from .dungeon_runtime import start_dungeon,validate_supported
     from .game_window import focus_window
     q=config['quest']
-    plan=validate_supported({**farm_plan(q['dungeon'],q['difficulty'],60,1000),'targets':q.get('targets') or []})
+    plan=validate_supported({**farm_plan(q['dungeon'],q['difficulty'],60,1000),'targets':q.get('targets') or [],
+                             'max_gold':int(q.get('max_gold',0))})
     process,channel,mutex=start_dungeon(focus_window('Steam'),plan)
     try:
         code=process.wait()
