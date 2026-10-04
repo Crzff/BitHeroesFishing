@@ -19,7 +19,9 @@ def familiar_glyph(frame):
 
 # Ventanas de otros modos: cada una exige título y botón propios (ROI con holgura).
 MODE_SCREENS=(('PVP',(('PVP_TITLE',(600,140,1320,295)),('PVP_PLAY',(1120,440,1445,695)))),
-              ('PVP_SELECT',(('PVP_SELECT',(520,95,1400,250)),)))
+              ('PVP_SELECT',(('PVP_SELECT',(520,95,1400,250)),)),
+              ('RAID',(('RAID_TITLE',(760,155,1160,300)),('RAID_SUMMON',(1095,650,1435,920)))),
+              ('RAID_DIFFICULTY',(('RAID_DIFF_STORM',(780,135,1140,285)),('RAID_HEROIC',(1180,395,1560,575)))))
 
 
 class DungeonVision:
@@ -30,7 +32,8 @@ class DungeonVision:
         # El fondo de la ciudad cambia: comparar solo los píxeles comunes a todas las variantes observadas.
         self.home_masks={key:np.all([np.all(self.templates[key]==self.templates[v],axis=2) for v in self.templates
                                      if v.startswith(key+'_TOWN')],axis=0).astype(np.uint8)
-                         for key in ('HOME_QUEST','HOME_SETTINGS','HOME_BOSS')}
+                         for key in ('HOME_QUEST','HOME_SETTINGS','HOME_BOSS','HOME_PVP','HOME_RAID')
+                         if any(v.startswith(key+'_TOWN') for v in self.templates)}
         self.digits=BaitReader(extra={k:v for k,v in self.templates.items() if k.startswith('DIGIT_')})
 
     def locate(self,frame,key,roi,threshold=.97):

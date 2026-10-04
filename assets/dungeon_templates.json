@@ -86,7 +86,12 @@
     "pvp_select": "2dabb35c654fd32f4f8819679df875c8741219db3ec087640a7ed42f3f1c7ba1",
     "pvp_team": "6c36d4744ffe0a4a8bf3aa7492d389c445d40a98d5c68da16fd023b90a22e84f",
     "pvp_cost_menu": "fa4848a2da77ea0dc243e59e40211842343247b7d90461fecac007e395597abb",
-    "boss_home_town2": "0e7d83bc7f30a1b300f12c28d10636fb1534d18d06675573b051447bb71d29ba"
+    "boss_home_town2": "0e7d83bc7f30a1b300f12c28d10636fb1534d18d06675573b051447bb71d29ba",
+    "raid_home_sand": "41706be1f9a099f8c0d0c49da095b10a6bd2453bce8200694d00b1c3de8bedd6",
+    "raid_window": "0ae2a652d4b4e1f52671aa20b51bbb74e409e635721fd0e0ed7bc59efcdf5b02",
+    "raid_window_after": "31447505ec2d37d4b1cc8fa49acb1d4c5ae906b2df5d271bea6035280a030e1c",
+    "raid_difficulty": "47aa8081d61f99a039c29d9486f906347267cbcaf6ed627e251a566ada37d91d",
+    "raid_team": "364d98f75ca4f1c94dc12d4d2cd800229c53b347888dec309c73cf12e0b57f2c"
   },
   "regions": {
     "HOME_QUEST": [
@@ -891,6 +896,54 @@
     "HOME_BOSS_TOWN2": [
       "hb3",
       "Home con tercer fondo 2026-10-04"
+    ],
+    "HOME_RAID": [
+      "h7",
+      "captura Steam 2026-10-04"
+    ],
+    "RAID_TITLE": [
+      "ra1",
+      "captura Steam 2026-10-04"
+    ],
+    "RAID_STORM": [
+      "ra1",
+      "captura Steam 2026-10-04"
+    ],
+    "RAID_SUMMON": [
+      "ra1",
+      "captura Steam 2026-10-04"
+    ],
+    "RAID_CLOSE": [
+      "ra1",
+      "captura Steam 2026-10-04"
+    ],
+    "RAID_DIFF_STORM": [
+      "ra2",
+      "captura Steam 2026-10-04"
+    ],
+    "RAID_HEROIC": [
+      "ra2",
+      "captura Steam 2026-10-04"
+    ],
+    "HOME_PVP_TOWN11": [
+      "hr2",
+      "variante de fondo 2026-10-04"
+    ],
+    "HOME_PVP_TOWN12": [
+      "demo6",
+      "variante de fondo 2026-10-04"
+    ],
+    "HOME_BOSS_TOWN11": [
+      "hr2",
+      "variante de fondo 2026-10-04"
+    ],
+    "HOME_RAID_TOWN1": [
+      "hr2",
+      "fondo de arena 2026-10-04"
+    ],
+    "HOME_RAID_TOWN2": [
+      "demo6",
+      "fondo de arena 2026-10-04"
     ]
   },
   "notes": [
