@@ -15,6 +15,7 @@ LIST_SUMMON=((1180,966),'WB_SUMMON_LIST',(1035,930,1325,1005))
 LIST_CLOSE=((1536,214),'WB_CLOSE',(1500,180,1575,250))
 CAROUSEL_SUMMON=((1260,786),'WB_CAROUSEL_SUMMON',(1140,700,1385,870))
 SUMMON=((1130,842),'WB_SUMMON_BUTTON',(1015,800,1250,885))
+CAROUSEL_PREV=(440,624)
 START=((920,984),'WB_START',(735,945,1100,1025))
 NOT_FULL_YES=((816,750),'DECLINE_YES',(670,695,955,805))
 AUTO=(1880,530)
@@ -67,6 +68,15 @@ class BossRunner(DungeonRunner):
     def xeals(self,frame,roi):
         x,y,x1,y1=roi;return self.vision.number(frame[y:y1,x:x1])
 
+    def find_netherworld(self):
+        """El carrusel no siempre abre en el último jefe: pasar páginas hasta leer Netherworld."""
+        named=lambda f:self.vision.locate(f,'WB_NETHERWORLD',(480,680,1000,850)) is not None
+        for _ in range(11):  # 11 jefes; nunca se invoca otro
+            frame=self.wait('WB_CAROUSEL');time.sleep(.5)
+            if named(self.capture()):return
+            self.click('WB_CAROUSEL',CAROUSEL_PREV);time.sleep(1)
+        raise SafetyStop('Netherworld no aparece en el carrusel; no se cambia de jefe')
+
     def enter(self,cycle,in_lobby=False):
         """Devuelve el intento, o None si no quedan xeals (sin invocar sala)."""
         if not in_lobby:
@@ -84,9 +94,7 @@ class BossRunner(DungeonRunner):
         if seen<XEAL_COST:
             self.close_list();self.log.emit('BOSS_STATUS',message=f'Sin xeals ({seen}); nada que gastar');return False
         self.press('WB_LIST',LIST_SUMMON)
-        frame=self.wait('WB_CAROUSEL')
-        if self.vision.locate(frame,'WB_NETHERWORLD',(545,740,920,785)) is None:
-            raise SafetyStop('El carrusel no muestra Netherworld; no se cambia de jefe')
+        self.find_netherworld()
         self.press('WB_CAROUSEL',CAROUSEL_SUMMON)
         self.configured('WB_SUMMON',summon_config(self.difficulty),f'Summon Tier 9 · {self.difficulty} · Private')
         self.press('WB_SUMMON',SUMMON)
