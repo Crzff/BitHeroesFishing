@@ -78,16 +78,52 @@ def row(w,h):
 
 def frame(w,h,title=None):
     """Ventana con marco metálico, panel azul oscuro y placa de título."""
-    img=Image.new('RGBA',(w,h),(0,0,0,0));d=ImageDraw.Draw(img);top=46 if title else 0
+    img=Image.new('RGBA',(w,h),(0,0,0,0));d=ImageDraw.Draw(img);top=70 if title else 0
     d.rounded_rectangle((0,top,w-1,h-1),radius=14,fill=OUTLINE)
     d.rounded_rectangle((4,top+4,w-5,h-5),radius=12,fill=FRAME)
     d.rounded_rectangle((8,top+8,w-9,top+14),radius=3,fill=FRAME_LIGHT)
     d.rounded_rectangle((26,top+(66 if title else 26),w-27,h-27),radius=8,fill=OUTLINE)
     d.rounded_rectangle((30,top+(70 if title else 30),w-31,h-31),radius=6,fill=INNER)
     for x,y in ((16,h-18),(w-18,h-18)):d.ellipse((x-5,y-5,x+5,y+5),fill=FRAME_DARK,outline=OUTLINE)
+    rust(img,(10,top+18,w-10,top+24));rust(img,(10,h-24,w-10,h-14),seed=7)
     if title:
-        p=plaque(title,min(w-120,max(320,text(title,40,stroke=4).width+140)));img.alpha_composite(p,((w-p.width)//2,0))
+        p=plaque(title,min(w-120,max(320,text(title,40,stroke=4).width+140)));px=(w-p.width)//2
+        for x in (px+28,px+p.width-48):img.alpha_composite(chain(44),(x,0))
+        img.alpha_composite(p,(px,24))
+        img.alpha_composite(leaves(),(px-34,top-6));img.alpha_composite(leaves(True),(px+p.width-36,top-6))
+    img.alpha_composite(leaves(),(2,h-62));img.alpha_composite(leaves(True),(w-72,h-62))
     return img
+
+
+def chain(h,link=18):
+    """Cadena vertical de eslabones (como las que cuelgan las ventanas del juego)."""
+    img=Image.new('RGBA',(20,h),(0,0,0,0));d=ImageDraw.Draw(img)
+    for i,y in enumerate(range(0,h,link)):
+        if i%2:d.rounded_rectangle((7,y,13,y+link+2),radius=3,fill=OUTLINE);d.line((10,y+3,10,y+link-1),fill=FRAME_LIGHT,width=2)
+        else:d.rounded_rectangle((2,y,18,y+link+2),radius=6,outline=OUTLINE,width=4,fill=None);d.rounded_rectangle((4,y+2,16,y+link),radius=5,outline=FRAME,width=2)
+    return img
+
+
+def leaves(flip=False):
+    """Hojas de enredadera pixeladas para las esquinas del marco."""
+    img=Image.new('RGBA',(70,56),(0,0,0,0));d=ImageDraw.Draw(img)
+    dark,mid,light=(36,92,30),(86,160,48),(150,214,86)
+    d.line((6,50,62,12),fill=OUTLINE,width=5);d.line((6,50,62,12),fill=dark,width=3)
+    for cx,cy,a,r in ((18,38,-1,12),(34,24,1,13),(50,28,-1,11),(28,46,1,9)):
+        pts=[(cx-r,cy+a*r//3),(cx-r//3,cy-r//2),(cx+r,cy-a*r//3),(cx+r//3,cy+r//2)]
+        d.polygon(pts,fill=OUTLINE)
+        inner=[(x+(cx-x)*0.3,y+(cy-y)*0.3) for x,y in pts];d.polygon(inner,fill=mid)
+        d.line((cx-r//2,cy+a*r//6,cx+r//2,cy-a*r//6),fill=light,width=2);d.point((cx+2,cy+3),fill=dark)
+    return img.transpose(Image.FLIP_LEFT_RIGHT) if flip else img
+
+
+def rust(img,box,seed=3):
+    """Manchas de óxido discretas sobre el metal del marco."""
+    import random
+    rnd=random.Random(seed);d=ImageDraw.Draw(img);x0,y0,x1,y1=box
+    for _ in range(14):
+        x=rnd.randint(x0,x1);y=rnd.randint(y0,y1);s=rnd.choice((3,4,6))
+        d.rectangle((x,y,x+s,y+s//2),fill=(176,108,62));d.point((x+1,y),fill=(214,150,96))
 
 
 def plaque(title,w,h=96):
