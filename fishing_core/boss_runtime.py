@@ -1,4 +1,4 @@
-"""World Boss Netherworld T9 Normal, sala privada en solitario: gasta solo xeals."""
+"""World Boss elegido por el jugador (jefe, tier y dificultad), sala privada en solitario: gasta solo xeals."""
 
 import os
 import time
@@ -21,29 +21,40 @@ NOT_FULL_YES=((816,750),'DECLINE_YES',(670,695,955,805))
 AUTO=(1880,530)
 TOWN_ROI=(700,915,1500,1080)
 REGROUP_ROI=(650,915,1250,1080)
-# La configuración se comprueba; el bot nunca la cambia. Heroic T9 en solitario
-# perdió en segundos en una prueba; Normal gana en ~8 s. El usuario elige.
-DIFFICULTIES=('Normal','Heroic')
+DIFFICULTIES=('Normal','Hard','Heroic')
+# Jefes del carrusel (2026-10-04) y los tiers que ofrece su menú.
+BOSSES={'NETHERWORLD':('Netherworld',(13,12,11,10,9)),'MELVIN_FACTORY':('Melvin Factory',(11,10)),
+        'EXTERMINATION':('3XT3RMIN4TION',(11,10)),'BRIMSTONE_SYNDICATE':('Brimstone Syndicate',(12,11)),
+        'TITANS_ATTACK':('Titans Attack!',(13,12,11)),'IGNITED_ABYSS':('The Ignited Abyss',(13,)),
+        'PROJECT_GOODALL':('Project: Goodall',(7,)),'GALLUS_APOTHEOSIS':('Gallus Apotheosis',(7,)),
+        'ORLAG_CLAN':('Orlag Clan',(12,11,10,9,8))}
+TIER_FIELD=(945,415,1080,470)
+TIER_DROPDOWN=(1126,444)
+DIFF_DROPDOWN=(1126,610)
+DIFF_FIELD=(775,585,1080,640)
+PRIVATE=((838,725),(800,690,875,760))
+MENU_CLOSE=(1310,182)
 
 
-def summon_config(difficulty):
-    return (('WB_TIER_9',(775,415,1080,470)),(f'WB_{difficulty.upper()}',(775,585,1080,640)),
-            ('WB_PRIVATE_ON',(800,690,875,760)))
+def menu_row(i):
+    return (930,316+128*i)
 
 
 def lobby_config(difficulty):
-    return ((f'WB_LOBBY_{difficulty.upper()}',(715,230,1100,285)),('WB_LOBBY_PRIVATE_ON',(1130,950,1200,1010)),
-            ('WB_SLOT2_EMPTY',(830,465,1065,530)))
+    checks=[('WB_LOBBY_PRIVATE_ON',(1130,950,1200,1010)),('WB_SLOT2_EMPTY',(830,465,1065,530))]
+    if difficulty!='Hard':checks.append((f'WB_LOBBY_{difficulty.upper()}',(715,230,1100,285)))  # sin plantilla de Hard
+    return tuple(checks)
 XEALS_LOBBY=(370,130,520,175)
 XEALS_LIST=(860,70,1060,120)
 BATTLE_LIMIT=300  # T9 Normal real terminó en segundos; holgura acotada.
 
 
 class BossRunner(DungeonRunner):
-    def __init__(self,io,capture,vision,channel,log,runs,difficulty='Normal'):
+    def __init__(self,io,capture,vision,channel,log,runs,difficulty='Normal',boss='NETHERWORLD',tier=9):
         if difficulty not in DIFFICULTIES:raise ValueError('Dificultad de World Boss no soportada')
+        if boss not in BOSSES or tier not in BOSSES[boss][1]:raise ValueError('Jefe o tier no disponible')
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
-        self.difficulty=difficulty
+        self.difficulty,self.boss,self.tier=difficulty,boss,tier
         self.runs=runs;self.deadline=time.monotonic()+60*60
         self.budget=FarmBudget(max_runs=runs,max_energy=runs*XEAL_COST,max_seconds=60*60,max_gold=0,stop_on_defeat=False)
 
@@ -68,14 +79,50 @@ class BossRunner(DungeonRunner):
     def xeals(self,frame,roi):
         x,y,x1,y1=roi;return self.vision.number(frame[y:y1,x:x1])
 
-    def find_netherworld(self):
-        """El carrusel no siempre abre en el último jefe: pasar páginas hasta leer Netherworld."""
-        named=lambda f:self.vision.locate(f,'WB_NETHERWORLD',(480,680,1000,850)) is not None
-        for _ in range(11):  # 11 jefes; nunca se invoca otro
-            frame=self.wait('WB_CAROUSEL');time.sleep(.5)
+    def find_boss(self):
+        """El carrusel no siempre abre en el último jefe: pasar páginas hasta leer el elegido."""
+        named=lambda f:self.vision.locate(f,f'WB_NAME_{self.boss}',(480,700,1160,830)) is not None
+        for _ in range(len(BOSSES)+1):  # una vuelta; nunca se invoca otro
+            self.wait('WB_CAROUSEL');time.sleep(.5)
             if named(self.capture()):return
             self.click('WB_CAROUSEL',CAROUSEL_PREV);time.sleep(1)
-        raise SafetyStop('Netherworld no aparece en el carrusel; no se cambia de jefe')
+        raise SafetyStop(f'{BOSSES[self.boss][0]} no aparece en el carrusel; no se cambia de jefe')
+
+    def tier_shown(self,frame):
+        x,y,x1,y1=TIER_FIELD;return self.vision.number(frame[y:y1,x:x1])
+
+    def pick(self,dropdown,menu_key,row,confirm,label):
+        """Abre un desplegable del Summon, pulsa una fila y confirma el cambio leyendo el campo."""
+        self.click('WB_SUMMON',dropdown)
+        menu=lambda f:self.vision.locate(f,menu_key,(760,95,1160,240)) is not None
+        frame=self.wait(menu,10,f'menú de {label}');time.sleep(1.2)  # el menú entra deslizándose
+        xy=menu_row(row(self.capture()) if callable(row) else row)
+        self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))
+        self.log.emit('DUNGEON_INPUT',screen=menu_key,xy=list(xy))
+        self.wait(lambda f:self.vision.screen(f)=='WB_SUMMON' and confirm(f),10,f'{label} elegido')
+
+    def configure_summon(self):
+        """Fija tier, dificultad y sala privada elegidos; cada cambio se confirma leyendo el diálogo."""
+        frame=self.wait(lambda f:self.vision.screen(f)=='WB_SUMMON' and self.tier_shown(f) is not None,10,'Summon')
+        time.sleep(.5);frame=self.capture()
+        if self.tier_shown(frame)!=self.tier:
+            def row(f):
+                for i in range(6):
+                    y=316+128*i
+                    if self.vision.number(f[y-30:y+30,970:1100])==self.tier:return i
+                raise SafetyStop(f'Tier {self.tier} no está en el menú; no se cambia')
+            self.pick(TIER_DROPDOWN,'WB_TIER_MENU',row,lambda f:self.tier_shown(f)==self.tier,f'tier {self.tier}')
+        key=f'WB_{self.difficulty.upper()}'
+        if self.vision.locate(self.capture(),key,DIFF_FIELD) is None:
+            self.pick(DIFF_DROPDOWN,'WB_DIFF_MENU',DIFFICULTIES.index(self.difficulty),
+                      lambda f:self.vision.locate(f,key,DIFF_FIELD) is not None,self.difficulty)
+        if self.vision.locate(self.capture(),'WB_PRIVATE_ON',PRIVATE[1]) is None:
+            self.click('WB_SUMMON',PRIVATE[0])
+            self.wait(lambda f:self.vision.locate(f,'WB_PRIVATE_ON',PRIVATE[1]) is not None,5,'sala privada')
+        self.wait(lambda f:self.vision.screen(f)=='WB_SUMMON' and self.tier_shown(f)==self.tier and
+                  self.vision.locate(f,key,DIFF_FIELD) is not None and
+                  self.vision.locate(f,'WB_PRIVATE_ON',PRIVATE[1]) is not None,10,
+                  f'Summon Tier {self.tier} · {self.difficulty} · Private')
 
     def enter(self,cycle,in_lobby=False):
         """Devuelve el intento, o None si no quedan xeals (sin invocar sala)."""
@@ -94,9 +141,9 @@ class BossRunner(DungeonRunner):
         if seen<XEAL_COST:
             self.close_list();self.log.emit('BOSS_STATUS',message=f'Sin xeals ({seen}); nada que gastar');return False
         self.press('WB_LIST',LIST_SUMMON)
-        self.find_netherworld()
+        self.find_boss()
         self.press('WB_CAROUSEL',CAROUSEL_SUMMON)
-        self.configured('WB_SUMMON',summon_config(self.difficulty),f'Summon Tier 9 · {self.difficulty} · Private')
+        self.configure_summon()
         self.press('WB_SUMMON',SUMMON)
         return True
 
@@ -152,7 +199,7 @@ class BossRunner(DungeonRunner):
         self.log.emit('BOSS_STATUS',message='Límite de runs alcanzado · detenido',budget=self.budget.payload())
 
 
-def run_boss(runs,difficulty='Normal'):
+def run_boss(runs,difficulty='Normal',boss='NETHERWORLD',tier=9):
     """Sesión de World Boss con F8, foco y exclusividad; sin panel todavía."""
     from .game_window import ENV_WINDOW,focus_window
     from .dungeon_vision import DungeonVision
@@ -167,7 +214,7 @@ def run_boss(runs,difficulty='Normal'):
         os.environ[ENV_WINDOW]=focus_window('Steam').serialize();os.environ.pop('FARM_LAUNCHER_PID',None)
         log=Telemetry('BOSS',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
-            BossRunner(io,capture,DungeonVision(),channel,log,runs,difficulty).run()
+            BossRunner(io,capture,DungeonVision(),channel,log,runs,difficulty,boss,tier).run()
     except (Exception,KeyboardInterrupt) as exc:
         if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
         raise
@@ -179,4 +226,5 @@ def run_boss(runs,difficulty='Normal'):
 
 if __name__=='__main__':
     import sys
-    run_boss(int(sys.argv[1]),*sys.argv[2:3])
+    # runs [dificultad] [jefe] [tier]
+    args=sys.argv[1:];run_boss(int(args[0]),*(args[1:3]),*([int(args[3])] if len(args)>3 else []))

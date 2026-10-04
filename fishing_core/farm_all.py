@@ -40,7 +40,7 @@ def steps(config):
     if on['quest']:
         if runes:plan.append(('Runas captura',lambda:run_runes('CAPTURE')))
         plan.append(('Quest',lambda:quest(config)))
-    rest=[('PvP','pvp',lambda:run_pvp(60)),('World Boss','boss',lambda:run_boss(60,config['boss']['difficulty'])),
+    rest=[('PvP','pvp',lambda:run_pvp(60)),('World Boss','boss',lambda:run_boss(60,config['boss']['difficulty'],config['boss']['boss'],int(config['boss']['tier']))),
           ('Raid','raid',lambda:run_raid(60)),('Expedition','expedition',lambda:run_expedition(60)),
           ('Trials','trials',lambda:run_trials(60))]
     if runes and any(on[mode] for _,mode,_ in rest):plan.append(('Runas Item Find',lambda:run_runes('ITEM_FIND')))

@@ -22,7 +22,8 @@ class FakeGame:
         self.state=home;self.starts=0;self.regroups=0;self.lobby=lobby
         self.moves={('boss_home',(90,430)):'boss_list',('boss_home_town',(90,430)):'boss_list',('boss_home_town2',(90,430)):'boss_list',('boss_list',(1180,966)):'boss_carousel',
                     ('boss_list',(1536,214)):'boss_home',('boss_carousel',(1260,786)):summon,
-                    (summon,(1130,842)):lobby,(lobby,(920,984)):'boss_not_full',
+                    (summon,(1130,842)):lobby,('boss_summon_normal',(1130,842)):lobby,('boss_summon_heroic',(1126,610)):'boss_diff_menu',
+                    ('boss_diff_menu',(930,316)):'boss_summon_normal',('boss_summon_heroic',(838,725)):'boss_summon_heroic',(lobby,(920,984)):'boss_not_full',
                     ('boss_not_full',(816,750)):'boss_battle_off',('boss_battle_off',(1880,530)):result}
 
     def click(self,xy):
@@ -65,15 +66,21 @@ class BossRuntimeTests(unittest.TestCase):
             game=FakeGame(home=home);self.run_boss(game)
             self.assertEqual(game.starts,1)
 
-    def test_heroic_only_runs_when_heroic_was_chosen(self):
-        game=FakeGame(summon='boss_summon_heroic')
-        with self.assertRaises(SafetyStop):self.run_boss(game,difficulty='Heroic')  # sala pública: Private falta
+    def test_chosen_difficulty_is_set_in_the_summon_dialog_before_start(self):
+        game=FakeGame(summon='boss_summon_heroic');self.run_boss(game,difficulty='Normal')
+        self.assertEqual(game.starts,1)  # HEROIC -> menú -> NORMAL confirmado leyendo el campo
+
+    def test_a_summon_that_cannot_be_made_private_never_starts(self):
+        game=FakeGame(summon='boss_summon_heroic')  # el clic en PRIVATE no cambia nada
+        with self.assertRaises(SafetyStop):self.run_boss(game,difficulty='Heroic')
         self.assertEqual(game.starts,0)
-        with self.assertRaises(ValueError):BossRunner(Mock(),Mock(),VISION,Mock(),Mock(),1,'Hard')
+
+    def test_unknown_boss_tier_or_difficulty_is_rejected(self):
+        for args in ((1,'Insane'),(1,'Heroic','NETHERWORLD',7),(1,'Heroic','NOPE',9)):
+            with self.assertRaises(ValueError):BossRunner(Mock(),Mock(),VISION,Mock(),Mock(),*args)
 
     def test_wrong_summon_config_or_shared_lobby_never_press_start(self):
-        for game in (FakeGame(summon='boss_summon_heroic'),FakeGame(lobby='boss_lobby_public'),
-                     FakeGame(lobby='boss_lobby_joined')):
+        for game in (FakeGame(lobby='boss_lobby_public'),FakeGame(lobby='boss_lobby_joined')):
             with self.subTest(state=game.moves[('boss_carousel',(1260,786))]):
                 with self.assertRaises(SafetyStop):self.run_boss(game)
                 self.assertEqual(game.starts,0)

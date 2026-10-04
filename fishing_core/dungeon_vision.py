@@ -114,7 +114,7 @@ class DungeonVision:
         if self.locate(frame,'RESULT_TOWN',(700,915,1500,1080)):
             if self.locate(frame,'WB_DEFEAT',(760,75,1160,230)):return 'WB_DEFEAT'
             if 'WB_VICTORY' in self.templates and self.locate(frame,'WB_VICTORY',(760,75,1160,230)):return 'WB_VICTORY'
-        if self.locate(frame,'WB_LOBBY_NETHERWORLD',(640,65,1290,210)) and self.locate(frame,'WB_START',(695,905,1140,1065)):
+        if self.locate(frame,'WB_START',(695,905,1140,1065)):  # START solo existe en la sala (cualquier jefe)
             return 'WB_LOBBY'
         if self.locate(frame,'WB_SUMMON_TITLE',(790,185,1190,325)) and self.locate(frame,'WB_SUMMON_BUTTON',(975,760,1290,925)):
             return 'WB_SUMMON'
