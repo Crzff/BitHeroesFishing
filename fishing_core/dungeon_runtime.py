@@ -326,8 +326,7 @@ class DungeonRunner:
                 # RERUN solo si el saldo estimado (cota inferior) paga otra run igual.
                 again=(rerun and self.balance is not None and self.balance>=self.cost and
                        self.budget.energy_reserved+self.cost<=self.plan['energy_limit'])
-                if again:self.click('VICTORY',(834,996),'RERUN',(650,920,1020,1075));self.wait('TEAM',20)
-                else:
+                if not again:
                     # TOWN cambia de sitio: a la derecha con RERUN (Quest/Raid), centrado sin él (Expedition).
                     x,y=self.vision.locate(frame,'TOWN',(700,900,1500,1080));h,w=self.vision.templates['TOWN'].shape[:2]
                     self.click('VICTORY',(x+w//2,y+h//2),'TOWN',(700,900,1500,1080));self.go_home()
@@ -337,7 +336,20 @@ class DungeonRunner:
                              'closure_confirmed':True,'budget':self.budget.payload()})
                 self.log.emit('DUNGEON_COMPLETE',message=f'Dungeon {cycle} completada'+(' · RERUN' if again else ' y cerrada'),
                               budget=self.budget.payload())
-                return again
+                if not again:return None
+                # RERUN entra directamente en la siguiente run (sin TEAM ni ACCEPT) y gasta en ese
+                # momento: reservar e intención antes del clic, como ACCEPT.
+                following=f'{self.channel.run_id}:{cycle+1}'
+                if not self.budget.reserve_entry(following,resource='ENERGY',balance=self.balance,cost=self.cost):
+                    raise SafetyStop('Entrada ya reservada; no repetir RERUN')
+                atomic_json(self.channel.directory/f'entry-{cycle+1}.intent.json',
+                            {'attempt_id':following,'plan':self.plan,'balance':self.balance,'cost':self.cost,'via':'RERUN',
+                             'budget':self.budget.payload(),'perf_ns':time.perf_counter_ns(),'effect_confirmed':False})
+                self.click('VICTORY',(834,996),'RERUN',(650,920,1020,1075))
+                self.log.emit('DUNGEON_ENTERED',attempt_id=following,energy_before=self.balance,energy_reserved=self.cost,
+                              difficulty=getattr(self,'difficulty',None),via='RERUN')
+                self.balance-=self.cost
+                return following
             if screen=='AUTO_OFF':
                 # El mapa pasa un instante por OFF al entrar y salir de combates: un clic ahí lo
                 # apaga. Solo se pulsa si sigue OFF 2 s; repetirlo más de 4 veces detiene.
@@ -378,9 +390,9 @@ class DungeonRunner:
 
     def run(self):
         self.go_home();self.verify_settings()  # Ajustes nativos: una vez por sesión.
-        in_team=False;runs=self.plan['runs']
+        following=None;runs=self.plan['runs']
         for cycle in range(1,runs+1):
-            if not in_team:
+            if following is None:
                 if self.balance is not None:
                     level=self.affordable(self.balance)
                     if level is None:
@@ -389,11 +401,11 @@ class DungeonRunner:
                 if self.budget.energy_reserved+ROUTE_COSTS[(self.plan['dungeon_id'],self.difficulty)]>self.plan['energy_limit']:
                     self.log.emit('DUNGEON_STATUS',message='Límite de energía alcanzado');return
                 self.select_route()
-            attempt=self.enter(cycle)
-            if attempt is None:
-                self.go_home();self.log.emit('DUNGEON_STATUS',message=f'Energía agotada ({self.balance}) · detenido');return
-            in_team=self.observe(attempt,cycle,rerun=cycle<runs)
-        if in_team:self.close_menu('TEAM');self.go_home()
+                attempt=self.enter(cycle)
+                if attempt is None:
+                    self.go_home();self.log.emit('DUNGEON_STATUS',message=f'Energía agotada ({self.balance}) · detenido');return
+            else:attempt=following
+            following=self.observe(attempt,cycle,rerun=cycle<runs)
         self.log.emit('DUNGEON_STATUS',message='Límite de runs alcanzado · detenido',budget=self.budget.payload())
 
 

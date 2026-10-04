@@ -517,7 +517,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             def enter(cycle):
                 runner.budget.energy_reserved+=10;runner.balance=50;return f'test:{cycle}'
             runner.enter=Mock(side_effect=enter)
-            runner.observe=Mock(side_effect=lambda attempt,cycle,rerun:rerun)
+            runner.observe=Mock(side_effect=lambda attempt,cycle,rerun:f'test:{cycle+1}' if rerun else None)
             runner.run()
             runner.verify_settings.assert_called_once();runner.select_route.assert_called_once()
             self.assertEqual([c.kwargs['rerun'] for c in runner.observe.call_args_list],[True,True,False])
@@ -546,15 +546,19 @@ class DungeonRuntimeTests(unittest.TestCase):
                 runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
                 runner.wait=Mock(return_value=runner.capture.return_value);runner.go_home=Mock()
                 vision.screen.return_value='VICTORY';runner.balance=balance
+                runner.budget=FarmBudget(max_runs=3,max_energy=30,max_seconds=60)
                 runner.budget.reserve_entry('test:1',resource='ENERGY',balance=100,cost=10)
-                self.assertIs(runner.observe('test:1',1,rerun=rerun),expected==(834,996))
+                rerun_used=expected==(834,996)
+                # RERUN entra directamente: la siguiente run queda reservada antes del clic.
+                self.assertEqual(runner.observe('test:1',1,rerun=rerun),'test:2' if rerun_used else None)
                 io.click.assert_called_once_with(expected)
                 self.assertEqual(runner.budget.payload()['completed_runs'],1)
+                self.assertEqual(runner.budget.payload()['entries_reserved'],2 if rerun_used else 1)
 
     def test_run_stops_before_navigating_when_the_next_entry_exceeds_the_energy_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,_=self.runner(Path(tmp));runner.plan=farm_plan('Z5D2','Normal',3,15)
-            runner.go_home=Mock();runner.verify_settings=Mock();runner.select_route=Mock();runner.observe=Mock(return_value=False)
+            runner.go_home=Mock();runner.verify_settings=Mock();runner.select_route=Mock();runner.observe=Mock(return_value=None)
             def enter(cycle):
                 runner.budget.energy_reserved+=10
                 return f'test:{cycle}'
