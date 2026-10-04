@@ -236,8 +236,9 @@ class DungeonRunner:
             screen=self.vision.screen(frame)
             if screen in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','VICTORY','LOADING'):return True
             if screen!='FAMILIAR_OFFER':return False
-            # Otra oferta acredita cierre; la misma o ilegible no. Con objetivo, solo otro nombre conocido.
-            return self.vision.familiar_name(frame) not in (None,name) if target else not same(frame) and familiar_glyph(frame) is not None
+            # Con el diálogo de confirmación ya cerrado (YES verificado), una oferta legible es la
+            # siguiente, aunque sea del mismo familiar: hay combates con dos iguales. Rechazar no gasta.
+            return self.vision.familiar_name(frame) is not None if target else familiar_glyph(frame) is not None
         self.wait(closed)
         atomic_json(path,{**intent,'effect_confirmed':True})
         label=name or 'familiar sin referencia'

@@ -352,7 +352,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             with self.assertRaises(SafetyStop):runner.decline_other(offer,'test:1',1)
             io.click.assert_called_once_with((755,955))
 
-    def test_decline_closes_on_a_different_known_next_offer_but_never_the_same_or_unknown_one(self):
+    def test_decline_closes_on_any_legible_next_offer_even_the_same_familiar_but_not_unknown(self):
         from fishing_core.dungeon_vision import DungeonVision
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
             frames={k:data[k] for k in ('offer_brute','offer_sitra','offer','decline_confirm')}
@@ -374,12 +374,12 @@ class DungeonRuntimeTests(unittest.TestCase):
                         self.assertEqual(xy,(818,752));self.assertEqual(state[0],'decline_confirm');state[0]=next_offer
                 io.click.side_effect=click
                 with patch('fishing_core.dungeon_runtime.time.sleep'):
-                    if next_offer=='offer_sitra':self.assertTrue(runner.decline_other(frames['offer_brute'],'test:1','1-1'))
+                    if next_offer in ('offer_sitra','offer_brute'):self.assertTrue(runner.decline_other(frames['offer_brute'],'test:1','1-1'))
                     else:
                         with self.assertRaises(SafetyStop):runner.decline_other(frames['offer_brute'],'test:1','1-1')
                     self.assertEqual(io.click.call_count,2)
                     intent=json.loads((Path(tmp)/'decline-1-1.intent.json').read_text())
-                    self.assertIs(intent['effect_confirmed'],next_offer=='offer_sitra')
+                    self.assertIs(intent['effect_confirmed'],next_offer in ('offer_sitra','offer_brute'))
                     state[0]='offer_brute'
                     with self.assertRaisesRegex(SafetyStop,'Rechazo ya registrado'):
                         runner.decline_other(frames['offer_brute'],'test:1','1-1')
@@ -387,11 +387,11 @@ class DungeonRuntimeTests(unittest.TestCase):
                 self.assertEqual(runner.budget.payload()['entries_reserved'],0)
                 self.assertEqual(runner.budget.gold_reserved,0)
 
-    def test_without_target_any_different_next_offer_closes_but_the_same_one_does_not(self):
+    def test_without_target_any_legible_next_offer_or_battle_closes_but_not_the_confirm(self):
         from fishing_core.dungeon_vision import DungeonVision
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
             frames={k:data[k] for k in ('offer_brute','offer','decline_confirm','battle')}
-        for next_screen,closes in (('offer',True),('battle',True),('offer_brute',False)):
+        for next_screen,closes in (('offer',True),('battle',True),('offer_brute',True),('decline_confirm',False)):
             with self.subTest(next_screen=next_screen),tempfile.TemporaryDirectory() as tmp:
                 runner,io,_=self.runner(Path(tmp));runner.plan['target']='';runner.vision=vision=DungeonVision()
                 state=['offer_brute'];runner.capture=lambda:frames[state[0]]
