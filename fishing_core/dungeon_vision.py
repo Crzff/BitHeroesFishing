@@ -132,6 +132,51 @@ class DungeonVision:
             if h<20:image[y:y+h,x:x+w]=0  # coma de miles
         return self.number(image)
 
+    def bright_number(self,image):
+        """Número de color (azul/amarillo/blanco): brillo en cualquier canal, sin comas."""
+        white=np.zeros_like(image);white[image.max(2)>=170]=255
+        mask=(white[:,:,0]>0).astype(np.uint8);boxes=quantity_boxes(mask)
+        if not boxes:return None
+        tall=max(b[3] for b in boxes)
+        for x,y,w,h,_ in boxes:
+            if h<0.7*tall:white[y:y+h,x:x+w]=0
+        return self.number(white)
+
+    def menu_lines(self,frame):
+        """Líneas de texto altas del menú de Trials: [(y en pantalla, recorte)]. La etiqueta TIER es más baja."""
+        x0,y0,x1,y1=730,255,1190,930;menu=frame[y0:y1,x0:x1]
+        lines=(menu.max(2)>=170).any(1);out=[];y=0
+        while y<len(lines):
+            if lines[y]:
+                top=y
+                while y<len(lines) and lines[y]:y+=1
+                if y-top>=26:out.append((y0+(top+y)//2,menu[max(0,top-4):y+4]))
+            y+=1
+        return out
+
+    def trials_ranges(self,frame):
+        """Primer menú de dificultad de Trials: [(y, mínimo, máximo)]."""
+        return [(y,)+span for y,line in self.menu_lines(frame) if (span:=self.range_text(line))]
+
+    def trials_levels(self,frame):
+        """Segundo menú (niveles de un rango): [(y, nivel)]; vacío si es el menú de rangos."""
+        lines=self.menu_lines(frame)
+        if any(self.range_text(line) for _,line in lines):return []
+        return [(y,n) for y,line in lines if (n:=self.bright_number(line)) is not None]
+
+    def range_text(self,line):
+        """'1,080 - 1,239' -> (1080, 1239): separa por el guion."""
+        white=np.zeros_like(line);white[line.max(2)>=170]=255
+        boxes=quantity_boxes((white[:,:,0]>0).astype(np.uint8))
+        if not boxes:return None
+        tall=max(b[3] for b in boxes)
+        dashes=[b for b in boxes if b[3]<0.4*tall and b[2]>1.5*b[3]]
+        if len(dashes)!=1:return None
+        dx,_,dw,_,_=dashes[0];values=[]
+        for left,right in ((0,dx),(dx+dw,white.shape[1])):
+            part=np.zeros_like(white);part[:,left:right]=white[:,left:right];values.append(self.bright_number(part))
+        return tuple(values) if None not in values else None
+
     def familiar_name(self,frame):
         if self.screen(frame)!='FAMILIAR_OFFER':return None
         glyph=familiar_glyph(frame)

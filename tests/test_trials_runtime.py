@@ -58,11 +58,46 @@ class TrialsRuntimeTests(unittest.TestCase):
         self.assertEqual(game.plays,[5,2]);self.assertEqual(game.state,'trials_home')
         self.assertEqual(runner.budget.energy_reserved,7);self.assertEqual(runner.budget.gold_reserved,0)
 
-    def test_other_difficulty_never_plays(self):
-        game=FakeGame()
-        with patch.object(VISION,'locate',side_effect=lambda f,k,r,*a:None if k=='TRIALS_DIFF_499' else DungeonVision.locate(VISION,f,k,r,*a)):
-            with self.assertRaisesRegex(SafetyStop,'499'):self.run_trials(game,[7])
-        self.assertEqual(game.plays,[])
+    def menu_runner(self,target):
+        tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);path=Path(tmp.name)
+        state={'screen':'trials_window','page':0,'shown':499,'clicks':[]}
+        io=Mock()
+        def click(xy):
+            state['clicks'].append(tuple(xy))
+            if tuple(xy)==(1416,826):state['screen']=f"trials_menu_{state['page']}"
+            elif state['screen'].startswith('trials_menu'):
+                rows=VISION.trials_ranges(FRAMES[state['screen']])
+                assert [high for y,low,high in rows if y==xy[1]]==[674];state['screen']='trials_levels_674'
+            elif state['screen']=='trials_levels_674':
+                state['shown']=[n for y,n in VISION.trials_levels(FRAMES['trials_levels_674']) if y==xy[1]][0]
+                state['screen']='trials_window'
+        io.click.side_effect=click
+        runner=TrialsRunner(io,Mock(),VISION,SimpleNamespace(directory=path,run_id='t',stop_path=path/'s.json'),Mock(),1,target)
+        runner.capture=lambda:FRAMES[state['screen']]
+        runner.difficulty_shown=lambda f:state['shown']
+        def wheel(steps):
+            if state['screen'].startswith('trials_menu'):
+                state['page']=0 if steps<0 else min(7,state['page']+1);state['screen']=f"trials_menu_{state['page']}"
+        runner.wheel=wheel
+        clock=[0.0]
+        def sleep(s):clock[0]+=s
+        fake=SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep,perf_counter_ns=lambda:0)
+        return runner,state,fake
 
+    def test_difficulty_is_chosen_by_its_range_maximum_across_pages(self):
+        runner,state,fake=self.menu_runner(674)
+        with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.trials_runtime.time',fake):runner.set_difficulty()
+        self.assertEqual(state['shown'],674);self.assertEqual(state['screen'],'trials_window')
+
+    def test_current_difficulty_is_left_alone(self):
+        runner,state,fake=self.menu_runner(499)
+        with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.trials_runtime.time',fake):runner.set_difficulty()
+        self.assertEqual(state['clicks'],[])
+
+    def test_missing_difficulty_stops_without_choosing_or_playing(self):
+        runner,state,fake=self.menu_runner(3000)  # por encima de 2.735, el máximo
+        with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.trials_runtime.time',fake):
+            with self.assertRaisesRegex(SafetyStop,'3000'):runner.set_difficulty()
+        self.assertEqual(state['clicks'],[(1416,826)]);self.assertEqual(state['shown'],499)
 
 if __name__=='__main__':unittest.main()

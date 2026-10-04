@@ -1,7 +1,8 @@
-"""Trials (evento semanal; esta semana Nyxn's Trials, dificultad 499): gasta todos los tokens.
+"""Trials (evento semanal; esta semana Nyxn's Trials): gasta todos los tokens.
 
-Perder es normal en Trials: la derrota se cierra y se sigue. La dificultad se
-comprueba y nunca se cambia; con menos de 5 tokens se baja el coste hasta 1.
+Perder es normal en Trials: la derrota se cierra y se sigue. La dificultad elegida
+(máximo de un rango del menú, p. ej. 499 = T9 azul, objetos de set) se fija con el
+desplegable y se confirma leyendo el campo; el coste baja de 5 hasta 1.
 """
 
 import os
@@ -20,14 +21,17 @@ PLAY=((1280,580),'TRIALS_PLAY',(1120,450,1450,710))
 CLOSE=((1490,236),'TRIALS_CLOSE',(1404,150,1584,330))
 ACCEPT=((1215,982),'ACCEPT',(1000,930,1420,1035))
 TOKENS_ROI=(880,88,1060,138)
-DIFFICULTY=('TRIALS_DIFF_499',(1090,755,1400,895))
+DIFF_FIELD=(1130,800,1360,850)
+DIFF_DROPDOWN=(1416,826)
 
 
 class TrialsRunner(DungeonRunner):
     defeat_continues=True
 
-    def __init__(self,io,capture,vision,channel,log,runs):
+    def __init__(self,io,capture,vision,channel,log,runs,difficulty=499):
+        if type(difficulty) is not int or not 1<=difficulty<=9999:raise ValueError('Dificultad de Trials inválida')
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
+        self.trials_difficulty=difficulty
         self.runs=runs;self.deadline=time.monotonic()+60*60
         self.plan={'dungeon_id':'TRIALS','difficulty':'499','runs':runs,'energy_limit':runs*TOKEN_COST,'target':''}
         self.cost=TOKEN_COST;self.balance=None
@@ -57,8 +61,53 @@ class TrialsRunner(DungeonRunner):
     def open(self):
         screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','TRIALS'),12))
         if screen=='HOME':self.press('HOME',HOME_TRIALS);self.wait('TRIALS')
-        if self.vision.locate(self.capture(),*DIFFICULTY) is None:
-            raise SafetyStop('La dificultad de Trials no es 499; no se cambia')
+        self.set_difficulty()
+
+    def difficulty_shown(self,frame):
+        x,y,x1,y1=DIFF_FIELD;return self.vision.bright_number(frame[y:y1,x:x1])
+
+    def wheel(self,steps):
+        """Rueda del ratón sobre el menú (abajo si steps>0), comprobando foco antes de cada paso."""
+        from Xlib import X
+        from Xlib.ext import xtest
+        self.io._move((930,600));display=self.io.game_guard.api.display
+        for _ in range(abs(steps)):
+            self.check();button=5 if steps>0 else 4
+            xtest.fake_input(display,X.ButtonPress,button);xtest.fake_input(display,X.ButtonRelease,button)
+            display.sync();time.sleep(.05)
+        time.sleep(.6)
+
+    def scroll_to(self,find,label):
+        """Sube al inicio de la lista y baja hasta que find(frame) da una fila; None si no está."""
+        time.sleep(1.2);self.wheel(-40);previous=None
+        for _ in range(60):
+            frame=self.capture();y=find(frame)
+            if y is not None:return y
+            rows=self.vision.menu_lines(frame);signature=[yy for yy,_ in rows],[line.tobytes() for _,line in rows]
+            if signature==previous:return None  # final de la lista
+            previous=signature;self.wheel(3)
+        return None
+
+    def choose(self,y,label):
+        xy=(930,y);self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))
+        self.log.emit('DUNGEON_INPUT',screen=label,xy=list(xy))
+
+    def set_difficulty(self):
+        """Dos menús: rango que contiene la dificultad y nivel exacto; se confirma leyendo el campo."""
+        stable=lambda f:self.vision.screen(f)=='TRIALS' and self.difficulty_shown(f) is not None
+        self.wait(stable,10,'dificultad de Trials');time.sleep(.5)
+        target=self.trials_difficulty
+        if self.difficulty_shown(self.capture())==target:return
+        menu=lambda f:self.vision.locate(f,'WB_DIFF_MENU',(760,95,1160,240)) is not None
+        self.click('TRIALS',DIFF_DROPDOWN);self.wait(menu,10,'menú de dificultad')
+        y=self.scroll_to(lambda f:next((y for y,low,high in self.vision.trials_ranges(f) if low<=target<=high),None),'rango')
+        if y is None:raise SafetyStop(f'La dificultad {target} no está en el menú; no se cambia')
+        self.choose(y,'TRIALS_RANGE')
+        self.wait(lambda f:menu(f) and bool(self.vision.trials_levels(f)),10,'niveles del rango')
+        y=self.scroll_to(lambda f:next((y for y,n in self.vision.trials_levels(f) if n==target),None),'nivel')
+        if y is None:raise SafetyStop(f'El nivel {target} no aparece en su rango; no se cambia')
+        self.choose(y,'TRIALS_LEVEL')
+        self.wait(lambda f:self.vision.screen(f)=='TRIALS' and self.difficulty_shown(f)==target,10,f'dificultad {target}')
 
     def enter(self,cycle):
         self.open();balance=self.tokens()
@@ -82,7 +131,7 @@ class TrialsRunner(DungeonRunner):
         self.log.emit('TRIALS_STATUS',message='Tokens gastados · detenido',budget=self.budget.payload())
 
 
-def run_trials(runs):
+def run_trials(runs,difficulty=499):
     from .game_window import ENV_WINDOW,focus_window
     from .dungeon_vision import DungeonVision
     from .linux import LinuxIO,LinuxCapture
@@ -96,7 +145,7 @@ def run_trials(runs):
         os.environ[ENV_WINDOW]=focus_window('Steam').serialize();os.environ.pop('FARM_LAUNCHER_PID',None)
         log=Telemetry('TRIALS',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
-            TrialsRunner(io,capture,DungeonVision(),channel,log,runs).run()
+            TrialsRunner(io,capture,DungeonVision(),channel,log,runs,difficulty).run()
     except (Exception,KeyboardInterrupt) as exc:
         if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
         raise
@@ -108,4 +157,4 @@ def run_trials(runs):
 
 if __name__=='__main__':
     import sys
-    run_trials(int(sys.argv[1]))
+    run_trials(int(sys.argv[1]),*[int(a) for a in sys.argv[2:3]])  # runs [dificultad]
