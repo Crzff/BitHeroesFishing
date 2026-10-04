@@ -19,8 +19,9 @@ class DungeonRuntimeTests(unittest.TestCase):
     def test_uncertified_routes_are_not_silently_substituted(self):
         validate_supported(farm_plan('Z5D2','Normal',1,30))
         validate_supported(farm_plan('Z5D3','Heroic',1,30,'Tealk'))
+        validate_supported(farm_plan('Z5D3','Heroic',6,180,'Tealk'))  # repetición, como Z5D2
         for args in [('Z1D2','Normal',1,30,'Bob'),('Z5D2','Heroic',1,30,''),
-                     ('Z5D3','Normal',1,30,''),('Z5D3','Heroic',2,60,'Tealk')]:
+                     ('Z5D3','Normal',1,30,'')]:
             with self.assertRaises(ValueError):validate_supported(farm_plan(*args))
 
     def test_tealk_heroic_reserves_thirty_once_and_rejects_the_normal_cost(self):
@@ -407,6 +408,19 @@ class DungeonRuntimeTests(unittest.TestCase):
                         with self.assertRaises(SafetyStop):runner.decline_other(frames['offer_brute'],'test:1','1-1')
                 intent=json.loads((Path(tmp)/'decline-1-1.intent.json').read_text())
                 self.assertIs(intent['effect_confirmed'],closes);self.assertEqual(runner.budget.gold_reserved,0)
+
+    def test_with_target_an_animating_offer_waits_for_a_legible_name_before_deciding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));runner.plan['target']='Tealk'
+            runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            vision.screen.return_value='FAMILIAR_OFFER'
+            names=iter([None,'Brute']);vision.familiar_name.side_effect=lambda _:next(names,'Brute')
+            seen=[]
+            def decline(frame,attempt,offer):
+                seen.append(vision.familiar_name(frame));raise SafetyStop('fin de prueba')
+            runner.decline_other=decline
+            with self.assertRaisesRegex(SafetyStop,'fin de prueba'):runner.observe('test:1',1)
+            self.assertEqual(seen,['Brute']);io.click.assert_not_called()
 
     def test_battle_auto_does_not_claim_that_map_auto_was_started(self):
         with tempfile.TemporaryDirectory() as tmp:

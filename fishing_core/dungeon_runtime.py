@@ -29,8 +29,6 @@ def validate_supported(plan):
     checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],plan.get('target',''))
     if (checked['dungeon_id'],checked['difficulty']) not in ROUTE_COSTS:
         raise ValueError('Ruta aún no calibrada: disponibles Z5D2 · Normal y Z5D3 · Heroic. No se cambia tu objetivo.')
-    if checked['dungeon_id']=='Z5D3' and checked['runs']!=1:
-        raise ValueError('Z5D3 · Heroic: solo una run por sesión hasta validar la repetición')
     return checked
 
 
@@ -256,6 +254,10 @@ class DungeonRunner:
             if screen=='FAMILIAR_OFFER':
                 cv2.imwrite(str(self.channel.directory/'familiar-offer.png'),frame[110:900,350:1600])
                 if declined>=20:raise SafetyStop('Demasiadas ofertas de familiar; no se continúa')
+                if self.plan['target'] and self.vision.familiar_name(frame) is None:
+                    # La oferta entra animada: esperar el nombre legible; uno desconocido sigue pausando.
+                    try:frame=self.wait(lambda f:self.vision.familiar_name(f) is not None,3,'nombre de familiar')
+                    except SafetyStop:pass
                 if not self.decline_other(frame,attempt,f'{cycle}-{declined+1}'):
                     raise SafetyStop('Oferta de familiar objetivo o desconocido: pausa para decidir; no se gasta oro ni gemas')
                 declined+=1;unknown_since=None;continue
