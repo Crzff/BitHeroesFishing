@@ -36,7 +36,7 @@ def steps(runes):
     from .trials_runtime import run_trials
     plan=[]
     if runes:plan.append(('Runas captura',lambda:run_runes('CAPTURE')))
-    plan.append(('Quest',quest))
+    if '--no-quest' not in sys.argv:plan.append(('Quest',quest))
     if runes:plan.append(('Runas Item Find',lambda:run_runes('ITEM_FIND')))
     plan+=[('PvP',lambda:run_pvp(60)),('World Boss',lambda:run_boss(60,'Heroic')),('Raid',lambda:run_raid(60)),
            ('Expedition',lambda:run_expedition(60)),('Trials',lambda:run_trials(60))]
@@ -52,7 +52,9 @@ def main(argv):
         except KeyboardInterrupt:
             results.append((name,'F8'));break
         except (SafetyStop,RuntimeError,ValueError) as exc:
-            results.append((name,str(exc)));break  # estado del juego no confirmado: no seguir
+            results.append((name,str(exc)))
+            # Una derrota en Raid/WB se cierra con TOWN y vuelve a Home: termina solo ese modo.
+            if not str(exc).startswith('Derrota'):break  # estado del juego no confirmado: no seguir
     for name,result in results:print(f'{name}: {result}',flush=True)
 
 
