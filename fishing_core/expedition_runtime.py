@@ -60,7 +60,7 @@ class ExpeditionRunner(DungeonRunner):
         return seen
 
     def to_portal(self):
-        screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','EXPEDITION','IDOL_MAP','PORTAL'),12))
+        screen=self.ensure_home(keep=('EXPEDITION','IDOL_MAP','PORTAL'))
         if screen=='HOME':self.press('HOME',HOME_EXP);screen=self.vision.screen(self.wait('EXPEDITION'))
         if screen=='EXPEDITION':
             balance=self.badges('EXPEDITION')

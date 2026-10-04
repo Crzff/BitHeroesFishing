@@ -70,7 +70,7 @@ class BossRunner(DungeonRunner):
         self.click(screen,xy,key,roi)
 
     def to_list(self):
-        screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','WB_LIST'),12))
+        screen=self.ensure_home(keep=('WB_LIST',))
         if screen=='HOME':self.press('HOME',HOME_BOSS);self.wait('WB_LIST')
 
     def close_list(self):

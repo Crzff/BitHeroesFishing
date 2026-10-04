@@ -59,7 +59,7 @@ class RaidRunner(DungeonRunner):
         return seen
 
     def open(self):
-        screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','RAID'),12))
+        screen=self.ensure_home(keep=('RAID',))
         if screen=='HOME':self.press('HOME',HOME_RAID);self.wait('RAID')
         named=lambda f:self.vision.locate(f,f'RAID_NAME_{self.raid}',(500,700,1170,830)) is not None
         for _ in range(len(RAIDS)+1):  # una vuelta; nunca se invoca otra

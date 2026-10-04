@@ -22,6 +22,12 @@ LADDER=('Heroic','Hard','Normal')
 DIFFICULTY_BUTTONS={'Normal':((550,495),(400,450,715,550)),'Hard':((958,495),(780,430,1140,570)),
                     'Heroic':((1365,495),(1200,450,1530,550))}
 SESSION_SECONDS=3600
+# Ventanas de modo -> su X (coordenada, plantilla, ROI). Sin plantilla: basta la pantalla reconocida.
+WINDOW_CLOSERS={'TRIALS':((1490,236),'TRIALS_CLOSE',(1404,150,1584,330)),'PVP':((1494,226),'PVP_CLOSE',(1410,140,1580,310)),
+                'EXPEDITION':((1490,240),'EXP_CLOSE',(1400,150,1580,330)),'IDOL_MAP':((1655,135),'IDOL_CLOSE',(1570,50,1740,220)),
+                'PORTAL':((1362,214),'PORTAL_CLOSE',(1280,130,1450,300)),'RAID':((1468,236),'RAID_CLOSE',(1380,150,1560,320)),
+                'WB_LIST':((1536,214),'WB_CLOSE',(1500,180,1575,250)),'WB_CAROUSEL':((1470,240),None,None),
+                'WB_SUMMON':((1266,260),None,None)}
 COST_ROI=(1210,392,1310,448)
 COST_DROPDOWN=(1370,416)
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
@@ -129,6 +135,18 @@ class DungeonRunner:
         time.sleep(.25)  # Unity debe procesar la suelta antes de abandonar el botón.
         self.io._move((960,1070))  # Zona neutra: no confundir hover con cambio de estado.
 
+    def ensure_home(self,keep=()):
+        """Cierra con su X verificada las ventanas de modo abiertas hasta llegar a Home (o a una de keep)."""
+        for _ in range(6):
+            frame=self.wait(lambda f:self.vision.screen(f)=='HOME' or self.vision.screen(f) in keep or
+                            self.vision.screen(f) in WINDOW_CLOSERS or self.vision.screen(f) in MENU_PARENTS,12,'Home o ventana conocida')
+            screen=self.vision.screen(frame)
+            if screen=='HOME' or screen in keep:return screen
+            if screen in MENU_PARENTS:self.close_menu(screen);continue
+            xy,key,roi=WINDOW_CLOSERS[screen];time.sleep(.4)
+            self.click(screen,xy,key,roi);time.sleep(1)
+        raise SafetyStop('No se pudo volver a Home cerrando ventanas')
+
     def cost_shown(self,frame):
         x,y,x1,y1=COST_ROI;return self.vision.number(frame[y:y1,x:x1])
 
@@ -207,6 +225,7 @@ class DungeonRunner:
         self.log.emit('DUNGEON_STATUS',message='Ajustes comprobados · cero oro/gemas',settings=seen)
 
     def go_home(self):
+        if self.vision.screen(self.capture()) in WINDOW_CLOSERS:self.ensure_home()
         frame=self.wait(lambda frame:self.vision.screen(frame)=='HOME' or self.vision.screen(frame) in MENU_PARENTS,12)
         for _ in range(4):
             screen=self.vision.screen(frame)

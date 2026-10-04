@@ -46,7 +46,7 @@ class PvpRunner(DungeonRunner):
         return seen
 
     def open(self):
-        screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','PVP'),12))
+        screen=self.ensure_home(keep=('PVP',))
         if screen=='HOME':self.press('HOME',HOME_PVP);self.wait('PVP')
 
     def fight(self,cycle):

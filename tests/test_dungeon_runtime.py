@@ -568,6 +568,20 @@ class DungeonRuntimeTests(unittest.TestCase):
                 self.assertEqual(runner.budget.payload()['completed_runs'],1)
                 self.assertEqual(runner.budget.payload()['entries_reserved'],2 if rerun_used else 1)
 
+    def test_open_mode_windows_are_closed_with_their_verified_x_before_starting(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('trials_window','pvp_window','trials_home')}
+        moves={('trials_window',(1490,236)):'pvp_window',('pvp_window',(1494,226)):'trials_home'}
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.vision=DungeonVision();state=['trials_window']
+            runner.capture=lambda:frames[state[0]];runner.wait=DungeonRunner.wait.__get__(runner)
+            io.click.side_effect=lambda xy:state.__setitem__(0,moves[(state[0],tuple(xy))])
+            with patch('fishing_core.dungeon_runtime.time.sleep'):
+                self.assertEqual(runner.ensure_home(),'HOME')
+                state[0]='pvp_window';self.assertEqual(runner.ensure_home(keep=('PVP',)),'PVP')
+            self.assertEqual(io.click.call_count,2)
+
     def test_run_stops_before_navigating_when_the_next_entry_exceeds_the_energy_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,_=self.runner(Path(tmp));runner.plan=farm_plan('Z5D2','Normal',3,15)

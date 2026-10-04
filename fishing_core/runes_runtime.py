@@ -84,7 +84,7 @@ class RunesRunner(DungeonRunner):
         raise SafetyStop('Las runas no se estabilizan; revisar a mano')
 
     def run(self,profile):
-        frame=self.wait(lambda f:self.vision.screen(f)=='HOME',12,'Home')
+        self.ensure_home()
         self.click('HOME',*PROFILE[:2],PROFILE[2])
         self.click_on(self.wait(self.on(*RUNES[1:]),10,'perfil'),RUNES)
         self.apply(profile)

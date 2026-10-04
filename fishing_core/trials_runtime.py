@@ -59,7 +59,7 @@ class TrialsRunner(DungeonRunner):
         return seen
 
     def open(self):
-        screen=self.vision.screen(self.wait(lambda f:self.vision.screen(f) in ('HOME','TRIALS'),12))
+        screen=self.ensure_home(keep=('TRIALS',))
         if screen=='HOME':self.press('HOME',HOME_TRIALS);self.wait('TRIALS')
         self.set_difficulty()
 
