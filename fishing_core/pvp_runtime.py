@@ -12,8 +12,11 @@ TICKET_COST=5  # máximo; con menos tickets se baja hasta 1
 HOME_PVP=((90,280),'HOME_PVP',(15,205,165,355))
 PLAY=((1280,568),'PVP_PLAY',(1120,440,1445,695))
 CLOSE=((1494,226),'PVP_CLOSE',(1410,140,1580,310))
-# Rivales ordenados de menos a más puntos (filas 1-4). FIGHT de cada fila.
-FIGHT_ROWS={i+1:((1390,y),'PVP_FIGHT',(1236,y-70,1544,y+72)) for i,y in enumerate((422,538,652,768))}
+# Rivales de menos a más puntos; su número cambia con el coste en tickets. Se baja al final de
+# la lista y se cuenta desde abajo: rival 4 = el que más puntos da, 1 = el cuarto desde abajo.
+FIGHT_ROWS=(1,2,3,4)
+LIST_ROI=(1236,330,1544,900)
+LIST_WHEEL=(960,600)
 ACCEPT=((1215,982),'ACCEPT',(1000,930,1420,1035))
 TICKETS_ROI=(1350,22,1530,62)
 TOWN_ROI=(700,915,1500,1080)
@@ -47,6 +50,18 @@ class PvpRunner(DungeonRunner):
         self.wait(known,30,'saldo de tickets')
         return seen
 
+    def choose_opponent(self):
+        self.wait('PVP_SELECT');time.sleep(1)  # la lista entra animada
+        self.wheel(40,LIST_WHEEL)
+        rows=[None]
+        def settled(frame):
+            current=self.vision.locate_all(frame,'PVP_FIGHT',LIST_ROI) if self.vision.screen(frame)=='PVP_SELECT' else []
+            okay=bool(current) and current==rows[0];rows[0]=current
+            return okay
+        self.wait(settled,10,'lista de rivales quieta')
+        x,y=map(int,rows[0][max(0,len(rows[0])-(5-self.opponent))]);h,w=self.vision.templates['PVP_FIGHT'].shape[:2]
+        self.click('PVP_SELECT',(x+w//2,y+h//2),'PVP_FIGHT',(x-10,y-10,x+w+10,y+h+10))
+
     def open(self):
         screen=self.ensure_home(keep=('PVP',))
         if screen=='HOME':self.press('HOME',HOME_PVP);self.wait('PVP')
@@ -60,7 +75,7 @@ class PvpRunner(DungeonRunner):
         if not self.budget.reserve_entry(attempt,resource='TICKETS',balance=balance,cost=cost):
             raise SafetyStop('Combate ya reservado; no repetir PLAY')
         atomic_json(self.channel.directory/f'pvp-{cycle}.intent.json',{'attempt_id':attempt,'tickets':balance,'effect_confirmed':False})
-        self.press('PVP',PLAY);self.press('PVP_SELECT',FIGHT_ROWS[self.opponent]);self.press('TEAM',ACCEPT)
+        self.press('PVP',PLAY);self.choose_opponent();self.press('TEAM',ACCEPT)
         self.log.emit('PVP_STARTED',attempt_id=attempt,tickets_before=balance)
         results=('WB_VICTORY','WB_DEFEAT')
         frame=self.wait(lambda f:self.vision.screen(f) in ('AUTO_OFF_BATTLE','AUTO_ON_BATTLE')+results,30,'combate PvP')

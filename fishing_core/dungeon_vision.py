@@ -98,6 +98,17 @@ class DungeonVision:
         if score>=threshold and float(difference.mean())<=12:return x+px,y+py
         return self.locate(frame,'HEROIC_IDLE',roi,threshold) if key=='HEROIC' else None
 
+    def locate_all(self,frame,key,roi,threshold=.97):
+        """Todas las apariciones completas de key en roi, de arriba abajo (sin solapes)."""
+        x,y,x1,y1=roi;image=frame[y:y1,x:x1];ref=self.templates[key];h,w=ref.shape[:2]
+        if image.shape[0]<h or image.shape[1]<w:return []
+        result=cv2.matchTemplate(image,ref,cv2.TM_CCOEFF_NORMED);result[~np.isfinite(result)]=-1
+        found=[]
+        for py,px in sorted(zip(*np.nonzero(result>=threshold)),key=lambda p:-result[p]):
+            if any(abs(px-fx)<w//2 and abs(py-fy)<h//2 for fx,fy in found):continue
+            if float(np.abs(image[py:py+h,px:px+w].astype(np.int16)-ref).mean())<=12:found.append((px,py))
+        return sorted(((x+px,y+py) for px,py in found),key=lambda p:p[1])
+
     def map_zone(self,frame):
         if frame.shape!=(1080,1920,3) or not self.locate(frame,'ZONES_BUTTON',(315,100,565,205)):return None
         zones=[zone for zone in range(1,21) if self.locate(frame,f'MAP_Z{zone}',(645,90,1280,185))]

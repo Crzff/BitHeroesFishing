@@ -112,7 +112,7 @@ class FarmApp(tk.Tk):
         if mode=='raid':return [RAIDS[c['raid']['raid']].upper(),c['raid']['difficulty'].upper()]
         if mode=='trials':
             level=int(c['trials']['difficulty']);tier=trials_range(level)[0];return [f'NIVEL {level}',f'TIER {tier}']
-        if mode=='pvp':return ['5 TICKETS',f"RIVAL {c['pvp']['opponent']} DE 4"]
+        if mode=='pvp':return ['5 TICKETS','MAS PUNTOS' if c['pvp']['opponent']==4 else f"{5-c['pvp']['opponent']} DESDE ABAJO"]
         return ['SEMANAL']
 
     def draw_quest(self):
@@ -178,8 +178,8 @@ class FarmApp(tk.Tk):
     def draw_pvp(self):
         self.window('PVP');current=int(self.config_data['pvp']['opponent'])
         icon=ui.icon('pvp',130);self.put(icon,(W-icon.width)//2,150)
-        self.label('RIVAL (DE MENOS A MAS PUNTOS)',W//2,320,20,ui.GOLD,center=True)
-        labels=('1 · MAS FACIL','2','3','4 · MAS PUNTOS')
+        self.label('RIVAL (BAJA AL FINAL DE LA LISTA)',W//2,320,20,ui.GOLD,center=True)
+        labels=('4 DESDE ABAJO','3 DESDE ABAJO','2 DESDE ABAJO','EL QUE MAS PUNTOS DA')
         for i,text in enumerate(labels):
             self.put(ui.button(text,440,60,'blue' if current==i+1 else 'gray',20),(W-440)//2,360+i*72,
                      lambda n=i+1:self.set_opponent(n))

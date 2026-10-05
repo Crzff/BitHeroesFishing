@@ -206,12 +206,15 @@ class DungeonRunner:
         return self.wait(lambda frame:self.vision.screen(frame) in MENU_PARENTS[screen])
 
     def scroll_menu(self,screen,amount):
-        from Xlib import X
-        from Xlib.ext import xtest
         if screen not in ('SETTINGS','ZONES') or self.vision.screen(self.capture())!=screen:
             raise SafetyStop('Menú de scroll no confirmado')
         if type(amount) is not int or not 0<abs(amount)<=80:raise SafetyStop('Scroll fuera de límite')
-        xy=(1250,600) if screen=='SETTINGS' else (1150,600)
+        self.wheel(amount,(1250,600) if screen=='SETTINGS' else (1150,600))
+
+    def wheel(self,amount,xy):
+        """Rueda sobre xy (positivo = bajar); el llamante confirma antes la pantalla."""
+        from Xlib import X
+        from Xlib.ext import xtest
         if hasattr(self.io,'wheel'):  # gamescope: rueda en su servidor X, sin cursor del usuario
             self.io.wheel(amount,xy);time.sleep(.12);self.io._move((960,1070));return
         self.io._move(xy)

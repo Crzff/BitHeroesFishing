@@ -61,32 +61,24 @@ class RunesRunner(DungeonRunner):
         time.sleep(1.5)  # la lista sigue deslizándose aunque ya se vea el título
         return self.capture()
 
-    def wheel(self,steps):
-        if hasattr(self.io,'wheel'):self.io.wheel(steps,LIST_WHEEL)
-        else:
-            from Xlib import X
-            from Xlib.ext import xtest
-            self.io._move(LIST_WHEEL);display=self.io.game_guard.api.display
-            for _ in range(abs(steps)):
-                self.check();button=5 if steps>0 else 4
-                xtest.fake_input(display,X.ButtonPress,button);xtest.fake_input(display,X.ButtonRelease,button);display.sync();time.sleep(.05)
-        self.io._move((960,1070));time.sleep(.6)
+    def scroll(self,steps):
+        self.wheel(steps,LIST_WHEEL);time.sleep(.5)
 
     def scan(self,kind):
         """Mejor runa del tipo en la lista: (valor, rareza) recorriendo con scroll; None si no hay."""
-        self.wheel(-30);best=None;previous=None
+        self.scroll(-30);best=None;previous=None
         for _ in range(12):
             visible=self.visible()
             for xy,k,rarity,value in visible:
                 if k==kind and (best is None or value>best[0]):best=(value,rarity)
             signature=[(k,r) for _,k,r,_ in visible]
             if signature==previous:break
-            previous=signature;self.wheel(2)
+            previous=signature;self.scroll(2)
         return best
 
     def find_and_click(self,kind,rarity):
         """Vuelve arriba y baja hasta ver esa runa; la pulsa. False si no aparece."""
-        self.wheel(-30);previous=None
+        self.scroll(-30);previous=None
         for _ in range(12):
             visible=self.visible()
             match=[xy for xy,k,r,_ in visible if k==kind and r==rarity]
@@ -96,7 +88,7 @@ class RunesRunner(DungeonRunner):
                 self.log.emit('DUNGEON_INPUT',screen='MINOR_RUNE',xy=list(xy));return True
             signature=[(k,r) for _,k,r,_ in visible]
             if signature==previous:return False
-            previous=signature;self.wheel(2)
+            previous=signature;self.scroll(2)
         return False
 
     def close_list(self):

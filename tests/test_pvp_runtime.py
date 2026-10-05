@@ -20,7 +20,7 @@ VISION=DungeonVision()
 class FakeGame:
     def __init__(self,results):
         self.state='pvp_home';self.results=iter(results);self.plays=[];self.cost=5
-        self.moves={('pvp_home',(90,280)):'pvp_window',('pvp_select',(1390,768)):'pvp_team',
+        self.moves={('pvp_home',(90,280)):'pvp_window',('pvp_select',(1390,769)):'pvp_team',
                     ('pvp_window',(1370,416)):'pvp_cost_menu',('pvp_cost_menu',(930,316)):'pvp_window_cost1',
                     ('pvp_window',(1494,226)):'pvp_home',('pvp_window_cost1',(1494,226)):'pvp_home'}
 
@@ -76,7 +76,7 @@ class PvpRuntimeTests(unittest.TestCase):
             fake=SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep,perf_counter_ns=lambda:0)
             with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.pvp_runtime.time',fake), \
                     patch.object(PvpRunner,'tickets',side_effect=[5,0]):runner.run()
-        self.assertIn((1390,422),clicks);self.assertNotIn((1390,768),clicks)
+        self.assertIn((1390,423),clicks);self.assertNotIn((1390,769),clicks)
         with self.assertRaises(ValueError):PvpRunner(Mock(),Mock(),VISION,Mock(),Mock(),1,5)
 
     def test_no_tickets_closes_the_window_without_playing(self):
@@ -87,6 +87,15 @@ class PvpRuntimeTests(unittest.TestCase):
         game=FakeGame([]);game.moves[('pvp_cost_menu',(930,316))]='pvp_window'  # sigue en 5
         with self.assertRaises(SafetyStop):self.run_pvp(game,[1])
         self.assertEqual(game.plays,[])
+
+
+    def test_scrolls_to_the_bottom_where_the_richest_rival_is(self):
+        for opponent,y in ((4,820),(1,474)):
+            io=Mock();runner=PvpRunner(io,Mock(),VISION,Mock(),Mock(),1,opponent);runner.check=Mock()
+            frame=FRAMES['pvp_select_scrolled'];runner.capture=lambda:frame
+            with patch('fishing_core.pvp_runtime.time.sleep'),patch('fishing_core.dungeon_runtime.time.sleep'):runner.choose_opponent()
+            io.wheel.assert_called_once();self.assertGreater(io.wheel.call_args.args[0],0)  # hacia abajo
+            self.assertEqual(io.click.call_args.args[0],(1390,y))
 
 
 if __name__=='__main__':unittest.main()
