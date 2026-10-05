@@ -110,10 +110,13 @@ class DungeonVision:
         for screen,checks in MODE_SCREENS:
             if all(key in self.templates and self.locate(frame,key,roi) for key,roi in checks):return screen
         regions=[('VICTORY',(780,110,1150,210)),('SETTINGS',(760,100,1160,215)),
-                 ('TEAM',(830,90,1100,200)),('DIFFICULTY_Z5D2',(540,160,1380,265)),
-                 ('DIFFICULTY_Z5D3',(540,160,1380,265))]
+                 ('TEAM',(830,90,1100,200))]
         for key,roi in regions:
             if self.locate(frame,key,roi):return key
+        # Ventanas de entrada a una dungeon: misma disposición en todas; el título dice cuál es.
+        if self.locate(frame,'NORMAL',(400,450,715,550)) and self.locate(frame,'HARD',(780,430,1140,570)):return 'DIFFICULTY'
+        if self.locate(frame,'SPECIAL_HEADER',(700,170,1220,290)) and self.locate(frame,'SPECIAL_ENTER',(940,870,1320,1020)):
+            return 'DUNGEON_SPECIAL'
         zone=self.map_zone(frame)
         if zone is not None:return f'MAP_Z{zone}'
         if (self.locate(frame,'BATTLE_VICTORY',(810,70,1120,155)) and
@@ -301,7 +304,14 @@ class DungeonVision:
         # Saldo > capacidad delata una capacidad truncada; por encima del máximo se pausa.
         return (balance,capacity) if balance is not None and capacity is not None and 0<capacity and balance<=capacity else None
 
+    def dungeon_title(self,frame,identifier):
+        key='TITLE_'+identifier
+        return key in self.templates and self.locate(frame,key,(440,140,1480,420)) is not None
+
     def cost(self,frame,difficulty):
-        if self.screen(frame) not in ('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'):return None
+        screen=self.screen(frame)
+        if difficulty=='Special':
+            return 20 if screen=='DUNGEON_SPECIAL' and self.locate(frame,'SPECIAL_COST_20',(700,900,900,1000)) else None
+        if screen!='DIFFICULTY':return None
         x={'Normal':625,'Hard':1025,'Heroic':1430}[difficulty]
         return self.number(frame[335:415,x:x+90])

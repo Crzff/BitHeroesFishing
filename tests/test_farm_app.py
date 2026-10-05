@@ -11,7 +11,8 @@ from fishing_core.farm_app import CALIBRATED, familiars_of
 class FarmAppTests(unittest.TestCase):
     def test_tealks_palace_lists_its_four_familiars_and_only_calibrated_routes_are_selectable(self):
         self.assertEqual(set(familiars_of('Z5D3')),{'Mummih','Brute','Sitra','Tealk'})
-        self.assertEqual(CALIBRATED,{'Z5D2','Z5D3'})
+        self.assertEqual(len(CALIBRATED),31);self.assertLessEqual({'Z1D1','Z1D4','Z5D2','Z5D3','Z9D1'},CALIBRATED)
+        self.assertNotIn('Z10D1',CALIBRATED)
 
     def test_config_round_trip_drives_the_steps_in_crzf_order(self):
         with tempfile.TemporaryDirectory() as tmp:

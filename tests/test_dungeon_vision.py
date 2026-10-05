@@ -17,7 +17,7 @@ class DungeonVisionTests(unittest.TestCase):
             cls.frames={key:data[key] for key in data.files}
 
     def test_labelled_menu_and_live_states(self):
-        for name,screen in [('home','HOME'),('map','MAP_Z5'),('difficulty','DIFFICULTY_Z5D2'),
+        for name,screen in [('home','HOME'),('map','MAP_Z5'),('difficulty','DIFFICULTY'),
                             ('team','TEAM'),('settings_gold','SETTINGS'),('auto_off','AUTO_OFF'),
                              ('auto_on','AUTO_ON'),('battle','AUTO_ON_BATTLE'),('story','STORY_ZORUL'),
                             ('result','VICTORY'),('offer','FAMILIAR_OFFER'),('loading','LOADING')]:
@@ -80,7 +80,7 @@ class DungeonVisionTests(unittest.TestCase):
         roi=(1200,450,1530,550)
         for name in ('tealk_difficulty','tealk_difficulty_idle'):
             frame=self.frames[name]
-            self.assertEqual(self.vision.screen(frame),'DIFFICULTY_Z5D3')
+            self.assertEqual(self.vision.screen(frame),'DIFFICULTY')
             self.assertEqual(self.vision.cost(frame,'Heroic'),30)
             self.assertIsNotNone(self.vision.locate(frame,'HEROIC',roi),name)
             self.assertIsNone(self.vision.locate(frame//2,'HEROIC',roi))
@@ -140,7 +140,9 @@ class DungeonVisionTests(unittest.TestCase):
     def test_tealk_menu_and_hovered_empty_parent_are_conservatively_read(self):
         self.assertEqual(self.vision.screen(self.frames['tealk_home']),'HOME')
         self.assertEqual(self.vision.screen(self.frames['tealk_home']//2),'UNKNOWN')
-        self.assertEqual(self.vision.screen(self.frames['tealk_difficulty']),'DIFFICULTY_Z5D3')
+        self.assertEqual(self.vision.screen(self.frames['tealk_difficulty']),'DIFFICULTY')
+        self.assertTrue(self.vision.dungeon_title(self.frames['tealk_difficulty'],'Z5D3'))
+        self.assertFalse(self.vision.dungeon_title(self.frames['tealk_difficulty'],'Z5D2'))  # otra dungeon: no se entra
         self.assertEqual(self.vision.cost(self.frames['tealk_difficulty'],'Heroic'),30)
         self.assertEqual(self.vision.screen(self.frames['tealk_team']),'TEAM')
         self.assertIs(self.vision.setting(self.frames['tealk_gold'],'gold'),False)
@@ -161,6 +163,13 @@ class DungeonVisionTests(unittest.TestCase):
         changed=self.frames['decline_confirm'].copy();changed[465:610,700:1220]=0
         self.assertEqual(self.vision.screen(changed),'UNKNOWN')
         self.assertEqual(self.vision.screen(self.frames['tealk_battle_victory']),'BATTLE_VICTORY')
+
+
+    def test_special_dungeon_window_is_recognised_with_its_fixed_cost(self):
+        frame=self.frames['special_entry']
+        self.assertEqual(self.vision.screen(frame),'DUNGEON_SPECIAL')
+        self.assertTrue(self.vision.dungeon_title(frame,'Z1D4'))
+        self.assertEqual(self.vision.cost(frame,'Special'),20);self.assertIsNone(self.vision.cost(frame,'Normal'))
 
 
 if __name__=='__main__':unittest.main()

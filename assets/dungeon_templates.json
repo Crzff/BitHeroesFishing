@@ -1411,6 +1411,312 @@
     "RUNE_SYM_DAR": [
       "s\u00edmbolo binario 40x40 del rombo",
       "tipo de runa menor, independiente de la rareza"
+    ],
+    "TITLE_Z1D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z1D4": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z1D3": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z1D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z2D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z2D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z2D4": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z2D3": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z3D4": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z3D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z3D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z3D3": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z4D3": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z4D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z4D4": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z4D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z5D4": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z5D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z5D3": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z5D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z6D3": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z6D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z6D4": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z6D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z7D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z7D3": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z7D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z8D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z8D2": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z8D3": [
+      [
+        520,
+        310,
+        1400,
+        400
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "TITLE_Z9D1": [
+      [
+        460,
+        160,
+        1460,
+        270
+      ],
+      "t\u00edtulo de la ventana de la dungeon"
+    ],
+    "SPECIAL_HEADER": [
+      [
+        700,
+        170,
+        1220,
+        290
+      ],
+      "cabecera DUNGEON de la ventana especial"
+    ],
+    "SPECIAL_ENTER": [
+      [
+        940,
+        870,
+        1320,
+        1020
+      ],
+      "ENTER de la dungeon especial"
+    ],
+    "SPECIAL_COST_20": [
+      [
+        700,
+        900,
+        900,
+        1000
+      ],
+      "coste 20 de la dungeon especial"
     ]
   },
   "notes": [
@@ -1423,7 +1729,8 @@
     "World Boss 2026-10-03: Netherworld T9 Normal privado en solitario (Heroic perd\u00eda en segundos; Normal gan\u00f3 en segundos). Plantillas WB_* y HOME_BOSS de capturas reales; TOWN cambia de posici\u00f3n entre victoria y derrota y se localiza. Fixtures boss_* conservan solo las ROI le\u00eddas.",
     "HOME_BOSS: el fondo de arena cambia con otros personajes; m\u00e1scara de p\u00edxeles comunes con HOME_BOSS_TOWN, como HOME_QUEST/SETTINGS.",
     "PvP 2026-10-04: ventana PVP ARENA, coste 5, SELECT OPPONENT con 4 rivales; tickets en la barra superior roja (alterna con reloj).",
-    "Runas menores 2026-10-05: tipo por el s\u00edmbolo (IoU), rareza por el tono del rombo; valores de la wiki (Dar/Quindi/Zyrk 5-25, Vryn 7.5-37.5)."
+    "Runas menores 2026-10-05: tipo por el s\u00edmbolo (IoU), rareza por el tono del rombo; valores de la wiki (Dar/Quindi/Zyrk 5-25, Vryn 7.5-37.5).",
+    "Dungeons 2026-10-05: t\u00edtulo por dungeon (zonas 1-9) y ventana especial; nodos en assets/dungeon_nodes.json."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

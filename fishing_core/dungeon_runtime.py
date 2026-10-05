@@ -17,8 +17,12 @@ from .processes import Mutex,child_options,close_children,python_executable
 from .protocol import Channel,atomic_json
 from .telemetry import ROOT,Telemetry,run_environment
 
-ROUTE_COSTS={(d,level):cost for d in ('Z5D2','Z5D3') for level,cost in (('Normal',10),('Hard',20),('Heroic',30))}
+# Coste universal (wiki Zones): Normal 10, Hard 20, Heroic 30; especial (D4) 20.
+COSTS={'Normal':10,'Hard':20,'Heroic':30,'Special':20}
+# Nodo de cada dungeon en el mapa de su zona (igual en todas las cuentas); calibrado en vivo.
+NODES={k:tuple(v) for k,v in json.loads((ROOT/'assets/dungeon_nodes.json').read_text())['nodes'].items()}
 LADDER=('Heroic','Hard','Normal')
+ENTRY_SCREENS=('DIFFICULTY','DUNGEON_SPECIAL')
 DIFFICULTY_BUTTONS={'Normal':((550,495),(400,450,715,550)),'Hard':((958,495),(780,430,1140,570)),
                     'Heroic':((1365,495),(1200,450,1530,550))}
 SESSION_SECONDS=3600
@@ -39,8 +43,8 @@ COST_ROI=(1210,392,1310,448)
 COST_DROPDOWN=(1370,416)
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
-MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':('DIFFICULTY_Z5D2','DIFFICULTY_Z5D3'),
-              'DIFFICULTY_Z5D2':('MAP_Z5',),'DIFFICULTY_Z5D3':('MAP_Z5',),'ZONES':MAP_SCREENS,
+MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':ENTRY_SCREENS,
+              'DIFFICULTY':MAP_SCREENS,'DUNGEON_SPECIAL':MAP_SCREENS,'ZONES':MAP_SCREENS,
               **{screen:('HOME',) for screen in MAP_SCREENS}}
 
 
@@ -52,8 +56,8 @@ def validate_supported(plan):
     gold=plan.get('max_gold',0)
     if type(gold) is not int or not 0<=gold<=10_000_000:raise ValueError('Cuota de oro inválida (0-10.000.000)')
     checked['max_gold']=gold
-    if (checked['dungeon_id'],checked['difficulty']) not in ROUTE_COSTS:
-        raise ValueError('Ruta aún no calibrada: disponibles Z5D2 y Z5D3 · Normal/Hard/Heroic. No se cambia tu objetivo.')
+    if checked['dungeon_id'] not in NODES:
+        raise ValueError('Dungeon aún sin calibrar en el mapa; no se cambia tu objetivo.')
     return checked
 
 
@@ -265,32 +269,41 @@ class DungeonRunner:
             if step<19:self.scroll_menu('ZONES',1)
         raise SafetyStop('Zona no encontrada o bloqueada; no se elige otra')
 
+    def entry_screen(self):
+        return 'DUNGEON_SPECIAL' if self.plan['difficulty']=='Special' else 'DIFFICULTY'
+
+    def press_level(self,level):
+        screen=self.entry_screen()
+        if level=='Special':self.click(screen,(1130,945),'SPECIAL_ENTER',(940,870,1320,1020))
+        else:xy,roi=DIFFICULTY_BUTTONS[level];self.click(screen,xy,level.upper(),roi)
+        self.wait('TEAM')
+
     def select_route(self):
-        identifier=self.plan['dungeon_id'];difficulty=self.difficulty;screen='DIFFICULTY_'+identifier
+        identifier=self.plan['dungeon_id'];difficulty=self.difficulty;screen=self.entry_screen()
         self.click('HOME',(90,90),'HOME_QUEST',(15,15,165,190))
-        self.select_zone(dungeon(identifier)['zone'])
-        xy,roi=((990,810),(880,675,1110,955)) if identifier=='Z5D2' else ((1457,480),(1330,380,1575,610))
-        self.click('MAP_Z5',xy,'NODE_'+identifier,roi)
-        frame=self.wait(screen);self.cost=self.vision.cost(frame,difficulty)
-        expected=ROUTE_COSTS[(identifier,difficulty)]
-        if self.cost!=expected or self.vision.cost(self.capture(),difficulty)!=self.cost:
-            raise SafetyStop(f'Coste/dificultad no confirmado: esta calibración exige {expected} de energía')
-        xy,roi=DIFFICULTY_BUTTONS[difficulty];self.click(screen,xy,difficulty.upper(),roi);self.wait('TEAM')
+        zone=dungeon(identifier)['zone'];self.select_zone(zone)
+        time.sleep(1)  # el mapa entra animado: un clic temprano cae en otro sitio
+        self.click(f'MAP_Z{zone}',NODES[identifier])
+        frame=self.wait(lambda f:self.vision.screen(f)==screen and self.vision.dungeon_title(f,identifier),10,f'ventana de {identifier}')
+        self.cost=self.vision.cost(frame,difficulty)
+        if self.cost!=COSTS[difficulty] or self.vision.cost(self.capture(),difficulty)!=self.cost:
+            raise SafetyStop(f'Coste/dificultad no confirmado: se esperaba {COSTS[difficulty]} de energía')
+        self.press_level(difficulty)
 
     def affordable(self,balance):
         """Dificultad más alta, sin superar la elegida, que paga el saldo; None si ninguna."""
-        options=LADDER[LADDER.index(self.plan['difficulty']):]
-        return next((d for d in options if ROUTE_COSTS[(self.plan['dungeon_id'],d)]<=balance),None)
+        options=('Special',) if self.plan['difficulty']=='Special' else LADDER[LADDER.index(self.plan['difficulty']):]
+        return next((d for d in options if COSTS[d]<=balance),None)
 
     def lower_difficulty(self,balance):
         """En TEAM sin saldo: Escape a la dificultad y elegir otra pagable; False si no queda ninguna."""
         level=self.affordable(balance)
-        screen='DIFFICULTY_'+self.plan['dungeon_id']
+        screen=self.entry_screen()
         self.close_menu('TEAM')
         if level is None:return False
         frame=self.wait(screen);cost=self.vision.cost(frame,level)
-        if cost!=ROUTE_COSTS[(self.plan['dungeon_id'],level)]:raise SafetyStop(f'Coste de {level} no confirmado')
-        xy,roi=DIFFICULTY_BUTTONS[level];self.click(screen,xy,level.upper(),roi);self.wait('TEAM')
+        if cost!=COSTS[level]:raise SafetyStop(f'Coste de {level} no confirmado')
+        self.press_level(level)
         self.difficulty,self.cost=level,cost
         self.log.emit('DUNGEON_STATUS',message=f'Energía {balance}: se baja a {level}')
         return True
@@ -316,7 +329,7 @@ class DungeonRunner:
 
     def enter(self,cycle):
         """Entra con la dificultad pagable más alta; None si no queda energía para ninguna."""
-        if not self.safety_checked or self.cost!=ROUTE_COSTS[(self.plan['dungeon_id'],self.difficulty)]:
+        if not self.safety_checked or self.cost!=COSTS[self.difficulty]:
             raise SafetyStop('Ruta o ajustes sin confirmar')
         try:
             balance=self.read_team_energy()
@@ -522,7 +535,7 @@ class DungeonRunner:
                     if level is None:
                         self.log.emit('DUNGEON_STATUS',message=f'Energía agotada ({self.balance}) · detenido');return
                     self.difficulty=level
-                if self.budget.energy_reserved+ROUTE_COSTS[(self.plan['dungeon_id'],self.difficulty)]>self.plan['energy_limit']:
+                if self.budget.energy_reserved+COSTS[self.difficulty]>self.plan['energy_limit']:
                     self.log.emit('DUNGEON_STATUS',message='Límite de energía alcanzado');return
                 self.select_route()
                 attempt=self.enter(cycle)

@@ -11,7 +11,7 @@ import numpy as np
 
 from fishing_core.control_flow import SafetyStop
 from fishing_core.dungeon_catalog import farm_plan
-from fishing_core.dungeon_runtime import DungeonRunner,validate_supported
+from fishing_core.dungeon_runtime import NODES, DungeonRunner,validate_supported
 from fishing_core.farm_budget import FarmBudget
 
 
@@ -22,7 +22,8 @@ class DungeonRuntimeTests(unittest.TestCase):
         validate_supported(farm_plan('Z5D3','Heroic',6,180,'Tealk'))  # repetición, como Z5D2
         validate_supported(farm_plan('Z5D3','Normal',17,170,'Tealk'))  # al agotarse Heroic
         validate_supported(farm_plan('Z5D3','Hard',1,30,'Tealk'));validate_supported(farm_plan('Z5D2','Heroic',1,30))
-        for args in [('Z1D2','Normal',1,30,'Bob'),('Z5D1','Normal',1,30,'')]:
+        validate_supported(farm_plan('Z1D4','Special',1,30))  # especial: ENTER de 20
+        for args in [('Z1D2','Normal',1,30,'Tealk'),('Z10D1','Normal',1,30,'')]:  # Z10+: nodos sin calibrar
             with self.assertRaises(ValueError):validate_supported(farm_plan(*args))
 
     def test_tealk_heroic_reserves_thirty_once_and_rejects_the_normal_cost(self):
@@ -45,10 +46,11 @@ class DungeonRuntimeTests(unittest.TestCase):
             runner.select_route()
             self.assertEqual(runner.cost,30)
             runner.select_zone.assert_called_once_with(5)
-            self.assertEqual([args.args[2] for args in runner.click.call_args_list],['HOME_QUEST','NODE_Z5D3','HEROIC'])
+            self.assertEqual([args.args[:2] for args in runner.click.call_args_list],
+                             [('HOME',(90,90)),('MAP_Z5',NODES['Z5D3']),('DIFFICULTY',(1365,495))])
             runner.click.reset_mock();vision.cost.return_value=10
             with self.assertRaises(SafetyStop):runner.select_route()
-            self.assertNotIn('HEROIC',[args.args[2] for args in runner.click.call_args_list])
+            self.assertNotIn('DIFFICULTY',[args.args[0] for args in runner.click.call_args_list])
 
     def runner(self,path):
         plan=farm_plan('Z5D2','Normal',1,30)

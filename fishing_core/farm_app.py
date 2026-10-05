@@ -18,14 +18,14 @@ from PIL import Image, ImageTk
 from . import farm_config, pixel_ui as ui
 from .boss_runtime import BOSSES
 from .dungeon_catalog import CATALOG, FAMILIARS, dungeon
-from .dungeon_runtime import ROUTE_COSTS
+from .dungeon_runtime import NODES
 from .raid_runtime import RAIDS
 from .telemetry import ROOT
 
 W,H=1100,880
 NAMES={'quest':'QUEST','pvp':'PVP','boss':'WORLD BOSS','raid':'RAID','expedition':'EXPEDITION','trials':'TRIALS'}
 INFO={'expedition':['EVENTO SEMANAL: IDOL DIMENSION','5 BADGES, BAJA HASTA 1','NUNCA COMPRA BADGES','UNA DERROTA NO DETIENE']}
-CALIBRATED={d for d,_ in ROUTE_COSTS}
+CALIBRATED=set(NODES)
 ZONES=sorted({row['zone'] for row in CATALOG})
 DIFFICULTY_COLORS=(('NORMAL','blue'),('HARD','green'),('HEROIC','orange'))
 GOLD_STEPS=(0,10_000,50_000,100_000,250_000)
@@ -128,7 +128,9 @@ class FarmApp(tk.Tk):
             else:
                 self.put(ui.row(560,50),70,y);self.label(label,84,y+13,17,ui.DIM);self.label('SIN CALIBRAR',480,y+18,12,ui.DIM)
         self.label('DIFICULTAD',660,222,20,ui.GOLD)
-        self.buttons(reversed(DIFFICULTY_COLORS),q['difficulty'],660,256,330,56,self.set_difficulty)
+        if dungeon(q['dungeon'])['special']:
+            self.put(ui.button('SPECIAL · 20',330,56,'purple'),660,256);self.label('DUNGEON ESPECIAL: UNA SOLA DIFICULTAD',660,330,11,ui.DIM)
+        else:self.buttons(reversed(DIFFICULTY_COLORS),q['difficulty'],660,256,330,56,self.set_difficulty)
         self.label('EMPIEZA EN LA ELEGIDA Y BAJA SI FALTA ENERGIA',660,452,11,ui.DIM)
         self.label(f"FAMILIARES DE {q['dungeon']} (MARCA LOS OBJETIVOS)",70,486,18,ui.GOLD)
         for i,name in enumerate(familiars_of(q['dungeon'])[:9]):
@@ -209,6 +211,8 @@ class FarmApp(tk.Tk):
     def choose_dungeon(self,identifier):
         q=self.config_data['quest']
         if q['dungeon']!=identifier:q['dungeon']=identifier;q['targets']=[]
+        special=dungeon(identifier)['special']
+        if special!=(q['difficulty']=='Special'):q['difficulty']='Special' if special else 'Heroic'
         self.save()
 
     def set_difficulty(self,level):self.config_data['quest']['difficulty']=level.title();self.save()
