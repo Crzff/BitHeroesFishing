@@ -17,6 +17,29 @@ def familiar_glyph(frame):
     return mask[ys.min():ys.max()+1,xs.min():xs.max()+1] if len(xs) else None
 
 
+def text_letters(mask):
+    """Letras de una máscara de texto (columnas vacías entre ellas), normalizadas a 27 px; sin apóstrofos."""
+    cols=np.nonzero(mask.any(0))[0];runs=[]
+    for c in cols:
+        if runs and c==runs[-1][1]+1:runs[-1][1]=c
+        else:runs.append([c,c])
+    out=[]
+    for a,b in runs:
+        part=mask[:,a:b+1];ys=np.nonzero(part.any(1))[0]
+        if ys.max()-ys.min()+1<0.6*mask.shape[0]:continue
+        g=part[ys.min():ys.max()+1].astype(np.uint8)*255
+        out.append(cv2.resize(g,(max(1,round(g.shape[1]*27/g.shape[0])),27),interpolation=cv2.INTER_AREA)>127)
+    return out
+
+
+def edit_distance(a,b):
+    row=list(range(len(b)+1))
+    for i,x in enumerate(a,1):
+        prev,row[0]=row[0],i
+        for j,y in enumerate(b,1):prev,row[j]=row[j],min(row[j]+1,row[j-1]+1,prev+(x!=y))
+    return row[-1]
+
+
 # Ventanas de otros modos: cada una exige título y botón propios (ROI con holgura).
 MODE_SCREENS=(('DISCONNECTED',(('DISCONNECTED',(720,430,1200,640)),('RECONNECT',(770,665,1150,820)))),
               ('SEASON_REWARDS',(('SEASON_TITLE',(600,150,1320,310)),('SEASON_CLAIM',(740,885,1180,1040)))),
@@ -235,12 +258,28 @@ class DungeonVision:
             if info:found.append(((cx,cy),)+info)
         return sorted(found,key=lambda r:(r[0][1],r[0][0]))
 
-    def familiar_name(self,frame):
+    def read_text(self,mask):
+        """Texto en mayúsculas con el alfabeto del juego (GLYPH_*), letra a letra por solapamiento."""
+        out=''
+        for g in text_letters(mask>0):
+            def score(ref):
+                r=cv2.resize(ref.astype(np.uint8),(g.shape[1],27),interpolation=cv2.INTER_NEAREST)>0
+                return (r&g).sum()/max(1,(r|g).sum())-abs(ref.shape[1]-g.shape[1])*.02
+            out+=max((k for k in self.templates if k.startswith('GLYPH_')),key=lambda k:score(self.templates[k]))[6]  # GLYPH_M2: variante
+        return out
+
+    def familiar_name(self,frame,candidates=()):
+        """Nombre de la oferta: referencia exacta o, si no, lectura emparejada con los familiares de la ruta."""
         if self.screen(frame)!='FAMILIAR_OFFER':return None
         glyph=familiar_glyph(frame)
-        # ponytail: nombres con referencia exacta; ampliar referencias u OCR validado para otros.
+        if glyph is None:return None
         names=[key[5:] for key,ref in self.templates.items() if key.startswith('NAME_') and np.array_equal(glyph,ref)]
-        return names[0] if len(names)==1 else None
+        if len(names)==1:return names[0]
+        text=self.read_text(glyph)
+        scored=sorted((edit_distance(text,''.join(c for c in name.upper() if c.isalpha())),name) for name in candidates)
+        # Un solo candidato a distancia <=1 y sin empate: así un nombre ilegible nunca se confunde con otro.
+        if scored and scored[0][0]<=1 and (len(scored)==1 or scored[1][0]>scored[0][0]):return scored[0][1]
+        return None
 
     def setting(self,frame,name):
         if self.screen(frame)!='SETTINGS':return None

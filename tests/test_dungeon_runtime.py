@@ -369,6 +369,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             io.click.assert_called_once_with((755,955))
 
     def test_decline_closes_on_any_legible_next_offer_even_the_same_familiar_but_not_unknown(self):
+        # 'offer' es Melv'guin, legible en Z5D2 desde el lector por letras.
         from fishing_core.dungeon_vision import DungeonVision
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
             frames={k:data[k] for k in ('offer_brute','offer_sitra','offer','decline_confirm')}
@@ -390,12 +391,12 @@ class DungeonRuntimeTests(unittest.TestCase):
                         self.assertEqual(xy,(818,752));self.assertEqual(state[0],'decline_confirm');state[0]=next_offer
                 io.click.side_effect=click
                 with patch('fishing_core.dungeon_runtime.time.sleep'):
-                    if next_offer in ('offer_sitra','offer_brute'):self.assertTrue(runner.decline_other(frames['offer_brute'],'test:1','1-1'))
+                    if next_offer in ('offer_sitra','offer_brute','offer'):self.assertTrue(runner.decline_other(frames['offer_brute'],'test:1','1-1'))
                     else:
                         with self.assertRaises(SafetyStop):runner.decline_other(frames['offer_brute'],'test:1','1-1')
                     self.assertEqual(io.click.call_count,2)
                     intent=json.loads((Path(tmp)/'decline-1-1.intent.json').read_text())
-                    self.assertIs(intent['effect_confirmed'],next_offer in ('offer_sitra','offer_brute'))
+                    self.assertIs(intent['effect_confirmed'],next_offer in ('offer_sitra','offer_brute','offer'))
                     state[0]='offer_brute'
                     with self.assertRaisesRegex(SafetyStop,'Rechazo ya registrado'):
                         runner.decline_other(frames['offer_brute'],'test:1','1-1')
@@ -431,7 +432,7 @@ class DungeonRuntimeTests(unittest.TestCase):
             runner,io,vision=self.runner(Path(tmp));runner.plan['target']='Tealk'
             runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
             vision.screen.return_value='FAMILIAR_OFFER'
-            names=iter([None,'Brute']);vision.familiar_name.side_effect=lambda _:next(names,'Brute')
+            names=iter([None,'Brute']);vision.familiar_name.side_effect=lambda *_:next(names,'Brute')
             seen=[]
             def decline(frame,attempt,offer):
                 seen.append(vision.familiar_name(frame));raise SafetyStop('fin de prueba')

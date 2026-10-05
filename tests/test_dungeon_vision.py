@@ -172,4 +172,14 @@ class DungeonVisionTests(unittest.TestCase):
         self.assertEqual(self.vision.cost(frame,'Special'),20);self.assertIsNone(self.vision.cost(frame,'Normal'))
 
 
+    def test_any_familiar_name_is_read_letter_by_letter_and_matched_only_against_its_route(self):
+        vision=DungeonVision();vision.templates={k:v for k,v in vision.templates.items() if not k.startswith('NAME_')}
+        z5d3=['Mummih','Brute','Sitra','Tealk']
+        for key,name in (('offer_mummih','Mummih'),('offer_brute','Brute'),('offer_sitra','Sitra'),('offer_tealk','Tealk')):
+            self.assertEqual(vision.familiar_name(self.frames[key],z5d3),name)
+        self.assertEqual(vision.familiar_name(self.frames['offer'],["Melv'guin",'Melvins']),"Melv'guin")
+        self.assertIsNone(vision.familiar_name(self.frames['offer'],z5d3))  # fuera de la ruta: nunca otro nombre
+        self.assertIsNone(vision.familiar_name(self.frames['offer_tealk']))  # sin candidatos no se adivina
+
+
 if __name__=='__main__':unittest.main()

@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from .control_flow import SafetyStop
-from .dungeon_catalog import dungeon,farm_plan,normalize
+from .dungeon_catalog import FAMILIARS,dungeon,farm_plan,normalize
 from .dungeon_vision import DungeonVision,familiar_glyph
 from .farm_budget import FarmBudget
 from .game_window import ENV_WINDOW,WindowGuard
@@ -116,7 +116,7 @@ class DungeonRunner:
             time.sleep(.12)
         expected=expected or (predicate if isinstance(predicate,str) else 'lectura estable')
         screen=self.vision.screen(frame) if frame is not None else 'SIN_LECTURA'
-        familiar=self.vision.familiar_name(frame) if screen=='FAMILIAR_OFFER' else None
+        familiar=self.offer_name(frame) if screen=='FAMILIAR_OFFER' else None
         snapshot=None
         if frame is not None:
             clean=np.zeros_like(frame)
@@ -135,10 +135,14 @@ class DungeonRunner:
                       snapshot=snapshot,timeout_seconds=timeout)
         raise SafetyStop(f'Pantalla no confirmada: {expected}; observada {screen}'+(f' · {familiar}' if familiar else ''))
 
+    def offer_name(self,frame):
+        identifier=getattr(self,'plan',{}).get('dungeon_id')
+        return self.vision.familiar_name(frame,[name for name,ids in FAMILIARS.items() if identifier in ids])
+
     def click(self,screen,xy,key=None,roi=None,expected_familiar=None,expected_zone=None):
         self.check();frame=self.capture()
         if (self.vision.screen(frame)!=screen or (key and self.vision.locate(frame,key,roi) is None) or
-                (expected_familiar is not None and self.vision.familiar_name(frame)!=expected_familiar) or
+                (expected_familiar is not None and self.offer_name(frame)!=expected_familiar) or
                 (expected_zone is not None and self.vision.zone_choice(frame,expected_zone)!=xy)):
             raise SafetyStop('La pantalla cambió antes del clic; no se reintenta')
         self.check();self.io.click(xy)
@@ -356,7 +360,7 @@ class DungeonRunner:
 
     def decline_other(self,frame,attempt,offer):
         """Sin objetivo se rechaza toda oferta legible; con objetivo, solo otro nombre conocido."""
-        name=self.vision.familiar_name(frame);targets={normalize(n) for n in self.targets}
+        name=self.offer_name(frame);targets={normalize(n) for n in self.targets}
         target=', '.join(self.targets);glyph=familiar_glyph(frame)
         if glyph is None:return False
         if targets and (not isinstance(name,str) or normalize(name) in targets):return False
@@ -376,7 +380,7 @@ class DungeonRunner:
             if screen!='FAMILIAR_OFFER':return False
             # Con el diálogo de confirmación ya cerrado (YES verificado), una oferta legible es la
             # siguiente, aunque sea del mismo familiar: hay combates con dos iguales. Rechazar no gasta.
-            return self.vision.familiar_name(frame) is not None if target else familiar_glyph(frame) is not None
+            return self.offer_name(frame) is not None if target else familiar_glyph(frame) is not None
         self.wait(closed)
         atomic_json(path,{**intent,'effect_confirmed':True})
         label=name or 'familiar sin referencia'
@@ -389,7 +393,7 @@ class DungeonRunner:
         Nunca BRIBE (gemas). Sin cuota o coste ilegible no se gasta: la oferta se rechaza.
         """
         frame=self.wait('FAMILIAR_OFFER');cost=self.vision.offer_cost(frame)
-        if self.vision.familiar_name(frame)!=name or cost is None or self.vision.offer_cost(self.capture())!=cost:
+        if self.offer_name(frame)!=name or cost is None or self.vision.offer_cost(self.capture())!=cost:
             raise SafetyStop('Oferta del objetivo inestable o coste ilegible; no se gasta oro')
         action=f'persuade-{offer}'
         try:
@@ -408,7 +412,7 @@ class DungeonRunner:
         def outcome(f):
             screen=self.vision.screen(f)
             if screen=='FAMILIAR_OFFER':  # no se unió y el juego ofrece el siguiente; el mismo nombre es ambiguo
-                other=self.vision.familiar_name(f);return other is not None and other!=name
+                other=self.offer_name(f);return other is not None and other!=name
             return screen in ('CAPTURE_SUCCESS','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','LOADING','BATTLE_VICTORY','VICTORY','AUTO_ON','AUTO_OFF')
         frame=self.wait(outcome,20,'resultado de Persuade')
         captured=self.vision.screen(frame)=='CAPTURE_SUCCESS'
@@ -436,11 +440,11 @@ class DungeonRunner:
             if screen=='FAMILIAR_OFFER':
                 cv2.imwrite(str(self.channel.directory/'familiar-offer.png'),frame[110:900,350:1600])
                 if declined>=20:raise SafetyStop('Demasiadas ofertas de familiar; no se continúa')
-                if self.targets and self.vision.familiar_name(frame) is None:
+                if self.targets and self.offer_name(frame) is None:
                     # La oferta entra animada: esperar el nombre legible; uno desconocido sigue pausando.
-                    try:frame=self.wait(lambda f:self.vision.familiar_name(f) is not None,3,'nombre de familiar')
+                    try:frame=self.wait(lambda f:self.offer_name(f) is not None,3,'nombre de familiar')
                     except SafetyStop:pass
-                offer=f'{cycle}-{declined+1}';name=self.vision.familiar_name(frame)
+                offer=f'{cycle}-{declined+1}';name=self.offer_name(frame)
                 if not self.decline_other(frame,attempt,offer):
                     if not (isinstance(name,str) and normalize(name) in {normalize(n) for n in self.targets}):
                         raise SafetyStop('Oferta de familiar desconocido: pausa para decidir; no se gasta oro ni gemas')
