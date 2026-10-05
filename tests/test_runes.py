@@ -33,6 +33,10 @@ class RuneTests(unittest.TestCase):
     def test_the_tooltip_names_the_rune_type_even_when_the_symbol_fails(self):
         self.assertEqual(VISION.tooltip_kind(FRAMES['rune_tooltip_before'],FRAMES['rune_tooltip_after']),'ZYRK')
         self.assertIsNone(VISION.tooltip_kind(FRAMES['rune_tooltip_before'],FRAMES['rune_tooltip_before']))
+        # El borde cambia de color según la runa: amarillo pálido o blanco.
+        self.assertEqual(VISION.tooltip_kind(FRAMES['rune_tooltip_white_before'],FRAMES['rune_tooltip_white_after']),'VRYN')
+        self.assertTrue(VISION.tooltip_visible(FRAMES['rune_tooltip_white_after']))
+        self.assertFalse(VISION.tooltip_visible(FRAMES['rune_tooltip_white_before']))
 
 
 if __name__=='__main__':unittest.main()

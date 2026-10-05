@@ -109,9 +109,15 @@ class RunesRunner(DungeonRunner):
         for _ in range(step):self.scroll(2)
         for _ in range(2):  # un tooltip que tarda en salir no debe detener el bot: se confirma otra vez
             time.sleep(.5)
-            here=[r for p,_,r,_ in self.visible() if abs(p[0]-xy[0])<20 and abs(p[1]-xy[1])<20]
-            if here==[rarity] and self.hover_kind(xy)==kind:break
-        else:return False
+            seen=self.visible();here=[r for p,_,r,_ in seen if abs(p[0]-xy[0])<20 and abs(p[1]-xy[1])<20]
+            hovered=self.hover_kind(xy) if here==[rarity] else None
+            if hovered==kind:break
+            self.log.emit('RUNE_CHECK_FAILED',xy=list(xy),expected=[kind,rarity],hovered=hovered,
+                          visible=[[int(p[0]),int(p[1]),k,r] for p,k,r,_ in seen])
+        else:
+            if getattr(self.channel,'directory',None):
+                import cv2;cv2.imwrite(str(self.channel.directory/'rune_check_failed.png'),self.capture())
+            return False
         self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))  # Unity procesa la suelta por frames
         self.log.emit('DUNGEON_INPUT',screen='MINOR_RUNE',xy=list(xy));return True
 

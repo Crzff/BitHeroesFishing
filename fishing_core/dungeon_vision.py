@@ -277,16 +277,28 @@ class DungeonVision:
         if best[0][1]<0.7 or best[0][1]-best[1][1]<0.15:return None,rarity,None
         kind=best[0][0];return kind,rarity,RUNE_VALUES[kind][RARITIES.index(rarity)]
 
+    @staticmethod
+    def tooltip_border(frame):
+        """Borde del tooltip: amarillo pálido (255,255,125) o blanco azulado (238,241,249), según la runa."""
+        b,g,r=frame[:,:,0],frame[:,:,1],frame[:,:,2]
+        return (((b>=100)&(b<=150))|(b>=230))&(g>=230)&(r>=230)
+
     def tooltip_visible(self,frame):
-        """Hay un tooltip de runa abierto (línea de borde amarillo pálido)."""
-        yellow=(frame[:,:,0]>=100)&(frame[:,:,0]<=150)&(frame[:,:,1]>=235)&(frame[:,:,2]>=235)
-        return bool((yellow.sum(1)>=250).any())
+        """Hay un tooltip de runa abierto (línea horizontal larga de su borde)."""
+        border=self.tooltip_border(frame)
+        title=(np.abs(frame.astype(np.int16)-np.array((36,26,20),np.int16)).sum(2)<=18)  # fondo del título
+        for y in np.nonzero(border[:1000].sum(1)>=250)[0]:
+            if y+8>=frame.shape[0]:continue
+            row=np.concatenate([[0],border[y].astype(np.int8),[0]]);edges=np.nonzero(np.diff(row))[0]
+            for x0,x1 in zip(edges[::2],edges[1::2]):  # tramos continuos del borde
+                if x1-x0>=250 and title[y+8,x0+10:x1-10].mean()>.8:return True
+        return False
 
     def tooltip_kind(self,before,after):
         """Tipo de runa leído en el título del tooltip ("QUINDI RUNE") que aparece al pasar el ratón."""
         # El tooltip aparece con un borde amarillo pálido (255,255,125): su línea superior lo sitúa.
         changed=np.abs(after.astype(np.int16)-before.astype(np.int16)).sum(2)>60
-        yellow=(after[:,:,0]>=100)&(after[:,:,0]<=150)&(after[:,:,1]>=235)&(after[:,:,2]>=235)&changed
+        yellow=self.tooltip_border(after)&changed
         rows=np.nonzero(yellow.sum(1)>=250)[0]
         if not len(rows):return None
         y=int(rows[0]);xs=np.nonzero(yellow[y])[0];x,w=int(xs.min()),int(xs.max()-xs.min())
