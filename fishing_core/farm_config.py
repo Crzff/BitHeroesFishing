@@ -13,6 +13,7 @@ DEFAULT={'modes':{mode:True for mode in MODES},
          'boss':{'boss':'NETHERWORLD','tier':9,'difficulty':'Heroic'},
          'raid':{'raid':'STORM','difficulty':'Heroic'},
          'trials':{'difficulty':499},
+         'pvp':{'opponent':4},
          'runes':True}
 
 

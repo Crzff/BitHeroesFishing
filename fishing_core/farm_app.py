@@ -24,8 +24,7 @@ from .telemetry import ROOT
 
 W,H=1100,880
 NAMES={'quest':'QUEST','pvp':'PVP','boss':'WORLD BOSS','raid':'RAID','expedition':'EXPEDITION','trials':'TRIALS'}
-INFO={'pvp':['ARENA · 5 TICKETS, BAJA HASTA 1','RIVAL: EL QUE MAS PUNTOS DA','UNA DERROTA NO DETIENE'],
-      'expedition':['EVENTO SEMANAL: IDOL DIMENSION','5 BADGES, BAJA HASTA 1','NUNCA COMPRA BADGES','UNA DERROTA NO DETIENE']}
+INFO={'expedition':['EVENTO SEMANAL: IDOL DIMENSION','5 BADGES, BAJA HASTA 1','NUNCA COMPRA BADGES','UNA DERROTA NO DETIENE']}
 CALIBRATED={d for d,_ in ROUTE_COSTS}
 ZONES=sorted({row['zone'] for row in CATALOG})
 DIFFICULTY_COLORS=(('NORMAL','blue'),('HARD','green'),('HEROIC','orange'))
@@ -72,7 +71,7 @@ class FarmApp(tk.Tk):
 
     def render(self):
         self.img=Image.new('RGBA',(W,H),(25,40,58,255));self.zones=[]
-        getattr(self,f'draw_{self.screen if self.screen in ("main","quest","boss","raid","trials") else "info"}')()
+        getattr(self,f'draw_{self.screen if self.screen in ("main","quest","boss","raid","trials","pvp") else "info"}')()
         self.photo=ImageTk.PhotoImage(self.img);self.canvas.delete('all');self.canvas.create_image(0,0,anchor='nw',image=self.photo)
 
     def window(self,title,back=True):
@@ -112,7 +111,8 @@ class FarmApp(tk.Tk):
         if mode=='raid':return [RAIDS[c['raid']['raid']].upper(),c['raid']['difficulty'].upper()]
         if mode=='trials':
             level=int(c['trials']['difficulty']);tier=trials_range(level)[0];return [f'NIVEL {level}',f'TIER {tier}']
-        return {'pvp':['5 TICKETS'],'expedition':['SEMANAL']}[mode]
+        if mode=='pvp':return ['5 TICKETS',f"RIVAL {c['pvp']['opponent']} DE 4"]
+        return ['SEMANAL']
 
     def draw_quest(self):
         self.window('QUEST');q=self.config_data['quest']
@@ -171,6 +171,18 @@ class FarmApp(tk.Tk):
         for i,(text,delta) in enumerate((('-10',-10),('-1',-1),('+1',1),('+10',10))):
             self.put(ui.button(text,120,56,'blue',22),420+i*134,716,lambda d=delta:self.step_level(d))
         self.label('5 TOKENS, BAJA HASTA 1 · NUNCA COMPRA · DERROTA NO DETIENE',70,786,13,ui.DIM)
+
+    def draw_pvp(self):
+        self.window('PVP');current=int(self.config_data['pvp']['opponent'])
+        icon=ui.icon('pvp',130);self.put(icon,(W-icon.width)//2,150)
+        self.label('RIVAL (DE MENOS A MAS PUNTOS)',W//2,320,20,ui.GOLD,center=True)
+        labels=('1 · MAS FACIL','2','3','4 · MAS PUNTOS')
+        for i,text in enumerate(labels):
+            self.put(ui.button(text,440,60,'blue' if current==i+1 else 'gray',20),(W-440)//2,360+i*72,
+                     lambda n=i+1:self.set_opponent(n))
+        self.label('5 TICKETS, BAJA HASTA 1 · UNA DERROTA NO DETIENE',W//2,680,15,ui.DIM,center=True)
+
+    def set_opponent(self,n):self.config_data['pvp']['opponent']=n;self.save()
 
     def draw_info(self):
         mode=self.screen;self.window(NAMES[mode])

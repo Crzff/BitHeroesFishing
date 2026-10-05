@@ -12,8 +12,8 @@ TICKET_COST=5  # máximo; con menos tickets se baja hasta 1
 HOME_PVP=((90,280),'HOME_PVP',(15,205,165,355))
 PLAY=((1280,568),'PVP_PLAY',(1120,440,1445,695))
 CLOSE=((1494,226),'PVP_CLOSE',(1410,140,1580,310))
-# Rival de la 4.ª fila: el que más puntos da. Ganó en 4 s el 2026-10-04.
-FIGHT=((1390,768),'PVP_FIGHT',(1236,698,1544,840))
+# Rivales ordenados de menos a más puntos (filas 1-4). FIGHT de cada fila.
+FIGHT_ROWS={i+1:((1390,y),'PVP_FIGHT',(1236,y-70,1544,y+72)) for i,y in enumerate((422,538,652,768))}
 ACCEPT=((1215,982),'ACCEPT',(1000,930,1420,1035))
 TICKETS_ROI=(1350,22,1530,62)
 TOWN_ROI=(700,915,1500,1080)
@@ -22,8 +22,10 @@ BATTLE_LIMIT=180
 
 
 class PvpRunner(DungeonRunner):
-    def __init__(self,io,capture,vision,channel,log,fights):
+    def __init__(self,io,capture,vision,channel,log,fights,opponent=4):
+        if opponent not in FIGHT_ROWS:raise ValueError('Rival de PvP: 1 a 4')
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
+        self.opponent=opponent
         self.fights=fights;self.deadline=time.monotonic()+60*60
         self.budget=FarmBudget(max_runs=fights,max_energy=fights*TICKET_COST,max_seconds=60*60,
                                max_gold=0,stop_on_defeat=False)
@@ -58,7 +60,7 @@ class PvpRunner(DungeonRunner):
         if not self.budget.reserve_entry(attempt,resource='TICKETS',balance=balance,cost=cost):
             raise SafetyStop('Combate ya reservado; no repetir PLAY')
         atomic_json(self.channel.directory/f'pvp-{cycle}.intent.json',{'attempt_id':attempt,'tickets':balance,'effect_confirmed':False})
-        self.press('PVP',PLAY);self.press('PVP_SELECT',FIGHT);self.press('TEAM',ACCEPT)
+        self.press('PVP',PLAY);self.press('PVP_SELECT',FIGHT_ROWS[self.opponent]);self.press('TEAM',ACCEPT)
         self.log.emit('PVP_STARTED',attempt_id=attempt,tickets_before=balance)
         results=('WB_VICTORY','WB_DEFEAT')
         frame=self.wait(lambda f:self.vision.screen(f) in ('AUTO_OFF_BATTLE','AUTO_ON_BATTLE')+results,30,'combate PvP')
@@ -79,7 +81,7 @@ class PvpRunner(DungeonRunner):
         self.log.emit('PVP_STATUS',message='Tickets gastados · detenido',budget=self.budget.payload())
 
 
-def run_pvp(fights):
+def run_pvp(fights,opponent=4):
     from .game_window import ENV_WINDOW,focus_window
     from .dungeon_vision import DungeonVision
     from .gamescope import backend
@@ -95,7 +97,7 @@ def run_pvp(fights):
         os.environ.pop('FARM_LAUNCHER_PID',None)
         log=Telemetry('PVP',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
-            PvpRunner(io,capture,DungeonVision(),channel,log,fights).run()
+            PvpRunner(io,capture,DungeonVision(),channel,log,fights,opponent).run()
     except (Exception,KeyboardInterrupt) as exc:
         if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
         raise
@@ -107,4 +109,4 @@ def run_pvp(fights):
 
 if __name__=='__main__':
     import sys
-    run_pvp(int(sys.argv[1]))
+    run_pvp(int(sys.argv[1]),*[int(a) for a in sys.argv[2:3]])  # combates [rival 1-4]

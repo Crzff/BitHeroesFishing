@@ -59,6 +59,26 @@ class PvpRuntimeTests(unittest.TestCase):
         self.assertEqual(runner.budget.energy_reserved,11)
         self.assertEqual(runner.budget.payload()['completed_runs'],3);self.assertEqual(runner.budget.gold_reserved,0)
 
+    def test_chosen_opponent_row_gets_the_fight(self):
+        game=FakeGame(['boss_victory']);clicks=[]
+        original=game.click
+        def spy(xy):
+            clicks.append(tuple(xy))
+            if game.state=='pvp_select':game.state='pvp_team';return
+            original(xy)
+        game.click=spy
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp);io=Mock();io.click.side_effect=game.click
+            runner=PvpRunner(io,Mock(),VISION,SimpleNamespace(directory=path,run_id='t',stop_path=path/'s.json'),Mock(),1,1)
+            runner.capture=lambda:FRAMES[game.state]
+            clock=[0.0]
+            def sleep(s):clock[0]+=s
+            fake=SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep,perf_counter_ns=lambda:0)
+            with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.pvp_runtime.time',fake), \
+                    patch.object(PvpRunner,'tickets',side_effect=[5,0]):runner.run()
+        self.assertIn((1390,422),clicks);self.assertNotIn((1390,768),clicks)
+        with self.assertRaises(ValueError):PvpRunner(Mock(),Mock(),VISION,Mock(),Mock(),1,5)
+
     def test_no_tickets_closes_the_window_without_playing(self):
         game=FakeGame([]);self.run_pvp(game,[0])
         self.assertEqual(game.plays,[]);self.assertEqual(game.state,'pvp_home')
