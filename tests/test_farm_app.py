@@ -68,13 +68,17 @@ class FarmAppClickTests(unittest.TestCase):
     def test_boss_tier_and_difficulty_are_saved_and_tier_stays_valid(self):
         self.app.screen='boss';self.app.render()
         self.click_where(self.by_default('set_boss','TITANS_ATTACK'))
-        self.assertEqual((farm_config.load()['boss']['boss'],farm_config.load()['boss']['tier']),('TITANS_ATTACK',9))
-        self.assertRaises(AssertionError,self.click_where,self.by_default('set_tier',8))  # T8 bajo el scroll
+        self.assertEqual((farm_config.load()['boss']['boss'],farm_config.load()['boss']['tier']),('TITANS_ATTACK',11))
+        self.assertRaises(AssertionError,self.click_where,self.by_default('set_tier',8))  # Titans no tiene T8
         down=lambda a:getattr(a,'__name__','')=='<lambda>' and 'scroll_tiers' in a.__code__.co_names and 1 in (a.__code__.co_consts or ())
-        self.click_where(down);self.click_where(down)
-        self.click_where(self.by_default('set_tier',8));self.assertEqual(farm_config.load()['boss']['tier'],8)
+        self.click_where(self.by_default('set_boss','NETHERWORLD'));self.app.tier_scroll=0;self.app.render()
+        self.assertRaises(AssertionError,self.click_where,self.by_default('set_tier',3))  # T3 bajo el scroll
+        for _ in range(7):self.click_where(down)
+        self.click_where(self.by_default('set_tier',3));self.assertEqual(farm_config.load()['boss']['tier'],3)
+        self.click_where(self.by_default('set_boss','TITANS_ATTACK'));self.assertEqual(farm_config.load()['boss']['tier'],11)
         up=lambda a:getattr(a,'__name__','')=='<lambda>' and 'scroll_tiers' in a.__code__.co_names and -1 in (a.__code__.co_consts or ())
-        self.click_where(up);self.click_where(up)
+        for _ in range(3):self.click_where(up)
+        self.click_where(self.by_default('set_tier',13))
         self.click_where(self.by_default('set_tier',13));self.click_where(lambda a:getattr(a,'__defaults__',None)==('HARD',))
         self.assertEqual(farm_config.load()['boss'],{'boss':'TITANS_ATTACK','tier':13,'difficulty':'Hard'})
 

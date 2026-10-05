@@ -76,7 +76,7 @@ class BossRuntimeTests(unittest.TestCase):
         self.assertEqual(game.starts,0)
 
     def test_unknown_boss_tier_or_difficulty_is_rejected(self):
-        for args in ((1,'Insane'),(1,'Heroic','NETHERWORLD',7),(1,'Heroic','NOPE',9)):
+        for args in ((1,'Insane'),(1,'Heroic','MELVIN_FACTORY',8),(1,'Heroic','NETHERWORLD',2),(1,'Heroic','NOPE',9)):
             with self.assertRaises(ValueError):BossRunner(Mock(),Mock(),VISION,Mock(),Mock(),*args)
 
     def test_wrong_summon_config_or_shared_lobby_never_press_start(self):

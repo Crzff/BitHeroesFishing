@@ -22,13 +22,14 @@ AUTO=(1880,530)
 TOWN_ROI=(700,915,1500,1080)
 REGROUP_ROI=(650,915,1250,1080)
 DIFFICULTIES=('Normal','Hard','Heroic')
-# Jefes del carrusel (2026-10-04). crzf (2026-10-05): todos ofrecen de T13 a T8; el menú del
-# juego tiene scroll y tier_xy lo recorre (un tier que la cuenta no tenga detiene sin cambiar nada).
-TIERS=(13,12,11,10,9,8)
-BOSSES={key:(name,TIERS) for key,name in (('NETHERWORLD','Netherworld'),('MELVIN_FACTORY','Melvin Factory'),
-        ('EXTERMINATION','3XT3RMIN4TION'),('BRIMSTONE_SYNDICATE','Brimstone Syndicate'),('TITANS_ATTACK','Titans Attack!'),
-        ('IGNITED_ABYSS','The Ignited Abyss'),('PROJECT_GOODALL','Project: Goodall'),('GALLUS_APOTHEOSIS','Gallus Apotheosis'),
-        ('ORLAG_CLAN','Orlag Clan'))}
+# Tiers de cada jefe (2026-10-05): wiki de Bit Heroes y menú real en vivo (Netherworld y Orlag
+# muestran desde T3 hasta el tier del jugador; Goodall y Gallus, T7). El menú solo enseña los que
+# el jugador alcanza; tier_xy recorre su scroll y un tier ausente detiene sin cambiar nada.
+BOSSES={'NETHERWORLD':('Netherworld',tuple(range(13,2,-1))),'MELVIN_FACTORY':('Melvin Factory',(11,10)),
+        'EXTERMINATION':('3XT3RMIN4TION',(11,10)),'BRIMSTONE_SYNDICATE':('Brimstone Syndicate',(12,11)),
+        'TITANS_ATTACK':('Titans Attack!',tuple(range(16,10,-1))),'IGNITED_ABYSS':('The Ignited Abyss',tuple(range(18,12,-1))),
+        'PROJECT_GOODALL':('Project: Goodall',(21,14,7)),'GALLUS_APOTHEOSIS':('Gallus Apotheosis',(7,)),
+        'ORLAG_CLAN':('Orlag Clan',tuple(range(12,2,-1)))}
 TIER_FIELD=(945,415,1080,470)
 TIER_DROPDOWN=(1126,444)
 DIFF_DROPDOWN=(1126,610)

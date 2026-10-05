@@ -263,9 +263,12 @@ class FarmApp(tk.Tk):
     def reset_loot(self):loot.reset()
     def open_mode(self,mode):
         if self.process is None:self.screen=mode
-        if mode=='boss':  # que el tier elegido quede a la vista
-            b=self.config_data['boss'];tiers=BOSSES[b['boss']][1]
-            self.tier_scroll=max(0,tiers.index(b['tier'])-3) if b['tier'] in tiers else 0
+        if mode=='boss':self.show_tier()
+
+    def show_tier(self):
+        """Desplaza la columna de tiers para que el elegido quede a la vista."""
+        b=self.config_data['boss'];tiers=BOSSES[b['boss']][1]
+        self.tier_scroll=max(0,tiers.index(b['tier'])-3) if b['tier'] in tiers else 0
     def toggle_mode(self,mode):self.config_data['modes'][mode]^=True;self.save()
     def toggle_runes(self):self.config_data['runes']^=True;self.save()
     def toggle_background(self):self.config_data['background']^=True;self.save()
@@ -288,7 +291,7 @@ class FarmApp(tk.Tk):
     def set_boss(self,key):
         b=self.config_data['boss'];b['boss']=key
         if b['tier'] not in BOSSES[key][1]:b['tier']=BOSSES[key][1][-1]
-        self.save()
+        self.show_tier();self.save()
 
     def scroll_tiers(self,step):self.tier_scroll+=step
 
