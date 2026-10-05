@@ -1395,6 +1395,22 @@
     "ITEMS_CLOSE": [
       "demo3",
       "captura Steam 2026-10-04"
+    ],
+    "RUNE_SYM_VRYN": [
+      "s\u00edmbolo binario 40x40 del rombo",
+      "tipo de runa menor, independiente de la rareza"
+    ],
+    "RUNE_SYM_QUINDI": [
+      "s\u00edmbolo binario 40x40 del rombo",
+      "tipo de runa menor, independiente de la rareza"
+    ],
+    "RUNE_SYM_ZYRK": [
+      "s\u00edmbolo binario 40x40 del rombo",
+      "tipo de runa menor, independiente de la rareza"
+    ],
+    "RUNE_SYM_DAR": [
+      "s\u00edmbolo binario 40x40 del rombo",
+      "tipo de runa menor, independiente de la rareza"
     ]
   },
   "notes": [
@@ -1406,7 +1422,8 @@
     "Energ\u00eda TEAM 2026-10-03: el lector de cebos confund\u00eda 0/6 con 8 en la fuente de energ\u00eda (rechazo por huecos). Variantes sueltas de 0 u 8 desplazaban el error (61/369 fallaba). Se a\u00f1ade el juego completo DIGIT_0..9_ENERGY de saldos/relojes reales etiquetados, solo para dungeons. Umbrales, margen, huecos y rechazo de reloj intactos.",
     "World Boss 2026-10-03: Netherworld T9 Normal privado en solitario (Heroic perd\u00eda en segundos; Normal gan\u00f3 en segundos). Plantillas WB_* y HOME_BOSS de capturas reales; TOWN cambia de posici\u00f3n entre victoria y derrota y se localiza. Fixtures boss_* conservan solo las ROI le\u00eddas.",
     "HOME_BOSS: el fondo de arena cambia con otros personajes; m\u00e1scara de p\u00edxeles comunes con HOME_BOSS_TOWN, como HOME_QUEST/SETTINGS.",
-    "PvP 2026-10-04: ventana PVP ARENA, coste 5, SELECT OPPONENT con 4 rivales; tickets en la barra superior roja (alterna con reloj)."
+    "PvP 2026-10-04: ventana PVP ARENA, coste 5, SELECT OPPONENT con 4 rivales; tickets en la barra superior roja (alterna con reloj).",
+    "Runas menores 2026-10-05: tipo por el s\u00edmbolo (IoU), rareza por el tono del rombo; valores de la wiki (Dar/Quindi/Zyrk 5-25, Vryn 7.5-37.5)."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

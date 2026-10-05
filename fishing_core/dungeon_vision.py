@@ -33,6 +33,22 @@ MODE_SCREENS=(('DISCONNECTED',(('DISCONNECTED',(720,430,1200,640)),('RECONNECT',
               ('TRIALS',(('TRIALS_TITLE',(620,150,1300,310)),('TRIALS_PLAY',(1120,450,1450,710)))))
 
 
+# Runas menores (wiki 2026-10-05): bono por rareza común, rara, épica, legendaria y mítica.
+RUNE_VALUES={'QUINDI':(5,10,15,20,25),'VRYN':(7.5,15,22.5,30,37.5),'DAR':(5,10,15,20,25),'ZYRK':(5,10,15,20,25)}
+RARITIES=('COMMON','RARE','EPIC','LEGENDARY','MYTHIC')
+
+
+def rune_rarity(hue,saturation):
+    """Tono del rombo -> rareza: gris común, azul rara, magenta épica, amarillo legendaria, rojo mítica."""
+    # ponytail: las comunes (grises) no pasan el umbral de saturación de runes_in; se ignoran (5 %), sin captura de referencia.
+    if saturation<70:return 'COMMON'
+    if 90<=hue<=130:return 'RARE'
+    if 135<=hue<=166:return 'EPIC'
+    if 12<=hue<=40:return 'LEGENDARY'
+    if hue>=167 or hue<=11:return 'MYTHIC'
+    return None
+
+
 class DungeonVision:
     def __init__(self,path=ASSETS):
         with np.load(path,allow_pickle=False) as data:
@@ -180,6 +196,41 @@ class DungeonVision:
         for left,right in ((0,dx),(dx+dw,white.shape[1])):
             part=np.zeros_like(white);part[:,left:right]=white[:,left:right];values.append(self.bright_number(part))
         return tuple(values) if None not in values else None
+
+    def rune(self,crop):
+        """(tipo, rareza, valor) de una runa menor recortada, o None si no se reconoce con margen."""
+        hsv=cv2.cvtColor(crop,cv2.COLOR_BGR2HSV)
+        fill=((hsv[:,:,1]>60)&(hsv[:,:,2]>110)).astype(np.uint8)
+        count,labels,stats,_=cv2.connectedComponentsWithStats(cv2.morphologyEx(fill,cv2.MORPH_CLOSE,np.ones((5,5),np.uint8)))
+        # El rombo es el componente más pequeño que contiene el centro (el marco de rareza de la lista lo rodea).
+        H,W=crop.shape[:2];inside=[j for j in range(1,count) if stats[j,4]>=600 and
+                                   stats[j,0]<=W//2<stats[j,0]+stats[j,2] and stats[j,1]<=H//2<stats[j,1]+stats[j,3]]
+        if not inside:return None
+        i=min(inside,key=lambda j:stats[j,2]*stats[j,3]);x,y,w,h,area=stats[i]
+        if area<600 or not 0.7<w/max(h,1)<1.4:return None
+        cx,cy=x+w//2,y+h//2;r=int(0.27*max(w,h))
+        body=labels==i;sym=((~body)&(hsv[:,:,2]<120))[max(0,cy-r):cy+r,max(0,cx-r):cx+r].astype(np.uint8)
+        if sym.size==0:return None
+        sym=cv2.resize(sym,(40,40),interpolation=cv2.INTER_AREA)>0
+        scores={k[9:]:(sym&(ref>0)).sum()/max(1,(sym|(ref>0)).sum()) for k,ref in self.templates.items() if k.startswith('RUNE_SYM_')}
+        best=sorted(scores.items(),key=lambda kv:-kv[1])
+        if best[0][1]<0.7 or best[0][1]-best[1][1]<0.15:return None
+        rarity=rune_rarity(float(np.median(hsv[:,:,0][body])),float(np.median(hsv[:,:,1][body])))
+        if rarity is None:return None
+        kind=best[0][0];return kind,rarity,RUNE_VALUES[kind][RARITIES.index(rarity)]
+
+    def runes_in(self,frame,roi):
+        """Runas de la lista (MINOR RUNE): [((x,y) centro, tipo, rareza, valor)] dentro de roi."""
+        x0,y0,x1,y1=roi;area=frame[y0:y1,x0:x1];hsv=cv2.cvtColor(area,cv2.COLOR_BGR2HSV)
+        fill=((hsv[:,:,1]>60)&(hsv[:,:,2]>110)).astype(np.uint8)
+        count,_,stats,_=cv2.connectedComponentsWithStats(cv2.morphologyEx(fill,cv2.MORPH_CLOSE,np.ones((5,5),np.uint8)))
+        found=[]
+        for x,y,w,h,a in stats[1:]:
+            if a<600 or not 0.7<w/max(h,1)<1.4 or w>140 or a/(w*h)<0.28:continue
+            cx,cy=x0+x+w//2,y0+y+h//2;pad=int(0.35*max(w,h))
+            info=self.rune(frame[max(0,cy-h//2-pad):cy+h//2+pad,max(0,cx-w//2-pad):cx+w//2+pad])
+            if info:found.append(((cx,cy),)+info)
+        return sorted(found,key=lambda r:(r[0][1],r[0][0]))
 
     def familiar_name(self,frame):
         if self.screen(frame)!='FAMILIAR_OFFER':return None
