@@ -109,6 +109,65 @@ class PipeWireFrames:
             except subprocess.TimeoutExpired:self.proc.kill()
 
 
+SHM='/dev/shm/bitheroes-gamescope-frame'  # [seq u64][stamp f64][BGR 1920x1080]
+HEADER=16
+
+
+class FrameServer:
+    """Un único flujo PipeWire por sesión: abrir y cerrar flujos de gamescope coincidió con sus
+    caídas (SIGSEGV en el driver Vulkan). Publica el último fotograma en memoria compartida."""
+    def __init__(self):
+        import mmap
+        self.fd=os.open(SHM,os.O_CREAT|os.O_RDWR,0o600);os.ftruncate(self.fd,HEADER+FRAME)
+        self.map=mmap.mmap(self.fd,HEADER+FRAME);self.frames=PipeWireFrames(pipewire_serial());self.seq=0
+
+    def serve(self,stop):
+        import struct
+        last=0.0
+        while not stop.is_set():
+            if self.frames.proc.poll() is not None:raise RuntimeError('El flujo de gamescope se cerró')
+            with self.frames.lock:latest,stamp=self.frames.latest,self.frames.stamp
+            if latest is not None and stamp>last:
+                last=stamp;self.seq+=1
+                self.map[HEADER:]=latest;self.map[:HEADER]=struct.pack('<Qd',self.seq,time.time())
+            time.sleep(.005)
+
+    def close(self):
+        self.frames.close();self.map.close();os.close(self.fd)
+
+
+class SharedFrames:
+    """Lado lector de FrameServer: misma interfaz que PipeWireFrames.frame()."""
+    def __init__(self):
+        import mmap
+        self.fd=os.open(SHM,os.O_RDONLY);self.map=mmap.mmap(self.fd,HEADER+FRAME,prot=mmap.PROT_READ)
+
+    def frame(self,newer_than,timeout=0.4):
+        import struct
+        end=time.monotonic()+timeout;start_seq=struct.unpack('<Qd',self.map[:HEADER])[0]
+        while True:
+            seq,written=struct.unpack('<Qd',self.map[:HEADER])
+            if seq==0:
+                if time.monotonic()>=end+2.0:raise RuntimeError('gamescope no entregó ningún fotograma')
+            elif seq!=start_seq or time.monotonic()>=end:
+                data=bytes(self.map[HEADER:]);check=struct.unpack('<Qd',self.map[:HEADER])[0]
+                if check==seq:return np.frombuffer(data,np.uint8).reshape(H,W,3)  # copia sin escritura a medias
+                continue
+            if not server_alive():raise RuntimeError('El flujo de gamescope se cerró')
+            time.sleep(.01)
+
+    def close(self):
+        self.map.close();os.close(self.fd)
+
+
+def server_alive():
+    pid_file=SHM+'.pid'
+    try:
+        pid=int(open(pid_file).read());os.kill(pid,0);return True
+    except (OSError,ValueError):
+        return False
+
+
 class GamescopeGuard:
     """Equivalente a WindowGuard: el juego sigue en su servidor X de gamescope. F8 en el escritorio."""
     def __init__(self):
@@ -210,7 +269,8 @@ class GamescopeIO:
 class GamescopeCapture:
     """Misma interfaz que LinuxCapture: grab(monitor) devuelve un ScreenShot BGRA del recorte pedido."""
     def __init__(self,guard):
-        self.guard=guard;self.frames=PipeWireFrames(pipewire_serial())
+        # Con el servidor de fotogramas en marcha no se abre otro flujo PipeWire (ver FrameServer).
+        self.guard=guard;self.frames=SharedFrames() if server_alive() else PipeWireFrames(pipewire_serial())
 
     def __enter__(self):
         return self
@@ -231,6 +291,7 @@ class GamescopeCapture:
             try:
                 frame=self.frames.frame(time.monotonic())
             except RuntimeError:
+                if isinstance(self.frames,SharedFrames):raise  # el servidor lleva su propio flujo
                 # El flujo se corta si otra ventana tapó el juego: reabrirlo una vez, ya con el juego delante.
                 self.frames.close();self.guard.check();self.frames=PipeWireFrames(pipewire_serial())
                 frame=self.frames.frame(time.monotonic(),timeout=2.0)
@@ -243,8 +304,56 @@ class GamescopeCapture:
             raise SafetyStop('No se puede capturar gamescope: '+str(exc)) from exc
 
 
+GONE=('No se encontró la ventana de Bit Heroes','gamescope no responde','flujo de gamescope se cerró',
+      'gamescope no entregó','No hay nodo de vídeo de gamescope','desapareció de gamescope')
+
+
+def is_gone(message):
+    """La parada se debe a que gamescope/el juego dejó de existir (p. ej. el fallo del driver Vulkan)."""
+    return any(text in message for text in GONE)
+
+
+def relaunch_game(timeout=300):
+    """Cierra lo que quede de Steam y relanza el juego con JUEGO_SEGUNDO_PLANO.sh; espera a que exista."""
+    root=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if subprocess.run(['pgrep','-x','steam'],capture_output=True).returncode==0:
+        subprocess.run(['steam','-shutdown'],capture_output=True,timeout=30)
+        for _ in range(60):
+            if subprocess.run(['pgrep','-x','steam'],capture_output=True).returncode!=0:break
+            time.sleep(1)
+    subprocess.Popen([os.path.join(root,'JUEGO_SEGUNDO_PLANO.sh')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,
+                     stdin=subprocess.DEVNULL,start_new_session=True)
+    end=time.monotonic()+timeout
+    while time.monotonic()<end:
+        time.sleep(5)
+        try:
+            find_display().close();pipewire_serial();time.sleep(20)  # dejar que el juego cargue
+            return True
+        except Exception:
+            continue
+    return False
+
+
 def backend():
     """(IO, Capture) según FARM_BACKEND: 'gamescope' o el escritorio niri por defecto."""
     if os.environ.get('FARM_BACKEND')=='gamescope':return GamescopeIO,GamescopeCapture
     from .linux import LinuxIO,LinuxCapture
     return LinuxIO,LinuxCapture
+
+
+def serve_forever():
+    """Proceso servidor: python -m fishing_core.gamescope serve (lo lanza farm_all en segundo plano)."""
+    import signal
+    stop=threading.Event();signal.signal(signal.SIGTERM,lambda *a:stop.set());signal.signal(signal.SIGINT,lambda *a:stop.set())
+    server=FrameServer();open(SHM+'.pid','w').write(str(os.getpid()))
+    try:server.serve(stop)
+    finally:
+        server.close()
+        for path in (SHM,SHM+'.pid'):
+            try:os.remove(path)
+            except OSError:pass
+
+
+if __name__=='__main__':
+    import sys
+    if sys.argv[1:]==['serve']:serve_forever()

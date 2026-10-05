@@ -51,25 +51,61 @@ def steps(config):
 
 
 def main(argv):
+    from .gamescope import is_gone,relaunch_game
+    background=os.environ.get('FARM_BACKEND')=='gamescope'
     config=farm_config.load()
     if '--runes' in argv:config['runes']=True
     if '--no-quest' in argv:config['modes']['quest']=False
-    results=[]
+    results=[];server={'proc':start_frame_server() if background else None}
+    try:run_steps(config,results,background,is_gone,relaunch_game,server)
+    finally:stop_frame_server(server)
+    report(results)
+
+
+def start_frame_server():
+    """Un solo flujo de imagen para toda la sesión (abrir/cerrar flujos coincidió con caídas de gamescope)."""
+    import subprocess
+    from .gamescope import server_alive
+    proc=subprocess.Popen([sys.executable,'-B','-m','fishing_core.gamescope','serve'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    import time
+    for _ in range(50):
+        if server_alive():break
+        time.sleep(.1)
+    return proc
+
+
+def stop_frame_server(server):
+    proc=server.get('proc')
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+        try:proc.wait(5)
+        except Exception:proc.kill()
+    server['proc']=None
+
+
+def run_steps(config,results,background,is_gone,relaunch_game,server):
+    relaunches=0
     for name,step in steps(config):
         print(f'== {name}',flush=True)
-        for attempt in (1,2):
+        for attempt in (1,2,3,4):
             try:
                 step();results.append((name,'OK'));break
             except KeyboardInterrupt:
-                results.append((name,'F8'));return report(results)
+                results.append((name,'F8'));return
             except (SafetyStop,RuntimeError,ValueError) as exc:
                 # Desconexión del servidor: el siguiente intento empieza con ensure_home(), que pulsa
                 # RECONNECT y cierra las ventanas del arranque. Solo un reintento por modo.
                 if attempt==1 and 'DISCONNECTED' in str(exc):print(f'== {name} (reconexión)',flush=True);continue
+                # Segundo plano: gamescope puede caerse (fallo del driver Vulkan). Relanzar el juego y repetir el modo.
+                if background and is_gone(str(exc)) and relaunches<3:
+                    relaunches+=1;print(f'== {name} (relanzando el juego {relaunches}/3)',flush=True)
+                    stop_frame_server(server)
+                    if relaunch_game():
+                        server['proc']=start_frame_server()
+                        continue
                 results.append((name,str(exc)))
                 if str(exc).startswith('Derrota'):break
-                return report(results)  # estado del juego no confirmado: no seguir
-    report(results)
+                return  # estado del juego no confirmado: no seguir
 
 
 def report(results):

@@ -86,6 +86,27 @@ class GamescopeTests(unittest.TestCase):
             self.assertEqual(state['closed'],0)
             g,state=self.guard(1,None);g.check();self.assertEqual(state['closed'],0)
 
+    def test_shared_frames_read_the_latest_published_frame_and_detect_a_dead_server(self):
+        import os,struct,tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path=os.path.join(tmp,'frame')
+            with open(path,'wb') as f:
+                frame=np.zeros((1080,1920,3),np.uint8);frame[5,6]=(9,8,7)
+                f.write(struct.pack('<Qd',3,time.time())+frame.tobytes())
+            with patch.object(gamescope,'SHM',path):
+                reader=gamescope.SharedFrames()
+                try:
+                    with patch('fishing_core.gamescope.server_alive',return_value=True):
+                        self.assertEqual(tuple(reader.frame(time.monotonic(),timeout=0.05)[5,6]),(9,8,7))
+                finally:reader.close()
+            with open(path,'r+b') as f:f.write(struct.pack('<Qd',0,0.0))
+            with patch.object(gamescope,'SHM',path):
+                reader=gamescope.SharedFrames()
+                try:
+                    with patch('fishing_core.gamescope.server_alive',return_value=False):
+                        with self.assertRaises(RuntimeError):reader.frame(time.monotonic(),timeout=0.01)
+                finally:reader.close()
+
     def test_backend_selection(self):
         with patch.dict('os.environ',{'FARM_BACKEND':'gamescope'}):
             self.assertIs(gamescope.backend()[0],gamescope.GamescopeIO)
