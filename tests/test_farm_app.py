@@ -30,7 +30,7 @@ class FarmAppTests(unittest.TestCase):
             self.assertEqual(farm_config.load(path),farm_config.DEFAULT)
 
     def test_pixel_widgets_render(self):
-        for img in (pixel_ui.frame(400,300,'WORLD BOSS'),pixel_ui.checkbox(True),pixel_ui.auto_button(True),
+        for img in (pixel_ui.frame(800,600,'WORLD BOSS'),pixel_ui.frame(800,600,'RAID','raid'),pixel_ui.panel(300,200),pixel_ui.loot_button(),pixel_ui.checkbox(True),pixel_ui.auto_button(True),
                     pixel_ui.button('HEROIC',200),pixel_ui.icon('quest')):
             self.assertGreater(img.width*img.height,0)
 
@@ -85,7 +85,7 @@ class FarmAppClickTests(unittest.TestCase):
         self.click_where(self.by_default('step_level',-10));self.assertEqual(farm_config.load()['trials']['difficulty'],664)
 
     def test_every_screen_renders(self):
-        for screen in ('main','quest','boss','raid','trials','pvp','expedition'):
+        for screen in ('main','quest','boss','raid','trials','pvp','expedition','loot'):
             self.app.screen=screen;self.app.render();self.assertTrue(self.app.zones)
 
 if __name__=='__main__':unittest.main()

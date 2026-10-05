@@ -77,3 +77,6 @@ SOFTWARE.
 - `assets/ui/*.png`: iconos de modo recortados de capturas locales de Bit Heroes para
   la app; derivan del juego, no son recursos MIT y no deben redistribuirse sin revisar
   los derechos del titular.
+- `assets/ui/frame/`, `assets/ui/bg/` y `assets/ui/res/`: marcos (SETTINGS, RAID), fondos
+  (mapas de zona, carruseles de World Boss y Raid) e iconos de recursos recortados de
+  capturas locales de Bit Heroes (`scripts/build_ui_frames.py`); mismas condiciones.
