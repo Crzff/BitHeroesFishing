@@ -205,3 +205,11 @@ def loot_icon(path,rarity,color,size=58):
     ImageDraw.Draw(img).rectangle((2,2,size-3,size-3),fill=color)
     icon=Image.open(path).convert('RGBA').resize((size-8,size-8),Image.NEAREST);img.alpha_composite(icon,(4,4))
     return img
+
+
+def arrow_button(w,h,up,active=True):
+    """Botón de scroll con triángulo (la fuente no tiene flechas)."""
+    img=button('',w,h,'blue' if active else 'gray');d=ImageDraw.Draw(img);cx,cy,s=w//2,h//2,w//4
+    pts=[(cx-s,cy+s//2),(cx+s,cy+s//2),(cx,cy-s//2)] if up else [(cx-s,cy-s//2),(cx+s,cy-s//2),(cx,cy+s//2)]
+    d.polygon(pts,fill=TEXT,outline=OUTLINE,width=3)
+    return img

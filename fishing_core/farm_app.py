@@ -60,7 +60,9 @@ class FarmApp(tk.Tk):
         super().__init__()
         self.title('Bit Heroes Farm Bot');self.resizable(False,False);self.configure(bg='#19283a')
         self.canvas=tk.Canvas(self,width=W,height=H,highlightthickness=0,bg='#19283a');self.canvas.pack()
-        self.canvas.bind('<Button-1>',self.on_click)
+        self.canvas.bind('<Button-1>',self.on_click);self.tier_scroll=0;self.wheel_zone=None
+        for event,step in (('<Button-4>',-1),('<Button-5>',1)):self.canvas.bind(event,lambda e,s=step:self.on_wheel(e,s))
+        self.canvas.bind('<MouseWheel>',lambda e:self.on_wheel(e,-1 if e.delta>0 else 1))
         self.config_data=farm_config.load();self.screen='main';self.process=None
         self.status='LISTO · ELIGE MODOS Y PULSA START';self.zone=dungeon(self.config_data['quest']['dungeon'])['zone']
         self.protocol('WM_DELETE_WINDOW',self.quit_app);self.render()
@@ -74,7 +76,7 @@ class FarmApp(tk.Tk):
         t=ui.text(txt,size,color=color);self.put(t,x-(t.width//2 if center else 0),y);return t
 
     def render(self):
-        self.img=Image.new('RGBA',(W,H),(25,40,58,255));self.zones=[]
+        self.img=Image.new('RGBA',(W,H),(25,40,58,255));self.zones=[];self.wheel_zone=None
         screens=("main","quest","boss","raid","trials","pvp","loot")
         getattr(self,f'draw_{self.screen if self.screen in screens else "info"}')()
         self.photo=ImageTk.PhotoImage(self.img);self.canvas.delete('all');self.canvas.create_image(0,0,anchor='nw',image=self.photo)
@@ -167,12 +169,17 @@ class FarmApp(tk.Tk):
         self.label('JEFE',x0,y0,20,ui.GOLD);lw=500;rx=x1-380
         for i,(key,(name,tiers)) in enumerate(BOSSES.items()):
             self.choice_row(x0,y0+34+i*66,lw,name.upper()[:24],b['boss']==key,lambda k=key:self.set_boss(k),h=56)
-        self.label('TIER',rx,y0,20,ui.GOLD)
-        for i,tier in enumerate(BOSSES[b['boss']][1]):
-            self.put(ui.button(f'TIER {tier}',x1-rx,52,'wb' if b['tier']==tier else 'gray',20),rx,y0+34+i*60,
+        self.label('TIER',rx,y0,20,ui.GOLD);tiers=BOSSES[b['boss']][1];shown=4
+        self.tier_scroll=max(0,min(self.tier_scroll,len(tiers)-shown));bw=x1-rx-60
+        for i,tier in enumerate(tiers[self.tier_scroll:self.tier_scroll+shown]):
+            self.put(ui.button(f'TIER {tier}',bw,52,'wb' if b['tier']==tier else 'gray',20),rx,y0+34+i*60,
                      lambda t=tier:self.set_tier(t))
-        self.label('DIFICULTAD',rx,y0+360,20,ui.GOLD)
-        self.buttons(DIFFICULTY_COLORS,b['difficulty'],rx,y0+394,x1-rx,52,self.set_boss_difficulty,gap=8,size=20)
+        # Scroll de tiers, como el menú del juego: flechas o rueda del ratón.
+        self.put(ui.arrow_button(52,112,True,self.tier_scroll>0),x1-52,y0+34,lambda:self.scroll_tiers(-1))
+        self.put(ui.arrow_button(52,112,False,self.tier_scroll<len(tiers)-shown),x1-52,y0+154,lambda:self.scroll_tiers(1))
+        self.wheel_zone=(rx,y0+34,x1,y0+34+shown*60)
+        self.label('DIFICULTAD',rx,y0+300,20,ui.GOLD)
+        self.buttons(DIFFICULTY_COLORS,b['difficulty'],rx,y0+334,x1-rx,52,self.set_boss_difficulty,gap=8,size=20)
         self.label('SALA PRIVADA · REGROUP · UNA DERROTA NO DETIENE',x0,y1-20,14,ui.TEXT)
 
     def draw_raid(self):
@@ -256,6 +263,9 @@ class FarmApp(tk.Tk):
     def reset_loot(self):loot.reset()
     def open_mode(self,mode):
         if self.process is None:self.screen=mode
+        if mode=='boss':  # que el tier elegido quede a la vista
+            b=self.config_data['boss'];tiers=BOSSES[b['boss']][1]
+            self.tier_scroll=max(0,tiers.index(b['tier'])-3) if b['tier'] in tiers else 0
     def toggle_mode(self,mode):self.config_data['modes'][mode]^=True;self.save()
     def toggle_runes(self):self.config_data['runes']^=True;self.save()
     def toggle_background(self):self.config_data['background']^=True;self.save()
@@ -279,6 +289,12 @@ class FarmApp(tk.Tk):
         b=self.config_data['boss'];b['boss']=key
         if b['tier'] not in BOSSES[key][1]:b['tier']=BOSSES[key][1][-1]
         self.save()
+
+    def scroll_tiers(self,step):self.tier_scroll+=step
+
+    def on_wheel(self,event,step):
+        z=self.wheel_zone
+        if z and z[0]<=event.x<z[2] and z[1]<=event.y<z[3]:self.scroll_tiers(step);self.render()
 
     def set_tier(self,tier):self.config_data['boss']['tier']=tier;self.save()
     def set_boss_difficulty(self,level):self.config_data['boss']['difficulty']=level.title();self.save()
