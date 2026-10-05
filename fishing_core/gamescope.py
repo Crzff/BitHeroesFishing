@@ -116,9 +116,26 @@ class GamescopeGuard:
         self.display=find_display();self.window=window_of(self.display)
         self.desktop=LinuxAPI()  # solo para F8 (estado del teclado del usuario)
 
+    def focused(self):
+        prop=self.display.screen().root.get_full_property(self.display.intern_atom('GAMESCOPE_FOCUSED_WINDOW'),0)
+        return prop.value[0] if prop and len(prop.value) else None
+
+    def restore_focus(self):
+        """Una ventana de Steam (p. ej. un aviso) tapó el juego: cerrarla como con su X; Steam sigue abierto."""
+        from Xlib import X
+        from Xlib.protocol import event
+        other=self.display.create_resource_object('window',self.focused())
+        if (other.get_wm_class() or ('',''))[1]!='steam':return False  # solo ventanas de Steam
+        message=event.ClientMessage(window=other,client_type=self.display.intern_atom('WM_PROTOCOLS'),
+                                    data=(32,[self.display.intern_atom('WM_DELETE_WINDOW'),X.CurrentTime,0,0,0]))
+        other.send_event(message);self.display.sync();time.sleep(1.5)
+        return self.focused()==self.window.id
+
     def check(self):
         try:
             if window_of(self.display) is None:raise RuntimeError('La ventana de Bit Heroes desapareció de gamescope')
+            if self.focused() not in (None,self.window.id) and not self.restore_focus():
+                raise RuntimeError('Otra ventana tapa el juego en gamescope; no se envía input')
         except RuntimeError:
             raise
         except Exception as exc:
@@ -211,7 +228,13 @@ class GamescopeCapture:
             x,y,w,h=(monitor[k] for k in ('left','top','width','height'))
             if any(type(n) is not int for n in (x,y,w,h)) or x<0 or y<0 or w<=0 or h<=0 or x+w>W or y+h>H:
                 raise RuntimeError('Región de captura fuera del juego')
-            frame=self.frames.frame(time.monotonic())[y:y+h,x:x+w]
+            try:
+                frame=self.frames.frame(time.monotonic())
+            except RuntimeError:
+                # El flujo se corta si otra ventana tapó el juego: reabrirlo una vez, ya con el juego delante.
+                self.frames.close();self.guard.check();self.frames=PipeWireFrames(pipewire_serial())
+                frame=self.frames.frame(time.monotonic(),timeout=2.0)
+            frame=frame[y:y+h,x:x+w]
             bgra=np.dstack([frame,np.full(frame.shape[:2],255,np.uint8)])
             return ScreenShot(bytearray(bgra.tobytes()),monitor)
         except KeyboardInterrupt:

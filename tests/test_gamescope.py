@@ -67,6 +67,25 @@ class GamescopeTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):io.click((10,10))
         io.game_guard.display.sync.assert_not_called()
 
+    def guard(self,focused,cls):
+        g=gamescope.GamescopeGuard.__new__(gamescope.GamescopeGuard)
+        g.window=SimpleNamespace(id=1);state={'focused':focused,'closed':0}
+        other=Mock();other.get_wm_class.return_value=cls
+        def send(message):state['closed']+=1;state['focused']=1
+        other.send_event.side_effect=send
+        g.display=Mock();g.display.create_resource_object.return_value=other;g.display.intern_atom.return_value=7
+        g.focused=lambda:state['focused']
+        return g,state
+
+    def test_a_steam_window_over_the_game_is_closed_and_anything_else_stops(self):
+        with patch('fishing_core.gamescope.window_of',return_value=object()),patch('fishing_core.gamescope.time.sleep'), \
+                patch('Xlib.protocol.event.ClientMessage'):
+            g,state=self.guard(2,('steamwebhelper','steam'));g.check();self.assertEqual(state['closed'],1)
+            g,state=self.guard(2,('otra','app'))
+            with self.assertRaises(RuntimeError):g.check()
+            self.assertEqual(state['closed'],0)
+            g,state=self.guard(1,None);g.check();self.assertEqual(state['closed'],0)
+
     def test_backend_selection(self):
         with patch.dict('os.environ',{'FARM_BACKEND':'gamescope'}):
             self.assertIs(gamescope.backend()[0],gamescope.GamescopeIO)
