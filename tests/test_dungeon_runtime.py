@@ -582,6 +582,21 @@ class DungeonRuntimeTests(unittest.TestCase):
                 state[0]='pvp_window';self.assertEqual(runner.ensure_home(keep=('PVP',)),'PVP')
             self.assertEqual(io.click.call_count,2)
 
+    def test_a_result_screen_left_open_is_closed_with_its_town_button(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('result','boss_defeat','trials_home')}
+        vision=DungeonVision()
+        def center(frame,key,roi):
+            x,y=vision.locate(frame,key,roi);h,w=vision.templates[key].shape[:2];return (x+w//2,y+h//2)
+        for start,key,roi in (('result','TOWN',(700,900,1500,1080)),('boss_defeat','RESULT_TOWN',(700,915,1500,1080))):
+            with self.subTest(start=start),tempfile.TemporaryDirectory() as tmp:
+                runner,io,_=self.runner(Path(tmp));runner.vision=vision;state=[start]
+                runner.capture=lambda:frames[state[0]];runner.wait=DungeonRunner.wait.__get__(runner)
+                target=center(frames[start],key,roi)
+                io.click.side_effect=lambda xy:state.__setitem__(0,'trials_home' if tuple(xy)==target else 'x')
+                with patch('fishing_core.dungeon_runtime.time.sleep'):self.assertEqual(runner.ensure_home(),'HOME')
+
     def test_disconnection_is_recovered_through_reconnect_daily_reward_and_items(self):
         from fishing_core.dungeon_vision import DungeonVision
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:

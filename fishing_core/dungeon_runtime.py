@@ -27,6 +27,9 @@ SESSION_SECONDS=3600
 WINDOW_CLOSERS={'DISCONNECTED':((960,742),'RECONNECT',(770,665,1150,820)),
                 'SEASON_REWARDS':((960,962),'SEASON_CLAIM',(740,885,1180,1040)),
                 'ITEMS':(None,'ITEMS_CLOSE',(1200,150,1500,450)),
+                # Resultado de una run que quedó abierta: TOWN no gasta nada (cambia de sitio: se localiza).
+                'VICTORY':(None,'TOWN',(700,900,1500,1080)),'WB_VICTORY':(None,'RESULT_TOWN',(700,915,1500,1080)),
+                'WB_DEFEAT':(None,'RESULT_TOWN',(700,915,1500,1080)),
                 'NEWS':((1118,964),'NEWS_CLOSE',(935,885,1310,1045)),'TRIALS':((1490,236),'TRIALS_CLOSE',(1404,150,1584,330)),'PVP':((1494,226),'PVP_CLOSE',(1410,140,1580,310)),
                 'EXPEDITION':((1490,240),'EXP_CLOSE',(1400,150,1580,330)),'IDOL_MAP':((1655,135),'IDOL_CLOSE',(1570,50,1740,220)),
                 'PORTAL':((1362,214),'PORTAL_CLOSE',(1280,130,1450,300)),'RAID':((1468,236),'RAID_CLOSE',(1380,150,1560,320)),
