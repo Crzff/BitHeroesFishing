@@ -13,4 +13,4 @@ if ! pgrep -f "gamescope --backend headless" >/dev/null; then
     notify-send "Bit Heroes Bot" "Abriendo el juego en segundo plano (1-2 minutos)..." 2>/dev/null
     sleep 90
 fi
-FARM_BACKEND=gamescope exec .venv/bin/python -B FARM_BOT_APP.py
+FARM_BACKEND=gamescope exec .venv/bin/python -B FARM_BOT_APP.py 2>>"${XDG_RUNTIME_DIR:-/tmp}/bitheroes-bot.log"
