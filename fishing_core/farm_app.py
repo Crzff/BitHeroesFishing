@@ -223,7 +223,8 @@ class FarmApp(tk.Tk):
         if self.process is not None:
             self.process.send_signal(signal.SIGINT);self.status='DETENIENDO...';return
         if not any(self.config_data['modes'].values()):self.status='NINGUN MODO ACTIVO';return
-        self.save();self.status='EN MARCHA · F8 DETIENE · NO CAMBIES DE VENTANA'
+        background=os.environ.get('FARM_BACKEND')=='gamescope'
+        self.save();self.status='EN MARCHA EN SEGUNDO PLANO · F8 DETIENE' if background else 'EN MARCHA · F8 DETIENE · NO CAMBIES DE VENTANA'
         self.process=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all'],cwd=str(ROOT),
                                       stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
         threading.Thread(target=self.follow,args=(self.process,),daemon=True).start()

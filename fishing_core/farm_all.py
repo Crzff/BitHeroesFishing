@@ -6,6 +6,7 @@ desconocida, F8, pérdida de foco) deja el juego sin confirmar y detiene la cade
 Cada paso imprime "== <modo>" y al final "<modo>: <resultado>" (la app los muestra).
 """
 
+import os
 import sys
 
 from . import farm_config
@@ -19,7 +20,8 @@ def quest(config):
     q=config['quest']
     plan=validate_supported({**farm_plan(q['dungeon'],q['difficulty'],60,1000),'targets':q.get('targets') or [],
                              'max_gold':int(q.get('max_gold',0))})
-    process,channel,mutex=start_dungeon(focus_window('Steam'),plan)
+    game=None if os.environ.get('FARM_BACKEND')=='gamescope' else focus_window('Steam')
+    process,channel,mutex=start_dungeon(game,plan)
     try:
         code=process.wait()
     finally:

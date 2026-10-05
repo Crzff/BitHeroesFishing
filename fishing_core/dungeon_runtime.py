@@ -23,7 +23,7 @@ DIFFICULTY_BUTTONS={'Normal':((550,495),(400,450,715,550)),'Hard':((958,495),(78
                     'Heroic':((1365,495),(1200,450,1530,550))}
 SESSION_SECONDS=3600
 # Ventanas de modo -> su X (coordenada, plantilla, ROI). Sin plantilla: basta la pantalla reconocida.
-WINDOW_CLOSERS={'TRIALS':((1490,236),'TRIALS_CLOSE',(1404,150,1584,330)),'PVP':((1494,226),'PVP_CLOSE',(1410,140,1580,310)),
+WINDOW_CLOSERS={'NEWS':((1118,964),'NEWS_CLOSE',(935,885,1310,1045)),'TRIALS':((1490,236),'TRIALS_CLOSE',(1404,150,1584,330)),'PVP':((1494,226),'PVP_CLOSE',(1410,140,1580,310)),
                 'EXPEDITION':((1490,240),'EXP_CLOSE',(1400,150,1580,330)),'IDOL_MAP':((1655,135),'IDOL_CLOSE',(1570,50,1740,220)),
                 'PORTAL':((1362,214),'PORTAL_CLOSE',(1280,130,1450,300)),'RAID':((1468,236),'RAID_CLOSE',(1380,150,1560,320)),
                 'WB_LIST':((1536,214),'WB_CLOSE',(1500,180,1575,250)),'WB_CAROUSEL':((1470,240),None,None),
@@ -55,8 +55,8 @@ def start_dungeon(game,plan):
     if os.name=='nt':raise ValueError('Runner de dungeon todavía no certificado en Windows; Fishing se conserva')
     mutex=Mutex('LAUNCHER');process=channel=guard=None
     try:
-        guard=WindowGuard(game);guard.check()
-        env=run_environment();env[ENV_WINDOW]=game.serialize();env['FARM_LAUNCHER_PID']=str(os.getpid())
+        env=run_environment();env['FARM_LAUNCHER_PID']=str(os.getpid())
+        if game is not None:guard=WindowGuard(game);guard.check();env[ENV_WINDOW]=game.serialize()
         channel=Channel(env['FISHING_RUN_ID']);atomic_json(channel.directory/'farm_plan.json',plan)
         process=subprocess.Popen([python_executable(),'-B','-u',str(ROOT/'FARM_DUNGEON_PROCESS.py')],
                                  cwd=str(ROOT),env=env,**child_options())
@@ -191,6 +191,8 @@ class DungeonRunner:
             raise SafetyStop('Menú de scroll no confirmado')
         if type(amount) is not int or not 0<abs(amount)<=80:raise SafetyStop('Scroll fuera de límite')
         xy=(1250,600) if screen=='SETTINGS' else (1150,600)
+        if hasattr(self.io,'wheel'):  # gamescope: rueda en su servidor X, sin cursor del usuario
+            self.io.wheel(amount,xy);time.sleep(.12);self.io._move((960,1070));return
         self.io._move(xy)
         for _ in range(abs(amount)):
             self.check()
@@ -506,7 +508,8 @@ class DungeonRunner:
 
 
 def run_dungeon():
-    from .linux import LinuxIO,LinuxCapture
+    from .gamescope import backend
+    LinuxIO,LinuxCapture=backend()
     channel=Channel(os.environ['FISHING_RUN_ID']);io=log=None;locks=[]
     try:
         plan=validate_supported(json.loads((channel.directory/'farm_plan.json').read_text()))

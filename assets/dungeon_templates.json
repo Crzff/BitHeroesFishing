@@ -114,7 +114,8 @@
     "trials_menu_5": "0bb567af343a9600b0c1b3ee2f3dc35771ff4eed43470da7420eb136befc0ae3",
     "trials_menu_6": "ffe78a0cb75ea2a316d93d1f9219cf50c11d23f2b0e4fd078dc84f776f88b916",
     "trials_menu_7": "ffe78a0cb75ea2a316d93d1f9219cf50c11d23f2b0e4fd078dc84f776f88b916",
-    "trials_levels_674": "86c411ae115e6a1e128eaba6143d2d54fbed8bc6bd1478cd921e0caecf963e9d"
+    "trials_levels_674": "86c411ae115e6a1e128eaba6143d2d54fbed8bc6bd1478cd921e0caecf963e9d",
+    "news": "9fabe31d962a99423111d74fe27bc9ebb267e974e0c08fcafb26303c9c599f09"
   },
   "regions": {
     "HOME_QUEST": [
@@ -1348,6 +1349,24 @@
         435,
         1110,
         535
+      ]
+    ],
+    "NEWS_TITLE": [
+      "news gamescope",
+      [
+        780,
+        130,
+        1140,
+        215
+      ]
+    ],
+    "NEWS_CLOSE": [
+      "news gamescope",
+      [
+        975,
+        925,
+        1270,
+        1005
       ]
     ]
   },

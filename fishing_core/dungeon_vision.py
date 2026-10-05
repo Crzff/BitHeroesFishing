@@ -18,7 +18,8 @@ def familiar_glyph(frame):
 
 
 # Ventanas de otros modos: cada una exige título y botón propios (ROI con holgura).
-MODE_SCREENS=(('PVP',(('PVP_TITLE',(600,140,1320,295)),('PVP_PLAY',(1120,440,1445,695)))),
+MODE_SCREENS=(('NEWS',(('NEWS_TITLE',(740,90,1180,255)),('NEWS_CLOSE',(935,885,1310,1045)))),
+              ('PVP',(('PVP_TITLE',(600,140,1320,295)),('PVP_PLAY',(1120,440,1445,695)))),
               ('PVP_SELECT',(('PVP_SELECT',(520,95,1400,250)),)),
               ('RAID',(('RAID_TITLE',(760,155,1160,300)),('RAID_SUMMON',(1095,650,1435,920)))),
               ('RAID_DIFFICULTY',(('RAID_NORMAL',(360,395,750,575)),('RAID_HARD',(770,395,1150,575)),
