@@ -40,6 +40,8 @@ class RunesRunner(DungeonRunner):
 
     def hover_kind(self,xy):
         """Tipo leído en el tooltip al pasar el ratón (el símbolo falla con las míticas rojas)."""
+        end=time.monotonic()+3  # sin tooltip anterior en la imagen de referencia
+        while self.vision.tooltip_visible(self.capture()) and time.monotonic()<end:time.sleep(.2)
         before=self.capture();self.check();self.io._move(tuple(int(n) for n in xy));time.sleep(1.2)
         after=self.capture();self.io._move((960,1070))
         # El tooltip se desvanece despacio y puede tapar el otro hueco: esperar a que desaparezca.
@@ -56,12 +58,13 @@ class RunesRunner(DungeonRunner):
     def slot_runes(self):
         """[(tipo, rareza, valor) o None] de los dos huecos. Ambos se leen de una sola captura sin tooltip
         (el tooltip de un hueco tapa el otro) y luego se confirma el tipo pasando el ratón."""
-        self.board();previous=object();end=time.monotonic()+3
-        while True:  # el tablero entra animado: dos lecturas iguales o 3 s
+        self.board();time.sleep(1);history=[];end=time.monotonic()+6
+        while True:  # el tablero entra animado (y desliza despacio): tres lecturas iguales o 6 s
             frame=self.capture()
             runes=[self.vision.rune(frame[y-90:y+90,x-90:x+90]) for x,y in SLOTS]
-            if runes==previous or time.monotonic()>end:break
-            previous=runes;time.sleep(.4)
+            history=(history+[runes])[-3:]
+            if (len(history)==3 and history[0]==history[1]==history[2]) or time.monotonic()>end:break
+            time.sleep(.4)
         out=[]
         for xy,rune in zip(SLOTS,runes):
             kind,value=self.resolve(xy,rune[0],rune[1]) if rune else (None,0)
@@ -104,8 +107,11 @@ class RunesRunner(DungeonRunner):
         """Vuelve a la posición de la mejor runa, confirma tipo y rareza y la pulsa."""
         value,rarity,step,xy=best;self.scroll(-30)
         for _ in range(step):self.scroll(2)
-        here=[r for p,_,r,_ in self.visible() if abs(p[0]-xy[0])<20 and abs(p[1]-xy[1])<20]
-        if here!=[rarity] or self.hover_kind(xy)!=kind:return False
+        for _ in range(2):  # un tooltip que tarda en salir no debe detener el bot: se confirma otra vez
+            time.sleep(.5)
+            here=[r for p,_,r,_ in self.visible() if abs(p[0]-xy[0])<20 and abs(p[1]-xy[1])<20]
+            if here==[rarity] and self.hover_kind(xy)==kind:break
+        else:return False
         self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))  # Unity procesa la suelta por frames
         self.log.emit('DUNGEON_INPUT',screen='MINOR_RUNE',xy=list(xy));return True
 
