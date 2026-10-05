@@ -197,3 +197,11 @@ def background(name):
     """Fondo real del juego (assets/ui/bg): mapa de zona, carrusel de WB o de Raid."""
     path=ICONS/f'bg/{name}.jpg'
     return Image.open(path).convert('RGBA') if path.exists() else None
+
+
+def loot_icon(path,rarity,color,size=58):
+    """Icono guardado del LOOT RECAP con su borde de rareza."""
+    img=Image.new('RGBA',(size,size),(0,0,0,0));ImageDraw.Draw(img).rectangle((0,0,size-1,size-1),fill=OUTLINE)
+    ImageDraw.Draw(img).rectangle((2,2,size-3,size-3),fill=color)
+    icon=Image.open(path).convert('RGBA').resize((size-8,size-8),Image.NEAREST);img.alpha_composite(icon,(4,4))
+    return img

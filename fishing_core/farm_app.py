@@ -233,6 +233,13 @@ class FarmApp(tk.Tk):
         for i,(mode,res) in enumerate(RESOURCE.items()):
             x=x0+i*((x1-x0)//6);self.put(self.resource(res,40),x,y1-60)
             self.label(str(totals['spent'].get(res,0)),x+52,y1-50,18)
+        album=sorted(totals['album'].items(),key=lambda kv:(kv[1]['kind']!='ITEM',loot.ORDER.index(kv[1]['rarity']),-kv[1]['count']))
+        ay=y0+110+6*56+8;self.label('ALBUM DEL LOOT',x0,ay,16,ui.GOLD);size=58
+        for i,(key,entry) in enumerate(album[:(x1-x0)//(size+8)]):
+            path=loot.ALBUM/f'{key}.png'
+            if not path.exists():continue
+            x=x0+i*(size+8);self.put(ui.loot_icon(path,entry['rarity'],RARITY_COLORS[entry['rarity']],size),x,ay+28)
+            if entry['count']>1:self.label(str(entry['count']),x+4,ay+30,13)
         self.label('GASTADO EN ESTA SESION',x0,y1-96,16,ui.GOLD)
         self.put(ui.button('REINICIAR',200,50,'red',20),x1-200,y0,self.reset_loot)
 

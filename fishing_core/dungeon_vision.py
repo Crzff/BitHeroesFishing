@@ -72,6 +72,25 @@ def rune_rarity(hue,saturation):
     return None
 
 
+# LOOT RECAP/FOUND de las pantallas de resultado: rejilla de 3x2 casillas visibles (con scroll).
+LOOT_CELLS=tuple((x,y) for y in (627,781) for x in (1093,1247,1401))
+LOOT_SIZE=129
+
+
+def loot_rarity(bgr):
+    """Color del borde de la casilla -> rareza (nombres de crzf); None si la casilla está vacía."""
+    b,g,r=(int(c) for c in bgr);hi,lo=max(b,g,r),min(b,g,r)
+    if hi<120:return None
+    if lo>=200:return 'COMMON'  # borde blanco: oro, XP y consumibles sin rareza
+    hue=cv2.cvtColor(np.uint8([[bgr]]),cv2.COLOR_BGR2HSV)[0,0,0]
+    if 45<=hue<=80:return 'COMMON'
+    if 82<=hue<=100:return 'SET'
+    if 101<=hue<=128:return 'RARE'
+    if 129<=hue<=165 or 9<=hue<=19:return 'EPIC'
+    if 20<=hue<=40:return 'LEGENDARY'
+    return 'MYTHIC'
+
+
 class DungeonVision:
     def __init__(self,path=ASSETS):
         with np.load(path,allow_pickle=False) as data:
@@ -278,6 +297,46 @@ class DungeonVision:
                 return (r&g).sum()/max(1,(r|g).sum())-abs(ref.shape[1]-g.shape[1])*.02
             out+=max((k for k in self.templates if k.startswith('GLYPH_')),key=lambda k:score(self.templates[k]))[6]  # GLYPH_M2: variante
         return out
+
+    def loot_amount(self,frame,x,y):
+        """Cantidad escrita arriba de la casilla ("6", "10.1K"); None si no hay o no se lee."""
+        band=frame[y+12:y+48,x+10:x+122];m=(band.min(2)>=235).astype(np.uint8)
+        n,lab,st,_=cv2.connectedComponentsWithStats(m);tall=[];dots=[]
+        for i in range(1,n):
+            gx,gy,gw,gh,a=st[i]
+            if 18<=gh<=32:tall.append((gx,i))
+            elif gh<=9 and a>=4 and gy+gh>=24:dots.append(gx)
+        if not tall:return None
+        text=''
+        for gx,i in sorted(tall):
+            gx,gy,gw,gh,_=st[i];g=(lab[gy:gy+gh,gx:gx+gw]==i).astype(np.uint8)*255
+            g=cv2.resize(g,(max(1,round(gw*27/gh)),27),interpolation=cv2.INTER_AREA)>127
+            def score(ref):
+                r=cv2.resize(ref.astype(np.uint8),(g.shape[1],27),interpolation=cv2.INTER_NEAREST)>0
+                return (r&g).sum()/max(1,(r|g).sum())
+            key=max((k for k in self.templates if k.startswith('LOOT_DIGIT_')),key=lambda k:score(self.templates[k]))
+            # ponytail: sin muestras de 4, 8 ni M; un glifo dudoso deja la cantidad sin leer.
+            if score(self.templates[key])<.7:return None
+            text+=key[11:]
+            inner=[d for d in dots if gx+gw<=d<=gx+gw+12]
+            if inner and '.' not in text and i!=sorted(tall)[-1][1]:text+='.'
+        unit={'K':1000,'M':1_000_000}.get(text[-1:],1);text=text.rstrip('KM')
+        try:return round(float(text)*unit) if text and text.count('.')<=1 and 'K' not in text else None
+        except ValueError:return None
+
+    def loot_cells(self,frame):
+        """Casillas visibles: [{'kind','rarity','amount','icon'}]; kind GOLD/XP/MATERIAL/ITEM."""
+        cells=[]
+        for x,y in LOOT_CELLS:
+            ring=np.concatenate([frame[y+2:y+6,x+20:x+110].reshape(-1,3),frame[y+20:y+110,x+2:x+6].reshape(-1,3)])
+            rarity=loot_rarity(np.median(ring,0).astype(np.uint8))
+            if rarity is None:continue
+            box=(x,y,x+LOOT_SIZE,y+LOOT_SIZE);amount=self.loot_amount(frame,x,y)
+            kind=('XP' if self.locate(frame,'LOOT_XP',box,.9) else 'GOLD' if self.locate(frame,'LOOT_GOLD',box,.9)
+                  else 'MATERIAL' if amount is not None else 'ITEM')
+            cells.append({'kind':kind,'rarity':rarity,'amount':amount if amount is not None else 1,
+                          'icon':frame[y+10:y+LOOT_SIZE-10,x+10:x+LOOT_SIZE-10].copy()})
+        return cells
 
     def familiar_name(self,frame,candidates=()):
         """Nombre de la oferta: referencia exacta o, si no, lectura emparejada con los familiares de la ruta."""

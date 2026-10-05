@@ -11,6 +11,7 @@ import numpy as np
 from .control_flow import SafetyStop
 from .dungeon_catalog import FAMILIARS,dungeon,farm_plan,normalize
 from .dungeon_vision import DungeonVision,familiar_glyph
+from . import loot
 from .farm_budget import FarmBudget
 from .game_window import ENV_WINDOW,WindowGuard
 from .processes import Mutex,child_options,close_children,python_executable
@@ -134,6 +135,19 @@ class DungeonRunner:
         self.log.emit('DUNGEON_WAIT_TIMEOUT',expected=expected,screen=screen,familiar=familiar,
                       snapshot=snapshot,timeout_seconds=timeout)
         raise SafetyStop(f'Pantalla no confirmada: {expected}; observada {screen}'+(f' · {familiar}' if familiar else ''))
+
+    def record_loot(self):
+        """Suma el LOOT RECAP visible y el que queda bajo el scroll (las casillas repetidas no cuentan dos veces)."""
+        if not loot.ENABLED:return
+        seen={};previous=None
+        for _ in range(8):
+            cells=self.vision.loot_cells(self.capture())
+            for cell in cells:seen.setdefault((cell['icon'][::8,::8].tobytes(),cell['amount']),cell)
+            signature=[(c['kind'],c['rarity'],c['amount']) for c in cells]
+            if len(cells)<6 or signature==previous:break
+            previous=signature;self.wheel(1,(1320,770));time.sleep(.6)
+        loot.record(list(seen.values()))
+        self.log.emit('LOOT_RECORDED',cells=len(seen))
 
     def offer_name(self,frame):
         identifier=getattr(self,'plan',{}).get('dungeon_id')
@@ -419,7 +433,7 @@ class DungeonRunner:
             return screen in ('CAPTURE_SUCCESS','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','LOADING','BATTLE_VICTORY','VICTORY','AUTO_ON','AUTO_OFF')
         frame=self.wait(outcome,20,'resultado de Persuade')
         captured=self.vision.screen(frame)=='CAPTURE_SUCCESS'
-        if captured:self.click('CAPTURE_SUCCESS',(958,962),'CAPTURE_CLOSE',(780,890,1140,1040))
+        if captured:self.click('CAPTURE_SUCCESS',(958,962),'CAPTURE_CLOSE',(780,890,1140,1040));loot.familiar(name)
         self.budget.finish_gold(action,effect_confirmed=True)
         atomic_json(path,{**intent,'effect_confirmed':True,'captured':captured})
         self.log.emit('FAMILIAR_PERSUADED',message=f'{name}: {"capturado" if captured else "no se unió"} · {cost} oro',
@@ -462,7 +476,7 @@ class DungeonRunner:
                 self.log.emit('DUNGEON_COMPLETE',message=f'Run {cycle}: derrota (normal en este modo)',budget=self.budget.payload())
                 return False
             if screen=='VICTORY':
-                frame=self.wait('VICTORY')
+                frame=self.wait('VICTORY');self.record_loot()
                 cv2.imwrite(str(self.channel.directory/f'result-{cycle}.png'),frame[110:930,1070:1600])
                 atomic_json(self.channel.directory/f'result-{cycle}.json',
                             {'attempt_id':attempt,'outcome':'VICTORY','loot':None,'gold_gain':None,'xp_gain':None,

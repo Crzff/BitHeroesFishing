@@ -192,6 +192,7 @@ class BossRunner(DungeonRunner):
         if self.vision.screen(frame)=='AUTO_OFF_BATTLE':self.click('AUTO_OFF_BATTLE',AUTO)
         frame=self.wait(lambda f:self.vision.screen(f) in results,BATTLE_LIMIT,'resultado del jefe')
         screen=self.vision.screen(frame);outcome='VICTORY' if screen=='WB_VICTORY' else 'DEFEAT'
+        if outcome=='VICTORY':self.record_loot()
         # Botones localizados: cambian de sitio entre victoria (3) y derrota (2).
         regroup=again  # crzf: una derrota no detiene, se sigue gastando
         if regroup:self.result_button(frame,'RESULT_REGROUP',REGROUP_ROI);self.wait('WB_LOBBY',15)

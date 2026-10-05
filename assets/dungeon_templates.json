@@ -1825,6 +1825,50 @@
     "GLYPH_M2": [
       "M cl\u00e1sica de los nombres de familiar",
       "oferta de Mummih"
+    ],
+    "LOOT_DIGIT_6": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_1": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_0": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_K": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_2": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_9": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_7": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_3": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_5": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_XP": [
+      "casilla de LOOT RECAP",
+      "letras XP"
+    ],
+    "LOOT_GOLD": [
+      "casilla de LOOT RECAP",
+      "moneda de oro"
     ]
   },
   "notes": [
@@ -1838,7 +1882,8 @@
     "HOME_BOSS: el fondo de arena cambia con otros personajes; m\u00e1scara de p\u00edxeles comunes con HOME_BOSS_TOWN, como HOME_QUEST/SETTINGS.",
     "PvP 2026-10-04: ventana PVP ARENA, coste 5, SELECT OPPONENT con 4 rivales; tickets en la barra superior roja (alterna con reloj).",
     "Runas menores 2026-10-05: tipo por el s\u00edmbolo (IoU), rareza por el tono del rombo; valores de la wiki (Dar/Quindi/Zyrk 5-25, Vryn 7.5-37.5).",
-    "Dungeons 2026-10-05: t\u00edtulo por dungeon (zonas 1-9) y ventana especial; nodos en assets/dungeon_nodes.json."
+    "Dungeons 2026-10-05: t\u00edtulo por dungeon (zonas 1-9) y ventana especial; nodos en assets/dungeon_nodes.json.",
+    "LOOT RECAP 2026-10-05: rejilla 3x2 de 129 px en x 1093/1247/1401, y 627/781; borde = rareza."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

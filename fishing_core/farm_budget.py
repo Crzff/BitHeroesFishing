@@ -100,6 +100,8 @@ class FarmBudget:
         self._entries[attempt_id] = cost
         self.energy_reserved += cost
         self.active_attempt = attempt_id
+        from . import loot
+        loot.spend(resource, cost)  # contador de la app; no hace nada fuera de farm_all
         return True
 
     def finish_run(self, attempt_id, outcome, *, closure_confirmed):

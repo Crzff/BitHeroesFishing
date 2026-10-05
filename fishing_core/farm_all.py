@@ -9,7 +9,7 @@ Cada paso imprime "== <modo>" y al final "<modo>: <resultado>" (la app los muest
 import os
 import sys
 
-from . import farm_config
+from . import farm_config, loot
 from .control_flow import SafetyStop
 
 
@@ -53,6 +53,7 @@ def steps(config):
 def main(argv):
     from .gamescope import is_gone,relaunch_game
     background=os.environ.get('FARM_BACKEND')=='gamescope'
+    os.environ['FARM_LOOT']='1';loot.ENABLED=True  # contador de la app (también en los subprocesos)
     config=farm_config.load()
     if '--runes' in argv:config['runes']=True
     if '--no-quest' in argv:config['modes']['quest']=False

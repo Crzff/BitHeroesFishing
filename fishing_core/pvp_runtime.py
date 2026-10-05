@@ -82,6 +82,7 @@ class PvpRunner(DungeonRunner):
         if self.vision.screen(frame)=='AUTO_OFF_BATTLE':self.click('AUTO_OFF_BATTLE',AUTO)
         frame=self.wait(lambda f:self.vision.screen(f) in results,BATTLE_LIMIT,'resultado PvP')
         screen=self.vision.screen(frame);outcome='VICTORY' if screen=='WB_VICTORY' else 'DEFEAT'
+        if outcome=='VICTORY':self.record_loot()
         x,y=self.vision.locate(frame,'RESULT_TOWN',TOWN_ROI);h,w=self.vision.templates['RESULT_TOWN'].shape[:2]
         self.click(screen,(x+w//2,y+h//2),'RESULT_TOWN',TOWN_ROI);self.wait('PVP',15)
         self.budget.finish_run(attempt,outcome,closure_confirmed=True)
