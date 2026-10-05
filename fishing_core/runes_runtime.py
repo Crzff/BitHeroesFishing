@@ -12,6 +12,7 @@ import time
 
 from .control_flow import SafetyStop
 from .dungeon_runtime import DungeonRunner
+from .dungeon_vision import RARITIES,RUNE_VALUES
 
 PROFILES={'CAPTURE':'QUINDI','ITEM_FIND':'VRYN','GOLD':'DAR','XP':'ZYRK'}
 PROFILE=((90,1010),'HOME_QUEST',(15,15,165,190))
@@ -37,13 +38,35 @@ class RunesRunner(DungeonRunner):
     def board(self):
         return self.wait(self.on('RUNES_TITLE',(760,90,1160,245)),10,'tablero de runas')
 
-    def slot_rune(self,slot):
-        """Runa del hueco; las runas del tablero entran animadas: dos lecturas iguales o 3 s."""
-        x,y=SLOTS[slot];self.board();previous=object();end=time.monotonic()+3
-        while True:
-            frame=self.capture();rune=self.vision.rune(frame[y-90:y+90,x-90:x+90])
-            if rune==previous or time.monotonic()>end:return rune
-            previous=rune;time.sleep(.4)
+    def hover_kind(self,xy):
+        """Tipo leído en el tooltip al pasar el ratón (el símbolo falla con las míticas rojas)."""
+        before=self.capture();self.check();self.io._move(tuple(int(n) for n in xy));time.sleep(1.2)
+        after=self.capture();self.io._move((960,1070))
+        # El tooltip se desvanece despacio y puede tapar el otro hueco: esperar a que desaparezca.
+        end=time.monotonic()+3
+        while self.vision.tooltip_visible(self.capture()) and time.monotonic()<end:time.sleep(.2)
+        time.sleep(.3)
+        return self.vision.tooltip_kind(before,after)
+
+    def resolve(self,xy,symbol_kind,rarity):
+        """(tipo, valor) confirmados; el símbolo solo sirve si el tooltip no se lee."""
+        kind=self.hover_kind(xy) or symbol_kind
+        return (kind,RUNE_VALUES[kind][RARITIES.index(rarity)]) if kind else (None,0)
+
+    def slot_runes(self):
+        """[(tipo, rareza, valor) o None] de los dos huecos. Ambos se leen de una sola captura sin tooltip
+        (el tooltip de un hueco tapa el otro) y luego se confirma el tipo pasando el ratón."""
+        self.board();previous=object();end=time.monotonic()+3
+        while True:  # el tablero entra animado: dos lecturas iguales o 3 s
+            frame=self.capture()
+            runes=[self.vision.rune(frame[y-90:y+90,x-90:x+90]) for x,y in SLOTS]
+            if runes==previous or time.monotonic()>end:break
+            previous=runes;time.sleep(.4)
+        out=[]
+        for xy,rune in zip(SLOTS,runes):
+            kind,value=self.resolve(xy,rune[0],rune[1]) if rune else (None,0)
+            out.append((kind,rune[1],value) if kind else None)
+        return out
 
     def visible(self):
         """Runas de la lista; vacía solo si sigue vacía 3 s (la lista entra animada)."""
@@ -65,31 +88,26 @@ class RunesRunner(DungeonRunner):
         self.wheel(steps,LIST_WHEEL);time.sleep(.5)
 
     def scan(self,kind):
-        """Mejor runa del tipo en la lista: (valor, rareza) recorriendo con scroll; None si no hay."""
+        """Mejor runa del tipo en la lista: (valor, rareza, pasos de scroll, xy) o None."""
         self.scroll(-30);best=None;previous=None
-        for _ in range(12):
+        for step in range(12):
             visible=self.visible()
-            for xy,k,rarity,value in visible:
-                if k==kind and (best is None or value>best[0]):best=(value,rarity)
+            for xy,k,rarity,_ in visible:
+                real,value=self.resolve(xy,k,rarity)
+                if real==kind and (best is None or value>best[0]):best=(value,rarity,step,tuple(int(n) for n in xy))
             signature=[(k,r) for _,k,r,_ in visible]
             if signature==previous:break
             previous=signature;self.scroll(2)
         return best
 
-    def find_and_click(self,kind,rarity):
-        """Vuelve arriba y baja hasta ver esa runa; la pulsa. False si no aparece."""
-        self.scroll(-30);previous=None
-        for _ in range(12):
-            visible=self.visible()
-            match=[xy for xy,k,r,_ in visible if k==kind and r==rarity]
-            if match:
-                xy=tuple(int(n) for n in match[0])
-                self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))  # Unity procesa la suelta por frames
-                self.log.emit('DUNGEON_INPUT',screen='MINOR_RUNE',xy=list(xy));return True
-            signature=[(k,r) for _,k,r,_ in visible]
-            if signature==previous:return False
-            previous=signature;self.scroll(2)
-        return False
+    def click_best(self,kind,best):
+        """Vuelve a la posición de la mejor runa, confirma tipo y rareza y la pulsa."""
+        value,rarity,step,xy=best;self.scroll(-30)
+        for _ in range(step):self.scroll(2)
+        here=[r for p,_,r,_ in self.visible() if abs(p[0]-xy[0])<20 and abs(p[1]-xy[1])<20]
+        if here!=[rarity] or self.hover_kind(xy)!=kind:return False
+        self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))  # Unity procesa la suelta por frames
+        self.log.emit('DUNGEON_INPUT',screen='MINOR_RUNE',xy=list(xy));return True
 
     def close_list(self):
         self.check();self.io.click(LIST_CLOSE)
@@ -102,28 +120,35 @@ class RunesRunner(DungeonRunner):
         self.check();self.io.click(xy);self.log.emit('DUNGEON_INPUT',screen=key,xy=list(xy))
 
     def apply(self,profile):
-        kind=PROFILES[profile]
-        for _ in range(4):  # cada vuelta mejora como mucho un hueco
-            current=[self.slot_rune(slot) for slot in (0,1)]
+        kind=PROFILES[profile];tried=set()
+        for _ in range(2):  # cada hueco se revisa una vez, empezando por el peor
+            current=self.slot_runes()
             values=[r[2] if r and r[0]==kind else 0 for r in current]
-            slot=values.index(min(values))
+            slot=min((s for s in (0,1) if s not in tried),key=lambda s:values[s]);tried.add(slot)
             self.open_list(slot);best=self.scan(kind)
             if best is None or best[0]<=values[slot]:
-                self.close_list()
-                other=1-slot  # el otro hueco ya es igual o mejor: probar si aún mejora
-                if values[other]>=values[slot]:return True
-                continue
-            if not self.find_and_click(kind,best[1]):raise SafetyStop('La runa elegida desapareció de la lista')
+                self.close_list();continue
+            if not self.click_best(kind,best):raise SafetyStop('La runa elegida desapareció de la lista')
             self.wait(self.on('RUNES_TITLE',(760,90,1160,245)),6,'tablero tras elegir runa')
-            end=time.monotonic()+4;x,y=SLOTS[slot]
-            while (self.vision.rune(self.capture()[y-90:y+90,x-90:x+90]) or (None,None,None))[::2]!=(kind,best[0]):
-                if time.monotonic()>end:raise SafetyStop('La runa no quedó equipada; no se insiste')
-                time.sleep(.4)
+            time.sleep(1)  # el hueco cambia animado
+            placed=self.slot_runes()[slot]
+            if not placed or (placed[0],placed[2])!=(kind,best[0]):raise SafetyStop('La runa no quedó equipada; no se insiste')
             self.log.emit('RUNE_EQUIPPED',slot=slot,rune=f'{kind} {best[1]}',message=f'Hueco {slot+1}: {kind} {best[1]} ({best[0]}%)')
         return True
 
+    def leave_runes(self):
+        """Si el juego quedó en la lista de runas, sus opciones, el tablero o el perfil, vuelve a Home."""
+        steps=((lambda f:self.vision.locate(f,'MINOR_RUNE',(720,210,1200,365)),LIST_CLOSE),
+               (lambda f:self.vision.locate(f,'RUNE_SWITCH',SWITCH[2]),OPTIONS_CLOSE),
+               (lambda f:self.vision.locate(f,'RUNES_TITLE',(760,90,1160,245)),BOARD_CLOSE),
+               (lambda f:self.vision.locate(f,*RUNES[1:]),PROFILE_CLOSE))
+        for _ in range(6):
+            frame=self.capture();hit=next((xy for seen,xy in steps if seen(frame) is not None),None)
+            if hit is None:return
+            self.check();self.io.click(hit);time.sleep(.25);self.io._move((960,1070));time.sleep(1.5)
+
     def run(self,profile):
-        self.ensure_home()
+        self.leave_runes();self.ensure_home()
         self.click('HOME',*PROFILE[:2],PROFILE[2])
         self.click_on(self.wait(self.on(*RUNES[1:]),10,'perfil'),RUNES)
         self.apply(profile)

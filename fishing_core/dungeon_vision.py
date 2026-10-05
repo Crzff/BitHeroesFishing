@@ -270,10 +270,33 @@ class DungeonVision:
         sym=cv2.resize(sym,(40,40),interpolation=cv2.INTER_AREA)>0
         scores={k[9:]:(sym&(ref>0)).sum()/max(1,(sym|(ref>0)).sum()) for k,ref in self.templates.items() if k.startswith('RUNE_SYM_')}
         best=sorted(scores.items(),key=lambda kv:-kv[1])
-        if best[0][1]<0.7 or best[0][1]-best[1][1]<0.15:return None
         rarity=rune_rarity(float(np.median(hsv[:,:,0][body])),float(np.median(hsv[:,:,1][body])))
         if rarity is None:return None
+        # El símbolo solo es una pista (falla con las míticas rojas): sin margen, tipo desconocido
+        # y el runner lo confirma con el tooltip.
+        if best[0][1]<0.7 or best[0][1]-best[1][1]<0.15:return None,rarity,None
         kind=best[0][0];return kind,rarity,RUNE_VALUES[kind][RARITIES.index(rarity)]
+
+    def tooltip_visible(self,frame):
+        """Hay un tooltip de runa abierto (línea de borde amarillo pálido)."""
+        yellow=(frame[:,:,0]>=100)&(frame[:,:,0]<=150)&(frame[:,:,1]>=235)&(frame[:,:,2]>=235)
+        return bool((yellow.sum(1)>=250).any())
+
+    def tooltip_kind(self,before,after):
+        """Tipo de runa leído en el título del tooltip ("QUINDI RUNE") que aparece al pasar el ratón."""
+        # El tooltip aparece con un borde amarillo pálido (255,255,125): su línea superior lo sitúa.
+        changed=np.abs(after.astype(np.int16)-before.astype(np.int16)).sum(2)>60
+        yellow=(after[:,:,0]>=100)&(after[:,:,0]<=150)&(after[:,:,1]>=235)&(after[:,:,2]>=235)&changed
+        rows=np.nonzero(yellow.sum(1)>=250)[0]
+        if not len(rows):return None
+        y=int(rows[0]);xs=np.nonzero(yellow[y])[0];x,w=int(xs.min()),int(xs.max()-xs.min())
+        band=after[y+8:y+62,x+30:x+w-30]
+        hsv=cv2.cvtColor(band,cv2.COLOR_BGR2HSV);mask=((hsv[:,:,1]>120)&(hsv[:,:,2]>150))|(band.min(2)>=200)
+        ys=np.nonzero(mask.any(1))[0]
+        if not len(ys):return None
+        text=self.read_text(mask[ys.min():ys.max()+1])
+        scored=sorted((edit_distance(text,name+'RUNE'),name) for name in RUNE_VALUES)
+        return scored[0][1] if scored[0][0]<=2 and scored[1][0]>scored[0][0] else None
 
     def runes_in(self,frame,roi):
         """Runas de la lista (MINOR RUNE): [((x,y) centro, tipo, rareza, valor)] dentro de roi."""

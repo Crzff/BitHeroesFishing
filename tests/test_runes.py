@@ -9,7 +9,7 @@ from fishing_core.dungeon_vision import DungeonVision
 from fishing_core.runes_runtime import LIST_ROI, SLOTS
 
 with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
-    FRAMES={k:data[k] for k in data.files if k.startswith('runes_')}
+    FRAMES={k:data[k] for k in data.files if k.startswith(('runes_','rune_tooltip'))}
 VISION=DungeonVision()
 
 
@@ -28,6 +28,11 @@ class RuneTests(unittest.TestCase):
 
     def test_nothing_is_read_on_an_empty_area(self):
         self.assertEqual(VISION.runes_in(np.zeros((1080,1920,3),np.uint8),LIST_ROI),[])
+
+
+    def test_the_tooltip_names_the_rune_type_even_when_the_symbol_fails(self):
+        self.assertEqual(VISION.tooltip_kind(FRAMES['rune_tooltip_before'],FRAMES['rune_tooltip_after']),'ZYRK')
+        self.assertIsNone(VISION.tooltip_kind(FRAMES['rune_tooltip_before'],FRAMES['rune_tooltip_before']))
 
 
 if __name__=='__main__':unittest.main()
