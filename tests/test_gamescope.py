@@ -46,12 +46,18 @@ class GamescopeTests(unittest.TestCase):
         def gone():raise RuntimeError('La ventana de Bit Heroes desapareció de gamescope')
         with self.assertRaises(SafetyStop):self.capture(frame,gone).grab({'left':0,'top':0,'width':10,'height':10})
 
-    def test_frames_never_returns_a_frame_older_than_requested(self):
+    def frames(self,latest,alive=True):
         frames=gamescope.PipeWireFrames.__new__(gamescope.PipeWireFrames)
-        frames.lock=__import__('threading').Lock();frames.latest=bytes(gamescope.FRAME);frames.stamp=time.monotonic()-5
-        frames.proc=SimpleNamespace(poll=lambda:None)
-        with self.assertRaises(RuntimeError):frames.frame(time.monotonic(),timeout=0.05)
-        self.assertEqual(frames.frame(time.monotonic()-10).shape,(1080,1920,3))
+        frames.lock=__import__('threading').Lock();frames.latest=latest;frames.stamp=time.monotonic()-5;frames.error=None
+        frames.proc=SimpleNamespace(poll=lambda:None if alive else 1)
+        return frames
+
+    def test_a_still_screen_reuses_the_last_frame_only_while_the_stream_is_alive(self):
+        self.assertEqual(self.frames(bytes(gamescope.FRAME)).frame(time.monotonic(),timeout=0.05).shape,(1080,1920,3))
+        with self.assertRaises(RuntimeError):self.frames(bytes(gamescope.FRAME),alive=False).frame(time.monotonic(),timeout=0.05)
+
+    def test_no_frame_at_all_is_an_error(self):
+        with self.assertRaises(RuntimeError):self.frames(None).frame(time.monotonic(),timeout=0.01)
 
     def test_io_rejects_coordinates_outside_and_checks_f8_and_window_first(self):
         io=gamescope.GamescopeIO.__new__(gamescope.GamescopeIO);io.control_mode=False

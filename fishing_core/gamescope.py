@@ -90,16 +90,17 @@ class PipeWireFrames:
         except Exception as exc:
             self.error=exc
 
-    def frame(self,newer_than,timeout=2.0):
-        """Fotograma recibido después de newer_than; nunca reutiliza uno anterior."""
+    def frame(self,newer_than,timeout=0.4):
+        """Fotograma más reciente. gamescope solo emite al cambiar la imagen: si en `timeout` no llega
+        uno nuevo, el último sigue siendo el actual (pantalla quieta), siempre que el flujo siga vivo."""
         end=time.monotonic()+timeout
-        while time.monotonic()<end:
+        while True:
+            if self.proc.poll() is not None or self.error is not None:raise RuntimeError('El flujo de gamescope se cerró')
             with self.lock:
-                if self.latest is not None and self.stamp>newer_than:
+                if self.latest is not None and (self.stamp>newer_than or time.monotonic()>=end):
                     return np.frombuffer(self.latest,np.uint8).reshape(H,W,3)
-            if self.proc.poll() is not None:raise RuntimeError('El flujo de gamescope se cerró')
+            if time.monotonic()>=end+2.0:raise RuntimeError('gamescope no entregó ningún fotograma')
             time.sleep(.01)
-        raise RuntimeError('gamescope no entregó un fotograma nuevo')
 
     def close(self):
         if self.proc.poll() is None:
@@ -210,7 +211,7 @@ class GamescopeCapture:
             x,y,w,h=(monitor[k] for k in ('left','top','width','height'))
             if any(type(n) is not int for n in (x,y,w,h)) or x<0 or y<0 or w<=0 or h<=0 or x+w>W or y+h>H:
                 raise RuntimeError('Región de captura fuera del juego')
-            frame=self.frames.frame(time.monotonic()-0.0)[y:y+h,x:x+w]
+            frame=self.frames.frame(time.monotonic())[y:y+h,x:x+w]
             bgra=np.dstack([frame,np.full(frame.shape[:2],255,np.uint8)])
             return ScreenShot(bytearray(bgra.tobytes()),monitor)
         except KeyboardInterrupt:
