@@ -56,9 +56,9 @@ def main(argv):
     config=farm_config.load()
     if '--runes' in argv:config['runes']=True
     if '--no-quest' in argv:config['modes']['quest']=False
+    # El servidor de imagen queda vivo al terminar: cerrar el flujo PipeWire coincidió con caídas de gamescope.
     results=[];server={'proc':start_frame_server() if background else None}
-    try:run_steps(config,results,background,is_gone,relaunch_game,server)
-    finally:stop_frame_server(server)
+    run_steps(config,results,background,is_gone,relaunch_game,server)
     report(results)
 
 
@@ -66,7 +66,9 @@ def start_frame_server():
     """Un solo flujo de imagen para toda la sesión (abrir/cerrar flujos coincidió con caídas de gamescope)."""
     import subprocess
     from .gamescope import server_alive
-    proc=subprocess.Popen([sys.executable,'-B','-m','fishing_core.gamescope','serve'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    if server_alive():return None  # ya hay uno: se reutiliza
+    proc=subprocess.Popen([sys.executable,'-B','-m','fishing_core.gamescope','serve'],stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL,stdin=subprocess.DEVNULL,start_new_session=True)
     import time
     for _ in range(50):
         if server_alive():break
@@ -75,11 +77,12 @@ def start_frame_server():
 
 
 def stop_frame_server(server):
-    proc=server.get('proc')
-    if proc is not None and proc.poll() is None:
-        proc.terminate()
-        try:proc.wait(5)
-        except Exception:proc.kill()
+    """Solo cuando el juego ya no existe (antes de relanzarlo)."""
+    from .gamescope import SHM
+    try:
+        os.kill(int(open(SHM+'.pid').read()),15)
+    except (OSError,ValueError):
+        pass
     server['proc']=None
 
 

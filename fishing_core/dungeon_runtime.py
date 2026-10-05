@@ -295,6 +295,12 @@ class DungeonRunner:
         self.log.emit('DUNGEON_STATUS',message=f'Energía {balance}: se baja a {level}')
         return True
 
+    def clock_only(self):
+        """La barra de energía muestra un reloj (dígitos con ':') y no un saldo legible."""
+        frame=self.capture()
+        if self.vision.energy(frame) is not None:return False
+        return self.vision.energy_clock(frame)
+
     def read_team_energy(self):
         balance=None
         def known(frame):
@@ -312,7 +318,14 @@ class DungeonRunner:
         """Entra con la dificultad pagable más alta; None si no queda energía para ninguna."""
         if not self.safety_checked or self.cost!=ROUTE_COSTS[(self.plan['dungeon_id'],self.difficulty)]:
             raise SafetyStop('Ruta o ajustes sin confirmar')
-        balance=self.read_team_energy()
+        try:
+            balance=self.read_team_energy()
+        except SafetyStop:
+            # Con menos energía de la que cuesta cualquier run, la barra solo muestra el reloj de
+            # recarga. Si el reloj es lo único legible, se termina sin entrar (nunca gasta).
+            if self.vision.screen(self.capture())=='TEAM' and self.clock_only():
+                self.close_menu('TEAM');self.balance=0;return None
+            raise
         while balance[0]<self.cost:
             if not self.lower_difficulty(balance[0]):
                 self.balance=balance[0];return None

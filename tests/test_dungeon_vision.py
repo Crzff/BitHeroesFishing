@@ -112,6 +112,12 @@ class DungeonVisionTests(unittest.TestCase):
         for clock in ('energy_team_clock_153','energy_team_clock_152','energy_team_clock_145','energy_team_clock_144'):
             self.assertIsNone(self.vision.energy(self.frames[clock]),clock)
 
+    def test_recharge_clock_is_told_apart_from_a_balance(self):
+        for clock in ('timer','energy_team_timer','energy_team_clock_153','energy_team_clock_144'):
+            self.assertTrue(self.vision.energy_clock(self.frames[clock]),clock)
+        for other in ('energy_team_zero','energy_team_61','team','home','battle'):
+            self.assertFalse(self.vision.energy_clock(self.frames[other]),other)
+
     def test_native_spending_flags_use_the_parent_checkbox_not_rarity(self):
         self.assertIs(self.vision.setting(self.frames['settings_gold'],'gold'),False)
         self.assertIs(self.vision.setting(self.frames['settings_gems'],'gems'),False)

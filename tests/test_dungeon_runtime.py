@@ -515,9 +515,17 @@ class DungeonRuntimeTests(unittest.TestCase):
             io.click.assert_called_once()
             self.assertEqual(runner.budget.energy_reserved,10)
 
-    def test_permanent_recharge_clock_stops_without_reserving_or_accept(self):
+    def test_only_the_clock_means_no_energy_and_ends_without_entering(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,fake=self.energy_clock(Path(tmp),[None])
+            runner.vision.energy_clock=Mock(return_value=True);runner.close_menu=Mock()
+            with patch('fishing_core.dungeon_runtime.time',fake):self.assertIsNone(runner.enter(1))
+            runner.close_menu.assert_called_once_with('TEAM');io.click.assert_not_called()
+            self.assertEqual(runner.budget.energy_reserved,0)
+
+    def test_permanent_recharge_clock_stops_without_reserving_or_accept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,fake=self.energy_clock(Path(tmp),[None]);runner.vision.energy_clock=Mock(return_value=False)
             with patch('fishing_core.dungeon_runtime.time',fake):
                 with self.assertRaisesRegex(SafetyStop,'saldo de energía en TEAM'):runner.enter(1)
             io.click.assert_not_called()

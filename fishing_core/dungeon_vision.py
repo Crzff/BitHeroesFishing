@@ -213,6 +213,20 @@ class DungeonVision:
         text=''.join(values)
         return int(text) if len(text)<=5 and (len(text)==1 or text[0]!='0') else None
 
+    def energy_clock(self,frame):
+        """True si la barra de energía muestra el reloj de recarga (p. ej. 1:41): dos puntos y dígitos."""
+        if self.screen(frame)=='TEAM':frame=np.minimum(frame[:80].astype(np.uint16)*2,255).astype(np.uint8)
+        pos=self.locate(frame,'ENERGY_ICON',(880,10,1050,78))
+        if pos is None:return False
+        x,y=pos;mask=(frame[y+1:y+46,x+64:x+229].min(2)>=170).astype(np.uint8)
+        boxes=quantity_boxes(mask)
+        if not boxes:return False
+        tall=max(b[3] for b in boxes)
+        # ':' es una caja estrecha con filas vacías en medio (un '1' es continuo); no hay barra '/'.
+        colons=[b for b in boxes if b[2]<=8 and b[3]>=0.7*tall and mask[b[1]:b[1]+b[3],b[0]:b[0]+b[2]].any(1).mean()<0.75]
+        slashes=[b for b in boxes if b[2]>=1.0*b[3]]
+        return len(colons)==1 and not slashes and 3<=len(boxes)<=5
+
     def energy(self,frame):
         if self.screen(frame)=='TEAM':
             # TEAM oscurece la barra superior al 50 %; calibrado con fixture
