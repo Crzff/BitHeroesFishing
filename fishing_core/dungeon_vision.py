@@ -332,9 +332,13 @@ class DungeonVision:
             rarity=loot_rarity(np.median(ring,0).astype(np.uint8))
             if rarity is None:continue
             box=(x,y,x+LOOT_SIZE,y+LOOT_SIZE);amount=self.loot_amount(frame,x,y)
+            # El equipo lleva la flecha de comparación (roja/verde) arriba a la izquierda; materiales no.
+            c=frame[y+8:y+50,x+8:x+44].astype(int);r,g,b=c[:,:,2],c[:,:,1],c[:,:,0]
+            arrow=((r>95)&(r>3*g)&(r>3*b)).sum()>=80 or ((g>120)&(g>2*r)&(g>2*b)).sum()>=80
             kind=('XP' if self.locate(frame,'LOOT_XP',box,.9) else 'GOLD' if self.locate(frame,'LOOT_GOLD',box,.9)
-                  else 'MATERIAL' if amount is not None else 'ITEM')
-            cells.append({'kind':kind,'rarity':rarity,'amount':amount if amount is not None else 1,
+                  else 'ITEM' if arrow else 'MATERIAL')
+            if amount is None:amount=0 if kind in ('XP','GOLD') else 1  # oro/XP ilegible: no se inventa
+            cells.append({'kind':kind,'rarity':rarity,'amount':amount,
                           'icon':frame[y+10:y+LOOT_SIZE-10,x+10:x+LOOT_SIZE-10].copy()})
         return cells
 
@@ -360,6 +364,17 @@ class DungeonVision:
         # Solo el padre a x≈478: las rarezas debajo tienen sangría y otro estado.
         for key,state in [('EMPTY',False),('EMPTY_HOVER',False),('CHECKED',True)]:
             if self.locate(frame,key,(x-83,y-15,x-11,y+58),.94):return state
+        return None
+
+    def setting_box(self,frame,name):
+        """Centro de la casilla de un ajuste de SETTINGS (para desmarcarla); None si no se ve."""
+        if self.screen(frame)!='SETTINGS':return None
+        pos=self.locate(frame,{'gold':'GOLD','gems':'GEMS','duplicates':'DUPLICATES'}[name],(550,340,1390,860))
+        if pos is None:return None
+        x,y=pos
+        for key in ('CHECKED','EMPTY','EMPTY_HOVER'):
+            box=self.locate(frame,key,(x-83,y-15,x-11,y+58),.94)
+            if box:h,w=self.templates[key].shape[:2];return box[0]+w//2,box[1]+h//2
         return None
 
     def number(self,image):

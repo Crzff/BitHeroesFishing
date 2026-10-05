@@ -245,7 +245,7 @@ class DungeonRunner:
     def verify_settings(self):
         self.safety_checked=False;self.wait('HOME')
         self.click('HOME',(1830,986),'HOME_SETTINGS',(1760,910,1920,1080));self.wait('SETTINGS')
-        self.scroll_menu('SETTINGS',-80);seen={}
+        self.scroll_menu('SETTINGS',-80);seen={};changed=[]
         for _ in range(35):
             frame=self.wait('SETTINGS')
             for name in ('gold','gems','duplicates'):
@@ -253,14 +253,19 @@ class DungeonRunner:
                 if value is not None:
                     second=self.capture()
                     if self.vision.setting(second,name)!=value:raise SafetyStop('Ajuste nativo inestable')
+                    # crzf: auto persuadir con oro/gemas nunca; con objetivos tampoco rechazar duplicados.
+                    if value and (name in ('gold','gems') or self.targets):
+                        xy=self.vision.setting_box(second,name)
+                        if xy is None:raise SafetyStop(f'Gasto nativo activado: {name}; no se entra')
+                        self.click('SETTINGS',xy)
+                        frame=self.wait(lambda f:self.vision.setting(f,name) is False,5,f'{name} desactivado')
+                        value=False;changed.append(name)
+                        self.log.emit('DUNGEON_STATUS',message=f'Ajuste {name} desactivado por el bot')
                     seen[name]=value
-                    if name in ('gold','gems') and value:raise SafetyStop(f'Gasto nativo activado: {name}; no se entra')
             if len(seen)==3:break
             self.scroll_menu('SETTINGS',6)  # Calibrado: 8 salta una lectura; 6 conserva solape.
         if len(seen)!=3:raise SafetyStop('No se pudieron comprobar todos los ajustes anti-gasto')
-        if self.targets and seen['duplicates']:
-            raise SafetyStop('Desactiva Decline duplicate familiars antes de farmear copias; no se entra')
-        atomic_json(self.channel.directory/'native_settings.json',{'checked':seen,'changed_by_bot':False})
+        atomic_json(self.channel.directory/'native_settings.json',{'checked':seen,'changed_by_bot':changed})
         self.close_menu('SETTINGS');self.safety_checked=True
         self.log.emit('DUNGEON_STATUS',message='Ajustes comprobados · cero oro/gemas',settings=seen)
 

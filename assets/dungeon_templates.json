@@ -1869,6 +1869,14 @@
     "LOOT_GOLD": [
       "casilla de LOOT RECAP",
       "moneda de oro"
+    ],
+    "LOOT_DIGIT_4": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
+    ],
+    "LOOT_DIGIT_8": [
+      "glifo binario a 27 px",
+      "cantidad de la casilla de LOOT RECAP"
     ]
   },
   "notes": [

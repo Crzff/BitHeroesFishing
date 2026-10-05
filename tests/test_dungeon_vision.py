@@ -122,6 +122,7 @@ class DungeonVisionTests(unittest.TestCase):
         self.assertIs(self.vision.setting(self.frames['settings_gold'],'gold'),False)
         self.assertIs(self.vision.setting(self.frames['settings_gems'],'gems'),False)
         self.assertIs(self.vision.setting(self.frames['settings_duplicates'],'duplicates'),True)
+        self.assertEqual(self.vision.setting_box(self.frames['settings_duplicates'],'duplicates'),(510,629))
         checked=self.frames['settings_gold'].copy()
         checked[653:717,478:542]=self.vision.templates['CHECKED']
         self.assertIs(self.vision.setting(checked,'gold'),True)

@@ -283,20 +283,23 @@ class DungeonRuntimeTests(unittest.TestCase):
             self.assertEqual(runner.scroll_menu.call_count,20)
             self.assertEqual(runner.budget.payload()['entries_reserved'],0)
 
-    def test_settings_scroll_uses_fewer_reads_without_skipping_spending_and_duplicates_guards(self):
-        for unsafe in (None,'gold','gems','duplicates','unknown'):
+    def test_settings_scroll_reads_everything_and_the_bot_unticks_spending_and_duplicates(self):
+        for unsafe in (None,'gold','gems','duplicates','unknown','no_box'):
             with tempfile.TemporaryDirectory() as tmp:
                 runner,io,vision=self.runner(Path(tmp));runner.plan['target']='Tealk'
-                position=[0];runner.click=Mock();runner.close_menu=Mock()
+                position=[0];ticked={unsafe};runner.close_menu=Mock()
+                runner.click=Mock(side_effect=lambda screen,xy,*a,**k:ticked.discard(unsafe) if screen=='SETTINGS' else None)
                 def scroll(screen,amount):
                     self.assertEqual(screen,'SETTINGS')
                     position[0]=0 if amount<0 else position[0]+amount
                 runner.scroll_menu=Mock(side_effect=scroll)
                 def setting(frame,name):
                     start={'gold':30,'gems':42,'duplicates':48}[name]
-                    return name==unsafe if unsafe!='unknown' and start<=position[0]<start+12 else None
+                    if unsafe=='unknown' or not start<=position[0]<start+12:return None
+                    return name in ticked or (unsafe=='no_box' and name=='gold')
                 vision.setting.side_effect=setting
-                if unsafe:
+                vision.setting_box.side_effect=lambda f,name:None if unsafe=='no_box' else (700,500)
+                if unsafe in ('unknown','no_box'):
                     with self.assertRaises(SafetyStop):runner.verify_settings()
                     self.assertFalse(runner.safety_checked);runner.close_menu.assert_not_called()
                 else:
@@ -304,6 +307,7 @@ class DungeonRuntimeTests(unittest.TestCase):
                     self.assertTrue(runner.safety_checked)
                     self.assertLessEqual(runner.scroll_menu.call_count,10)  # Reset + como máximo 9 avances.
                     runner.close_menu.assert_called_once_with('SETTINGS')
+                    self.assertEqual(runner.click.call_count,2 if unsafe else 1)  # SETTINGS + solo la casilla marcada
                 io.click.assert_not_called()
                 self.assertEqual(runner.budget.payload()['entries_reserved'],0)
 
