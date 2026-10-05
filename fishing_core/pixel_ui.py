@@ -177,7 +177,7 @@ def loot_button(w=150,h=150):
     base,light,dark=COLORS['orange'];img=Image.new('RGBA',(w,h),(0,0,0,0))
     bands(img,(0,0,w-1,h-1),OUTLINE,[light],[base],[dark],[base],base,px=5)
     chest=Image.open(ICONS/'res/chest.png').convert('RGBA');chest=chest.resize((w-40,round(chest.height*(w-40)/chest.width)),Image.NEAREST)
-    img.alpha_composite(chest,((w-chest.width)//2,10));t=text('LOOT',28);img.alpha_composite(t,((w-t.width)//2,h-t.height-12))
+    img.alpha_composite(chest,(round(w/2-visual_center(chest)),10));t=text('LOOT',28);img.alpha_composite(t,((w-t.width)//2,h-t.height-12))
     return img
 
 
@@ -186,6 +186,13 @@ def icon(name,height=110):
     img=Image.open(ICONS/f'{name}.png').convert('RGBA');img=img.crop(img.getbbox())  # centrado real
     scale=height/img.height
     return img.resize((round(img.width*scale),height),Image.NEAREST)
+
+
+def visual_center(img):
+    """Centro horizontal del dibujo según su masa (no su caja): las rayas sueltas no lo desplazan."""
+    import numpy as np
+    a=np.asarray(img.getchannel('A'),dtype=float);cols=a.sum(0)
+    return float((cols*np.arange(len(cols))).sum()/max(1.0,cols.sum()))
 
 
 def dimmed(img,alpha=.35):

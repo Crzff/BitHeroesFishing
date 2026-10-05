@@ -111,7 +111,8 @@ class FarmApp(tk.Tk):
         for i,mode in enumerate(farm_config.MODES):
             x=x0+(i%3)*(cw+20);y=y0+(i//3)*(ch+20);on=self.config_data['modes'][mode]
             self.put(ui.row(cw,ch),x,y)
-            icon=ui.icon(mode,120);self.put(icon if on else ui.dimmed(icon),x+(cw-icon.width)//2,y+14,lambda m=mode:self.open_mode(m))
+            icon=ui.icon(mode,120);ix=x+round(cw/2-ui.visual_center(icon))
+            self.put(icon if on else ui.dimmed(icon),ix,y+14,lambda m=mode:self.open_mode(m))
             res=self.resource(RESOURCE[mode],38);self.put(res if on else ui.dimmed(res),x+14,y+14)
             for j,line in enumerate(self.summary(mode)):self.label(line[:18],x+18,y+148+j*32,16,ui.GOLD if on else ui.DIM)
             self.put(ui.checkbox(on),x+cw-68,y+ch-68,None if running else lambda m=mode:self.toggle_mode(m))
