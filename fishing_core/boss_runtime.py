@@ -96,22 +96,35 @@ class BossRunner(DungeonRunner):
         self.click('WB_SUMMON',dropdown)
         menu=lambda f:self.vision.locate(f,menu_key,(760,95,1160,240)) is not None
         frame=self.wait(menu,10,f'menú de {label}');time.sleep(1.2)  # el menú entra deslizándose
-        xy=menu_row(row(self.capture()) if callable(row) else row)
+        xy=row(self.capture()) if callable(row) else menu_row(row)
         self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))
         self.log.emit('DUNGEON_INPUT',screen=menu_key,xy=list(xy))
         self.wait(lambda f:self.vision.screen(f)=='WB_SUMMON' and confirm(f),10,f'{label} elegido')
+
+    def tier_rows(self,frame):
+        """{tier: y del centro} de las filas visibles del menú (con scroll no caen en posiciones fijas)."""
+        hits={}
+        for y in range(250,960,6):
+            value=self.vision.number(frame[y-30:y+30,970:1100])
+            if value is not None:hits.setdefault(value,[]).append(y)
+        return {value:(ys[0]+ys[-1])//2 for value,ys in hits.items()}
+
+    def tier_xy(self,frame):
+        """Fila del tier elegido, desplazando el menú (tiers de mayor a menor) hasta verla."""
+        previous=None
+        for _ in range(12):
+            rows=self.tier_rows(frame)
+            if self.tier in rows:return (930,rows[self.tier])
+            if not rows or rows==previous:break
+            previous=rows;self.wheel(2 if self.tier<min(rows) else -2,(930,600));time.sleep(.8);frame=self.capture()
+        raise SafetyStop(f'Tier {self.tier} no está en el menú; no se cambia')
 
     def configure_summon(self):
         """Fija tier, dificultad y sala privada elegidos; cada cambio se confirma leyendo el diálogo."""
         frame=self.wait(lambda f:self.vision.screen(f)=='WB_SUMMON' and self.tier_shown(f) is not None,10,'Summon')
         time.sleep(.5);frame=self.capture()
         if self.tier_shown(frame)!=self.tier:
-            def row(f):
-                for i in range(6):
-                    y=316+128*i
-                    if self.vision.number(f[y-30:y+30,970:1100])==self.tier:return i
-                raise SafetyStop(f'Tier {self.tier} no está en el menú; no se cambia')
-            self.pick(TIER_DROPDOWN,'WB_TIER_MENU',row,lambda f:self.tier_shown(f)==self.tier,f'tier {self.tier}')
+            self.pick(TIER_DROPDOWN,'WB_TIER_MENU',self.tier_xy,lambda f:self.tier_shown(f)==self.tier,f'tier {self.tier}')
         key=f'WB_{self.difficulty.upper()}'
         if self.vision.locate(self.capture(),key,DIFF_FIELD) is None:
             self.pick(DIFF_DROPDOWN,'WB_DIFF_MENU',DIFFICULTIES.index(self.difficulty),

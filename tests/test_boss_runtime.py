@@ -97,4 +97,16 @@ class BossRuntimeTests(unittest.TestCase):
         self.assertEqual(runner.budget.energy_reserved,0)
 
 
+    def test_tier_menu_scrolls_toward_the_wanted_tier_and_finds_its_shifted_row(self):
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            top,scrolled=data['wb_tier_menu_top'],data['wb_tier_menu_scrolled']
+        runner=BossRunner.__new__(BossRunner);runner.vision=DungeonVision();runner.wheel=Mock()
+        runner.tier=7;self.assertEqual(runner.tier_xy(top),(930,571));runner.wheel.assert_not_called()
+        runner.tier=3;runner.capture=Mock(return_value=scrolled)
+        with patch('fishing_core.boss_runtime.time.sleep'):self.assertEqual(runner.tier_xy(top),(930,862))
+        self.assertGreater(runner.wheel.call_args.args[0],0)  # tier menor: hacia abajo
+        runner.tier=13;runner.wheel.reset_mock()
+        with patch('fishing_core.boss_runtime.time.sleep'),self.assertRaises(SafetyStop):runner.tier_xy(top)
+
+
 if __name__=='__main__':unittest.main()
