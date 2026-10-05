@@ -98,8 +98,9 @@ class FarmApp(tk.Tk):
             self.put(ui.checkbox(on),x+232,y+164,None if running else lambda m=mode:self.toggle_mode(m))
         self.put(ui.checkbox(self.config_data['runes'],44),82,676,None if running else self.toggle_runes)
         self.label('CAMBIAR RUNAS (CAPTURA / ITEM FIND)',138,682,18)
-        self.label('PULSA UN ICONO PARA ELEGIR QUE HACE CADA MODO',82,724,14,ui.DIM)
-        self.label(self.status[:58],82,756,16,ui.GOLD if running else ui.DIM)
+        self.put(ui.checkbox(self.config_data['background'],44),82,726,None if running else self.toggle_background)
+        self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',138,732,18)
+        self.label(self.status[:58],82,786,16,ui.GOLD if running else ui.DIM)
         self.put(ui.auto_button(running,150,124),W-232,664,self.toggle_run)
 
     def summary(self,mode):
@@ -202,6 +203,7 @@ class FarmApp(tk.Tk):
         if self.process is None:self.screen=mode
     def toggle_mode(self,mode):self.config_data['modes'][mode]^=True;self.save()
     def toggle_runes(self):self.config_data['runes']^=True;self.save()
+    def toggle_background(self):self.config_data['background']^=True;self.save()
     def step_zone(self,delta):self.zone=ZONES[(ZONES.index(self.zone)+delta)%len(ZONES)]
 
     def choose_dungeon(self,identifier):
@@ -235,9 +237,10 @@ class FarmApp(tk.Tk):
         if self.process is not None:
             self.process.send_signal(signal.SIGINT);self.status='DETENIENDO...';return
         if not any(self.config_data['modes'].values()):self.status='NINGUN MODO ACTIVO';return
-        background=os.environ.get('FARM_BACKEND')=='gamescope'
+        background=self.config_data['background'] or os.environ.get('FARM_BACKEND')=='gamescope'
+        env={**os.environ,'FARM_BACKEND':'gamescope' if background else ''}
         self.save();self.status='EN MARCHA EN SEGUNDO PLANO · F8 DETIENE' if background else 'EN MARCHA · F8 DETIENE · NO CAMBIES DE VENTANA'
-        self.process=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all'],cwd=str(ROOT),
+        self.process=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all'],cwd=str(ROOT),env=env,
                                       stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
         threading.Thread(target=self.follow,args=(self.process,),daemon=True).start()
 

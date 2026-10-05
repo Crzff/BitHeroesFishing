@@ -14,7 +14,8 @@ DEFAULT={'modes':{mode:True for mode in MODES},
          'raid':{'raid':'STORM','difficulty':'Heroic'},
          'trials':{'difficulty':499},
          'pvp':{'opponent':4},
-         'runes':True}
+         'runes':True,
+         'background':False}  # True: juego en gamescope (JUEGO_SEGUNDO_PLANO.sh), sin foco
 
 
 def load(path=None):
