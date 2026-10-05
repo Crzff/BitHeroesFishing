@@ -115,7 +115,10 @@
     "trials_menu_6": "ffe78a0cb75ea2a316d93d1f9219cf50c11d23f2b0e4fd078dc84f776f88b916",
     "trials_menu_7": "ffe78a0cb75ea2a316d93d1f9219cf50c11d23f2b0e4fd078dc84f776f88b916",
     "trials_levels_674": "86c411ae115e6a1e128eaba6143d2d54fbed8bc6bd1478cd921e0caecf963e9d",
-    "news": "9fabe31d962a99423111d74fe27bc9ebb267e974e0c08fcafb26303c9c599f09"
+    "news": "9fabe31d962a99423111d74fe27bc9ebb267e974e0c08fcafb26303c9c599f09",
+    "disconnected": "cd1d9e365a0900fd276cf983fb2b8e4782d153119788abead879466541c2b03f",
+    "season_rewards": "6ac9fadabc5a6fe7d2b70ac78c08784f2cc71f298a1c9347d14fd34d19662edd",
+    "items_window": "8cab4d7f002bb578cc19c99dd18078224a938d458d3c68a5d91f2bd568509124"
   },
   "regions": {
     "HOME_QUEST": [
@@ -1368,6 +1371,30 @@
         1270,
         1005
       ]
+    ],
+    "DISCONNECTED": [
+      "rr0",
+      "captura Steam 2026-10-04"
+    ],
+    "RECONNECT": [
+      "rr0",
+      "captura Steam 2026-10-04"
+    ],
+    "SEASON_TITLE": [
+      "demo2",
+      "captura Steam 2026-10-04"
+    ],
+    "SEASON_CLAIM": [
+      "demo2",
+      "captura Steam 2026-10-04"
+    ],
+    "ITEMS_TITLE": [
+      "demo3",
+      "captura Steam 2026-10-04"
+    ],
+    "ITEMS_CLOSE": [
+      "demo3",
+      "captura Steam 2026-10-04"
     ]
   },
   "notes": [

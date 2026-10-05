@@ -582,6 +582,21 @@ class DungeonRuntimeTests(unittest.TestCase):
                 state[0]='pvp_window';self.assertEqual(runner.ensure_home(keep=('PVP',)),'PVP')
             self.assertEqual(io.click.call_count,2)
 
+    def test_disconnection_is_recovered_through_reconnect_daily_reward_and_items(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('disconnected','season_rewards','items_window','news','trials_home')}
+        vision=DungeonVision();x,y=vision.locate(frames['items_window'],'ITEMS_CLOSE',(1200,150,1500,450))
+        h,w=vision.templates['ITEMS_CLOSE'].shape[:2]
+        moves={('disconnected',(960,742)):'season_rewards',('season_rewards',(960,962)):'items_window',
+               ('items_window',(x+w//2,y+h//2)):'news',('news',(1118,964)):'trials_home'}
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.vision=vision;state=['disconnected']
+            runner.capture=lambda:frames[state[0]];runner.wait=DungeonRunner.wait.__get__(runner)
+            io.click.side_effect=lambda xy:state.__setitem__(0,moves[(state[0],tuple(xy))])
+            with patch('fishing_core.dungeon_runtime.time.sleep'):self.assertEqual(runner.ensure_home(),'HOME')
+            self.assertEqual(io.click.call_count,4)
+
     def test_run_stops_before_navigating_when_the_next_entry_exceeds_the_energy_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             runner,io,_=self.runner(Path(tmp));runner.plan=farm_plan('Z5D2','Normal',3,15)

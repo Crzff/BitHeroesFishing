@@ -57,13 +57,22 @@ def main(argv):
     results=[]
     for name,step in steps(config):
         print(f'== {name}',flush=True)
-        try:
-            step();results.append((name,'OK'))
-        except KeyboardInterrupt:
-            results.append((name,'F8'));break
-        except (SafetyStop,RuntimeError,ValueError) as exc:
-            results.append((name,str(exc)))
-            if not str(exc).startswith('Derrota'):break  # estado del juego no confirmado: no seguir
+        for attempt in (1,2):
+            try:
+                step();results.append((name,'OK'));break
+            except KeyboardInterrupt:
+                results.append((name,'F8'));return report(results)
+            except (SafetyStop,RuntimeError,ValueError) as exc:
+                # Desconexión del servidor: el siguiente intento empieza con ensure_home(), que pulsa
+                # RECONNECT y cierra las ventanas del arranque. Solo un reintento por modo.
+                if attempt==1 and 'DISCONNECTED' in str(exc):print(f'== {name} (reconexión)',flush=True);continue
+                results.append((name,str(exc)))
+                if str(exc).startswith('Derrota'):break
+                return report(results)  # estado del juego no confirmado: no seguir
+    report(results)
+
+
+def report(results):
     for name,result in results:print(f'{name}: {result}',flush=True)
 
 
