@@ -196,6 +196,13 @@ class DungeonRunner:
         Si el juego quedó a mitad de una run (bot reiniciado), la deja terminar: Auto encendido, ofertas
         rechazadas (no gasta) y el resultado se cierra con TOWN."""
         running=LEFTOVER_SCREENS
+        # Desplegables que un STOP puede dejar abiertos (coste, tier, dificultad): su X no gasta nada.
+        dropdowns=('COST_MENU_TICKETS','COST_MENU_BADGES','COST_MENU_TOKENS','WB_TIER_MENU','WB_DIFF_MENU')
+        for _ in range(3):
+            frame=self.capture()
+            if not any(self.vision.locate(frame,k,(700,95,1220,250)) for k in dropdowns):break
+            self.check();self.io.click((1310,182));time.sleep(.25);self.io._move((960,1070));time.sleep(1.2)
+            self.log.emit('DUNGEON_INPUT',screen='MENU',xy=[1310,182])
         for _ in range(240):  # una run reanudada puede durar varios minutos (cada vuelta ~2 s)
             frame=self.wait(lambda f:self.vision.screen(f)=='HOME' or self.vision.screen(f) in keep or
                             self.vision.screen(f) in WINDOW_CLOSERS or self.vision.screen(f) in MENU_PARENTS or
