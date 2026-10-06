@@ -180,15 +180,25 @@ class GamescopeGuard:
         return prop.value[0] if prop and len(prop.value) else None
 
     def restore_focus(self):
-        """Una ventana de Steam (p. ej. un aviso) tapó el juego: cerrarla como con su X; Steam sigue abierto."""
+        """Otra ventana tiene el foco: las de Steam (avisos) se cierran como con su X; las auxiliares del
+        propio juego (Proton) o las que ya se cerraron suelen devolverlo solas. Espera hasta 5 s."""
         from Xlib import X
         from Xlib.protocol import event
-        other=self.display.create_resource_object('window',self.focused())
-        if (other.get_wm_class() or ('',''))[1]!='steam':return False  # solo ventanas de Steam
-        message=event.ClientMessage(window=other,client_type=self.display.intern_atom('WM_PROTOCOLS'),
-                                    data=(32,[self.display.intern_atom('WM_DELETE_WINDOW'),X.CurrentTime,0,0,0]))
-        other.send_event(message);self.display.sync();time.sleep(1.5)
-        return self.focused()==self.window.id
+        end=time.monotonic()+5
+        while time.monotonic()<end:
+            focused=self.focused()
+            if focused in (None,self.window.id):return True
+            try:
+                other=self.display.create_resource_object('window',focused)
+                cls=other.get_wm_class() or ('','')
+            except Exception:  # BadWindow: se cerró mientras se miraba
+                time.sleep(.5);continue
+            if cls[1]=='steam':
+                message=event.ClientMessage(window=other,client_type=self.display.intern_atom('WM_PROTOCOLS'),
+                                            data=(32,[self.display.intern_atom('WM_DELETE_WINDOW'),X.CurrentTime,0,0,0]))
+                other.send_event(message);self.display.sync();time.sleep(1.5);continue
+            time.sleep(.5)
+        return self.focused() in (None,self.window.id)
 
     def check(self):
         try:

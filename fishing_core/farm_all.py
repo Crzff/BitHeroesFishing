@@ -149,7 +149,7 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                     pauses+=1;print(f'== {name} (en pausa: vuelve a la ventana del juego para seguir)',flush=True)
                     if wait_for_game_focus():
                         print(f'== {name}',flush=True);continue
-                if not retried and not message.startswith('Derrota') and not any(p in message for p in PAUSES):
+                if not retried and not message.startswith('Derrota') and (background or not any(p in message for p in PAUSES)):
                     # Un estado no confirmado: un reintento (la run a medias se termina al volver a Home).
                     retried=True;print(f'== {name} (reintento)',flush=True);continue
                 results.append((name,message))
