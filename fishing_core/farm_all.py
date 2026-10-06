@@ -1,15 +1,20 @@
 """Gasta los recursos de los modos activos en el orden de crzf: Quest -> PvP -> World Boss -> Raid -> Expedition -> Trials.
 
 Lee farm_config.json (lo escribe la app). Cada modo termina en Home al quedarse sin
-su recurso; una derrota no detiene nada. Cualquier otra parada de seguridad (pantalla
-desconocida, F8, pérdida de foco) deja el juego sin confirmar y detiene la cadena.
+su recurso; una derrota no detiene nada. Si el usuario usa el ordenador (modo escritorio)
+el modo queda en pausa hasta que el juego recupera el foco; otra parada de seguridad se
+reintenta una vez. Un START tras una parada reanuda desde el modo pendiente.
 Cada paso imprime "== <modo>" y al final "<modo>: <resultado>" (la app los muestra).
 """
 
+import json
 import os
+import subprocess
 import sys
+import time
 
 from . import farm_config, loot
+from .telemetry import ROOT
 from .control_flow import SafetyStop
 
 
@@ -87,31 +92,73 @@ def stop_frame_server(server):
     server['proc']=None
 
 
+PROGRESS=ROOT/'runs/farm_progress.json'
+# Paradas porque el usuario usó el ordenador (modo escritorio): pausa y se reanuda, no se pierde el ciclo.
+PAUSES=('perdio el foco','no confirma el cursor','Otra ventana tapa','cambio su identidad')
+RESUME_SECONDS=3*3600
+
+
+def wait_for_game_focus(limit=4*3600):
+    """Modo escritorio: espera a que el juego vuelva a tener el foco (el usuario regresó)."""
+    import json as _json
+    end=time.monotonic()+limit
+    while time.monotonic()<end:
+        try:
+            out=subprocess.run(['niri','msg','--json','focused-window'],capture_output=True,text=True,timeout=5).stdout
+            if (_json.loads(out) or {}).get('app_id')=='steam_app_666860':time.sleep(2);return True
+        except (OSError,ValueError,subprocess.SubprocessError):pass
+        time.sleep(3)
+    return False
+
+
+def load_progress():
+    """Modos ya hechos en el ciclo anterior si se detuvo hace poco; si no, ciclo nuevo."""
+    try:data=json.loads(PROGRESS.read_text())
+    except (OSError,ValueError):return set()
+    return set(data.get('done',[])) if time.time()-data.get('stamp',0)<RESUME_SECONDS else set()
+
+
+def save_progress(done):
+    PROGRESS.parent.mkdir(parents=True,exist_ok=True)
+    PROGRESS.write_text(json.dumps({'done':sorted(done),'stamp':time.time()}))
+
+
 def run_steps(config,results,background,is_gone,relaunch_game,server):
-    relaunches=0
+    relaunches=0;done=load_progress()
+    if done:print(f'== Reanudando: ya hechos {", ".join(sorted(done))}',flush=True)
     for name,step in steps(config):
-        print(f'== {name}',flush=True)
-        for attempt in (1,2,3,4):
+        if name in done:results.append((name,'OK (ya hecho)'));continue
+        print(f'== {name}',flush=True);retried=False;pauses=0
+        while True:
             try:
-                step();results.append((name,'OK'));break
+                step();results.append((name,'OK'));done.add(name);save_progress(done);break
             except KeyboardInterrupt:
                 results.append((name,'F8'));return
             except (SafetyStop,RuntimeError,ValueError) as exc:
-                # Desconexión del servidor: el siguiente intento empieza con ensure_home(), que pulsa
-                # RECONNECT y cierra las ventanas del arranque. Solo un reintento por modo.
-                if attempt==1 and 'DISCONNECTED' in str(exc):print(f'== {name} (reconexión)',flush=True);continue
+                message=str(exc)
+                if 'DISCONNECTED' in message and not retried:
+                    retried=True;print(f'== {name} (reconexión)',flush=True);continue
                 # Segundo plano: gamescope puede caerse (fallo del driver Vulkan). Relanzar el juego y repetir el modo.
-                if background and is_gone(str(exc)) and relaunches<3:
+                if background and is_gone(message) and relaunches<3:
                     relaunches+=1;print(f'== {name} (relanzando el juego {relaunches}/3)',flush=True)
                     stop_frame_server(server)
                     if relaunch_game():
                         server['proc']=start_frame_server()
                         continue
-                results.append((name,str(exc)))
-                if str(exc).startswith('Derrota'):break
+                if not background and any(p in message for p in PAUSES) and pauses<50:
+                    pauses+=1;print(f'== {name} (en pausa: vuelve a la ventana del juego para seguir)',flush=True)
+                    if wait_for_game_focus():
+                        print(f'== {name}',flush=True);continue
+                if not retried and not message.startswith('Derrota') and not any(p in message for p in PAUSES):
+                    # Un estado no confirmado: un reintento (la run a medias se termina al volver a Home).
+                    retried=True;print(f'== {name} (reintento)',flush=True);continue
+                results.append((name,message))
+                if message.startswith('Derrota'):break
                 return  # estado del juego no confirmado: no seguir
             except Exception as exc:  # un fallo inesperado se informa en vez de tumbar el lanzador en silencio
                 import traceback;traceback.print_exc();results.append((name,f'{type(exc).__name__}: {exc}'));return
+    try:PROGRESS.unlink()  # ciclo completo: el próximo START empieza de nuevo
+    except OSError:pass
 
 
 def report(results):

@@ -334,10 +334,12 @@ class FarmApp(tk.Tk):
         log.write(f'\n--- {time.strftime("%Y-%m-%d %H:%M:%S")} inicio pid {process.pid}\n');log.flush()
         for line in process.stdout:
             line=line.strip();log.write(f'{time.strftime("%H:%M:%S")} {line}\n');log.flush()
-            if line.startswith('== '):self.after(0,self.set_status,f'EN MARCHA · {line[3:].upper()} · F8 DETIENE')
+            if line.startswith('== '):
+                paused='en pausa' in line
+                self.after(0,self.set_status,('EN PAUSA · VUELVE AL JUEGO: ' if paused else 'EN MARCHA · ')+line[3:].split(' (')[0].upper()+('' if paused else ' · F8 DETIENE'))
             elif ': ' in line and line.split(':')[0] in steps:results.append(line)
         code=process.wait();log.write(f'{time.strftime("%H:%M:%S")} fin código {code}\n');log.close()
-        failed=[r for r in results if not r.endswith(': OK')]
+        failed=[r for r in results if not r.split(': ',1)[1].startswith('OK')]  # 'OK (ya hecho)' al reanudar
         self.after(0,self.finish,'TERMINADO · TODO GASTADO' if not failed else 'PARADO · '+failed[-1][:46].upper())
 
     def set_status(self,text):self.status=text;self.render()

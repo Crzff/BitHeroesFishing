@@ -428,7 +428,10 @@ class DungeonRunner:
             # Con el diálogo de confirmación ya cerrado (YES verificado), una oferta legible es la
             # siguiente, aunque sea del mismo familiar: hay combates con dos iguales. Rechazar no gasta.
             return self.offer_name(frame) is not None if target else familiar_glyph(frame) is not None
-        self.wait(closed)
+        try:self.wait(closed,15,'oferta cerrada')
+        except SafetyStop:
+            # YES ya se pulsó: si el juego sigue la run (combate/mapa), la oferta quedó cerrada.
+            if self.vision.screen(self.capture()) not in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','BATTLE_VICTORY','VICTORY','LOADING'):raise
         atomic_json(path,{**intent,'effect_confirmed':True})
         label=name or 'familiar sin referencia'
         self.log.emit('FAMILIAR_DECLINED',message=f'{label} rechazado · objetivo {target or "ninguno"}',familiar=name,target=target)
