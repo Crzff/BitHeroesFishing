@@ -79,4 +79,15 @@ class RaidRuntimeTests(unittest.TestCase):
         self.assertEqual([c.kwargs['rerun'] for c in runner.observe.call_args_list],[True,True,True])
 
 
+    def test_every_game_raid_is_listed_with_its_tier(self):
+        from fishing_core.raid_runtime import RAID_TIER,RAIDS
+        self.assertEqual(len(RAIDS),18)
+        self.assertEqual((RAID_TIER['STORM'],RAID_TIER['TIKAL_DIKI'],RAID_TIER['HENS_HIDEAWAY']),(13,14,21))
+
+    def test_a_raid_without_name_image_is_found_by_reading_its_title(self):
+        from fishing_core.raid_runtime import RAIDS
+        names=list(RAIDS.values())
+        self.assertEqual(VISION.raid_title(FRAMES['raid_window'],names),'Storm')
+
+
 if __name__=='__main__':unittest.main()

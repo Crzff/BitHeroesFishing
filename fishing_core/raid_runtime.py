@@ -18,10 +18,14 @@ CLOSE=((1468,236),'RAID_CLOSE',(1380,150,1560,320))
 PREV=(440,624)
 DIFFICULTY_BUTTONS={'Normal':((554,482),'RAID_NORMAL',(360,395,750,575)),'Hard':((958,482),'RAID_HARD',(770,395,1150,575)),
                     'Heroic':((1370,482),'RAID_HEROIC',(1180,395,1560,575))}
-RAIDS={'MINIONS_OF_TARANIS':'Minions of Taranis','CHARRED_EXPANSE':'Charred Expanse',
-       'GORBONS_ROCKIN_RUCKUS':"Gorbon's Rockin' Ruckus",'MALLOWDALE':'Mallowdale','ZOLS_LABYRINTH':"Zol's Labyrinth",
-       'A_HAILE_OF_A_MISTAKE':'A Haile of a Mistake','WOODBEARDS_BOOTY':"Woodbeard's Booty",
-       'HYPER_DIMENSION':'Hyper Dimension','ASTAROTHS_AWAKENING':"Astaroth's Awakening",'STORM':'Storm'}
+# Todas las raids del juego (wiki 2026-10-06), de la 1 a la 18; la raid N se desbloquea en el tier N+3.
+RAIDS={'ASTAROTHS_AWAKENING':"Astaroth's Awakening",'HYPER_DIMENSION':'Hyper Dimension','WOODBEARDS_BOOTY':"Woodbeard's Booty",
+       'A_HAILE_OF_A_MISTAKE':'A Haile of a Mistake','ZOLS_LABYRINTH':"Zol's Labyrinth",'MALLOWDALE':'Mallowdale',
+       'GORBONS_ROCKIN_RUCKUS':"Gorbon's Rockin' Ruckus",'CHARRED_EXPANSE':'Charred Expanse','MINIONS_OF_TARANIS':'Minions of Taranis',
+       'STORM':'Storm','TIKAL_DIKI':'Tikal-Diki','METAL_MOUNTAIN':'Metal Mountain','WOLFS_DECEPTION':"The Wolf's Deception",
+       'BRAWLY_GRAS_PALACE':'Brawly Gras Palace','UZUMS_OLYMPIAN_RAVE':"Uzum's Olympian Rave",'UNDER_THE_TITANS_EYE':"Under The Titan's Eye",
+       'ROASTGARD':'Roastgard','HENS_HIDEAWAY':"Hen's Hideaway"}
+RAID_TIER={key:i+4 for i,key in enumerate(RAIDS)}  # Astaroth T4 ... Storm T13, Tikal-Diki T14 ... Hen's Hideaway T21
 ACCEPT=((1215,982),'ACCEPT',(1000,930,1420,1035))
 SHARDS_ROI=(880,100,1050,145)
 
@@ -71,7 +75,9 @@ class RaidRunner(DungeonRunner):
     def open(self):
         screen=self.ensure_home(keep=('RAID',))
         if screen=='HOME':self.press('HOME',HOME_RAID);self.wait('RAID')
-        named=lambda f:self.vision.locate(f,f'RAID_NAME_{self.raid}',(500,700,1170,830)) is not None
+        key=f'RAID_NAME_{self.raid}'
+        if key in self.vision.templates:named=lambda f:self.vision.locate(f,key,(500,700,1170,830)) is not None
+        else:named=lambda f:self.vision.raid_title(f,list(RAIDS.values()))==RAIDS[self.raid]  # sin imagen: se lee el nombre
         for _ in range(len(RAIDS)+1):  # una vuelta; nunca se invoca otra
             self.wait('RAID');time.sleep(.5)
             if named(self.capture()):return

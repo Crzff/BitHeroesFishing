@@ -406,6 +406,24 @@ class DungeonVision:
                 if not any(near(lines[i+1],w) for w in ('MATERIAL','CONSUMABLE','CURRENCY')):return 'ITEM'
         return None
 
+    def raid_title(self,frame,names):
+        """Nombre de la raid del carrusel (texto de color sobre la descripción), emparejado con names."""
+        region=frame[735:805,500:1150];hsv=cv2.cvtColor(region,cv2.COLOR_BGR2HSV)
+        mask=(hsv[:,:,1]>110)&(hsv[:,:,2]>150);rows=mask.sum(1)
+        if rows.max()<60:return None
+        ys=np.nonzero(rows>=.4*rows.max())[0];band=mask[ys.min():ys.max()+1]
+        n,lab,st,_=cv2.connectedComponentsWithStats(band.astype(np.uint8),connectivity=8);letters=np.zeros_like(band)
+        for j in range(1,n):
+            if st[j,3]>=.5*band.shape[0]:letters|=lab==j  # letras: casi toda la altura de la línea
+        xs=np.nonzero(letters.any(0))[0]
+        if not len(xs):return None
+        text=self.read_text(letters[:,xs.min():xs.max()+1])
+        def clean(name):
+            s=''.join(c for c in name.upper() if c.isalpha());return s[3:] if s.startswith('THE') else s
+        text=text[3:] if text.startswith('THE') else text
+        scored=sorted((edit_distance(clean(name),text[:len(clean(name))]),name) for name in names)
+        return scored[0][1] if scored[0][0]<=2 and (len(scored)==1 or scored[1][0]>scored[0][0]+1) else None
+
     def loot_cells(self,frame):
         """Casillas visibles: [{'kind','rarity','amount','icon'}]; kind GOLD/XP/MATERIAL/ITEM."""
         cells=[]
