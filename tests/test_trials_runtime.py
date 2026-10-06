@@ -107,13 +107,20 @@ class TrialsRuntimeTests(unittest.TestCase):
         runner=TrialsRunner.__new__(TrialsRunner)
         runner.vision=SimpleNamespace(trials_levels=lambda f:[(317+128*i,top[0]-i) for i in range(5) if top[0]-i>=440])
         runner.capture=lambda:None
-        def wheel(n):steps.append(n);top[0]=max(444,min(755,top[0]-2*n))
+        def wheel(n,xy=(930,600)):steps.append(n);top[0]=max(444,min(755,top[0]-2*n))
         runner.wheel=wheel
         with patch('fishing_core.trials_runtime.time.sleep'):y=runner.scroll_to_level(499)
         self.assertIsNotNone(y);self.assertIn(499,[top[0]-i for i in range(5)])
         self.assertLess(len(steps),15)  # salta, no baja de 3 en 3
         top[0]=755
         with patch('fishing_core.trials_runtime.time.sleep'):self.assertIsNone(runner.scroll_to_level(300))  # fuera del rango
+
+
+    def test_the_wheel_shares_the_signature_used_by_the_loot_recap(self):
+        runner=TrialsRunner.__new__(TrialsRunner);runner.io=Mock();runner.check=Mock()
+        with patch('fishing_core.trials_runtime.time.sleep'),patch('fishing_core.dungeon_runtime.time.sleep'):
+            runner.wheel(1,(1320,770));runner.wheel(-3)  # record_loot y los menús de Trials
+        self.assertEqual([c.args for c in runner.io.wheel.call_args_list],[(1,(1320,770)),(-3,(930,600))])
 
 
 if __name__=='__main__':unittest.main()

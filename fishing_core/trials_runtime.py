@@ -66,17 +66,9 @@ class TrialsRunner(DungeonRunner):
     def difficulty_shown(self,frame):
         x,y,x1,y1=DIFF_FIELD;return self.vision.bright_number(frame[y:y1,x:x1])
 
-    def wheel(self,steps):
-        """Rueda del ratón sobre el menú (abajo si steps>0), comprobando foco antes de cada paso."""
-        if hasattr(self.io,'wheel'):self.io.wheel(steps);time.sleep(.6);return  # gamescope
-        from Xlib import X
-        from Xlib.ext import xtest
-        self.io._move((930,600));display=self.io.game_guard.api.display
-        for _ in range(abs(steps)):
-            self.check();button=5 if steps>0 else 4
-            xtest.fake_input(display,X.ButtonPress,button);xtest.fake_input(display,X.ButtonRelease,button)
-            display.sync();time.sleep(.05)
-        time.sleep(.6)
+    def wheel(self,steps,xy=(930,600)):
+        """Rueda sobre el menú (abajo si steps>0); la común de DungeonRunner, que también usa el loot."""
+        super().wheel(steps,xy);time.sleep(.6)
 
     def scroll_to(self,find,label):
         """Sube al inicio de la lista y baja hasta que find(frame) da una fila; None si no está."""
