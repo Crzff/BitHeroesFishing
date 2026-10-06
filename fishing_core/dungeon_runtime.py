@@ -400,8 +400,12 @@ class DungeonRunner:
         except SafetyStop:
             # Con menos energía de la que cuesta cualquier run, la barra solo muestra el reloj de
             # recarga. Si el reloj es lo único legible, se termina sin entrar (nunca gasta).
-            if self.vision.screen(self.capture())=='TEAM' and self.clock_only():
-                self.close_menu('TEAM');self.balance=0;return None
+            # El reloj cambia cada segundo: una lectura en pleno cambio no basta; se mira unos segundos.
+            end=time.monotonic()+6
+            while time.monotonic()<end:
+                if self.vision.screen(self.capture())=='TEAM' and self.clock_only():
+                    self.close_menu('TEAM');self.balance=0;return None
+                time.sleep(.3)
             raise
         while balance[0]<self.cost:
             if not self.lower_difficulty(balance[0]):
