@@ -56,4 +56,20 @@ class LootTests(unittest.TestCase):
         for rgb,rarity in colours.items():self.assertEqual(loot_rarity(np.uint8(rgb[::-1])),rarity,rgb)
 
 
+    def test_the_game_description_says_if_a_drop_is_material_consumable_or_equipment(self):
+        import numpy as np
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in data.files if k.startswith('loot_tip_')}
+        vision=DungeonVision();before=frames['loot_tip_before']
+        for name,kind in (('consumable','CONSUMABLE'),('material','MATERIAL'),('item','ITEM'),('currency','CURRENCY')):
+            self.assertEqual(vision.loot_tooltip(before,frames['loot_tip_'+name]),kind,name)
+        self.assertIsNone(vision.loot_tooltip(before,before))  # sin descripción abierta
+
+    def test_known_kinds_are_remembered_per_icon(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'k.json';self.assertIsNone(loot.known_kind('abc',path))
+            loot.remember_kind('abc','CONSUMABLE',path);self.assertEqual(loot.known_kind('abc',path),'CONSUMABLE')
+
+
 if __name__=='__main__':unittest.main()

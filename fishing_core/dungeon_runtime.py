@@ -155,12 +155,26 @@ class DungeonRunner:
         seen={};previous=None
         for _ in range(8):
             cells=self.vision.loot_cells(self.capture())
+            for cell in cells:
+                if cell['kind']=='MATERIAL':cell['kind']=self.loot_kind(cell)  # sin flecha: material, consumible o equipo
             for cell in cells:seen.setdefault((cell['icon'][::8,::8].tobytes(),cell['amount']),cell)
             signature=[(c['kind'],c['rarity'],c['amount']) for c in cells]
             if len(cells)<6 or signature==previous:break
             previous=signature;self.wheel(1,(1320,770));time.sleep(.6)
         loot.record(list(seen.values()))
         self.log.emit('LOOT_RECORDED',cells=len(seen))
+
+    def loot_kind(self,cell):
+        """Tipo de una casilla sin flecha según su descripción (pasar el ratón; no pulsa nada). Se recuerda
+        por icono, así cada objeto distinto se consulta una sola vez."""
+        key=loot.icon_key(cell['icon'],cell['rarity']);known=loot.known_kind(key)
+        if known:return known
+        before=self.capture();self.check();self.io._move(cell['xy']);time.sleep(1.2)
+        after=self.capture();self.io._move((960,1070));time.sleep(.8)
+        kind=self.vision.loot_tooltip(before,after)
+        if kind=='CURRENCY':kind='MATERIAL'
+        if kind in ('MATERIAL','CONSUMABLE','ITEM'):loot.remember_kind(key,kind);return kind
+        return cell['kind']
 
     def offer_name(self,frame):
         identifier=getattr(self,'plan',{}).get('dungeon_id')

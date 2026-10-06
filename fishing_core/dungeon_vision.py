@@ -369,6 +369,43 @@ class DungeonVision:
         try:return round(float(text)*unit) if text and text.count('.')<=1 and 'K' not in text else None
         except ValueError:return None
 
+    def tooltip_boxes(self,frame):
+        """Recuadros de descripción: (x0, y0, x1, y1) desde su línea superior de borde (alto fijo útil)."""
+        border=self.tooltip_border(frame);out=[]
+        for y in np.nonzero(border.sum(1)>=200)[0]:
+            row=np.concatenate([[0],border[y].astype(np.int8),[0]]);e=np.nonzero(np.diff(row))[0]
+            for x0,x1 in zip(e[::2],e[1::2]):
+                if x1-x0<200 or y+140>=frame.shape[0]:continue
+                if any(abs(x0-a)<6 and abs(x1-b)<6 and 0<=y-c<40 for a,c,b,_ in out):continue
+                out.append((int(x0),int(y),int(x1),int(min(frame.shape[0],y+260))))
+        return out
+
+    def loot_tooltip(self,before,after):
+        """Tipo que el juego escribe en la descripción de una casilla del botín ("RARE MATERIAL",
+        "COMMON CONSUMABLE", "RARE RING"...): MATERIAL, CONSUMABLE, CURRENCY o ITEM; None si no se lee."""
+        new=[b for b in self.tooltip_boxes(after)
+             if (np.abs(after[b[1]:b[1]+3,b[0]:b[2]].astype(np.int16)-before[b[1]:b[1]+3,b[0]:b[2]].astype(np.int16)).sum(2)>60).mean()>.5]
+        if not new:return None
+        x0,y0,x1,y1=max(new,key=lambda b:b[0])  # con comparación salen dos: el de la derecha es el del botín
+        region=after[y0+6:y1,x0+int(.44*(x1-x0)):x1-8];hsv=cv2.cvtColor(region,cv2.COLOR_BGR2HSV)
+        mask=(region.min(2)>=215)|((hsv[:,:,1]>70)&(hsv[:,:,2]>170))  # texto blanco o del color de la rareza
+        lines=[];rows=mask.any(1);start=None
+        for y in range(len(rows)+1):
+            on=y<len(rows) and rows[y]
+            if on and start is None:start=y
+            if not on and start is not None:
+                if 12<=y-start<=40:
+                    seg=mask[start:y];xs=np.nonzero(seg.any(0))[0];lines.append(self.read_text(seg[:,xs.min():xs.max()+1]))
+                start=None
+        near=lambda text,word:edit_distance(text,word)<=2
+        rarities=('COMMON','RARE','EPIC','LEGENDARY','MYTHIC','SET','GENERIC')
+        for i,line in enumerate(lines):
+            for word,kind in (('MATERIAL','MATERIAL'),('CONSUMABLE','CONSUMABLE'),('CURRENCY','CURRENCY')):
+                if near(line,word):return kind
+            if any(near(line,r) for r in rarities) and i+1<len(lines) and len(lines[i+1])>=3:
+                if not any(near(lines[i+1],w) for w in ('MATERIAL','CONSUMABLE','CURRENCY')):return 'ITEM'
+        return None
+
     def loot_cells(self,frame):
         """Casillas visibles: [{'kind','rarity','amount','icon'}]; kind GOLD/XP/MATERIAL/ITEM."""
         cells=[]
@@ -383,7 +420,7 @@ class DungeonVision:
             kind=('XP' if self.locate(frame,'LOOT_XP',box,.9) else 'GOLD' if self.locate(frame,'LOOT_GOLD',box,.9)
                   else 'ITEM' if arrow else 'MATERIAL')
             if amount is None:amount=0 if kind in ('XP','GOLD') else 1  # oro/XP ilegible: no se inventa
-            cells.append({'kind':kind,'rarity':rarity,'amount':amount,
+            cells.append({'kind':kind,'rarity':rarity,'amount':amount,'xy':(x+LOOT_SIZE//2,y+LOOT_SIZE//2),
                           'icon':frame[y+10:y+LOOT_SIZE-10,x+10:x+LOOT_SIZE-10].copy()})
         return cells
 

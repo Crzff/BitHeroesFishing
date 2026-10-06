@@ -233,23 +233,25 @@ class FarmApp(tk.Tk):
         x0,y0,x1,y1=self.window('LOOT');totals=loot.load()
         self.put(self.resource('gold',44),x0,y0);self.label(f"ORO  {totals['gold']:,}",x0+64,y0+10,24,ui.GOLD)
         self.label(f"XP  {totals['xp']:,}",x0+420,y0+10,24,(140,232,110))
-        self.label('OBJETOS',x0,y0+74,20,ui.GOLD);self.label('MATERIALES',x0+340,y0+74,20,ui.GOLD)
-        self.label('FAMILIARES CAPTURADOS',x0+680,y0+74,20,ui.GOLD)
-        for i,rarity in enumerate(RARITY_COLORS):
-            y=y0+110+i*56;self.put(ui.row(320,48),x0,y)
-            self.label(loot.RARITY_NAMES[rarity],x0+16,y+13,17,RARITY_COLORS[rarity]);self.label(str(totals['items'].get(rarity,0)),x0+260,y+13,17)
-            self.put(ui.row(320,48),x0+340,y)
-            self.label(loot.RARITY_NAMES[rarity],x0+356,y+13,17,RARITY_COLORS[rarity]);self.label(str(totals['materials'].get(rarity,0)),x0+600,y+13,17)
-        fam=Image.open(ui.ICONS/'res/familiars.png').convert('RGBA').resize((44,45),Image.NEAREST)
-        for i,(name,count) in enumerate(sorted(totals['familiars'].items())[:9]):
-            y=y0+110+i*56;self.put(ui.row(x1-x0-680,48),x0+680,y);self.put(fam,x0+688,y+2)
-            self.label(f'{name.upper()[:12]} x{count}',x0+740,y+13,17)
-        if not totals['familiars']:self.label('NINGUNO TODAVIA',x0+680,y0+122,16,ui.DIM)
+        # Cuatro columnas: equipo, materiales, consumibles (lo dice la descripción del juego) y familiares.
+        cw=(x1-x0-3*14)//4;cols=(('OBJETOS','items'),('MATERIALES','materials'),('CONSUMIBLES','consumables'))
+        for c,(title,group) in enumerate(cols):
+            cx=x0+c*(cw+14);self.label(title,cx,y0+74,18,ui.GOLD)
+            for i,rarity in enumerate(RARITY_COLORS):
+                y=y0+108+i*52;self.put(ui.row(cw,46),cx,y)
+                self.label('CONJUNTO' if rarity=='SET' else loot.RARITY_NAMES[rarity],cx+12,y+13,15,RARITY_COLORS[rarity])
+                count=str(totals.get(group,{}).get(rarity,0));self.label(count,cx+cw-14-ui.text(count,15).width,y+13,15)
+        fx=x0+3*(cw+14);self.label('FAMILIARES',fx,y0+74,18,ui.GOLD)
+        fam=Image.open(ui.ICONS/'res/familiars.png').convert('RGBA').resize((40,41),Image.NEAREST)
+        for i,(name,count) in enumerate(sorted(totals['familiars'].items())[:6]):
+            y=y0+108+i*52;self.put(ui.row(cw,46),fx,y);self.put(fam,fx+6,y+2)
+            self.label(f'{name.upper()[:9]} x{count}',fx+52,y+14,14)
+        if not totals['familiars']:self.label('NINGUNO TODAVIA',fx,y0+120,14,ui.DIM)
         for i,(mode,res) in enumerate(RESOURCE.items()):
             x=x0+i*((x1-x0)//6);self.put(self.resource(res,40),x,y1-60)
             self.label(str(totals['spent'].get(res,0)),x+52,y1-50,18)
-        album=sorted(totals['album'].items(),key=lambda kv:(kv[1]['kind']!='ITEM',loot.ORDER.index(kv[1]['rarity']),-kv[1]['count']))
-        ay=y0+110+6*56+8;self.label('ALBUM DEL LOOT',x0,ay,16,ui.GOLD);size=58
+        album=sorted(totals['album'].items(),key=lambda kv:(('ITEM','MATERIAL','CONSUMABLE').index(kv[1]['kind']),loot.ORDER.index(kv[1]['rarity']),-kv[1]['count']))
+        ay=y0+108+6*52+8;self.label('ALBUM DEL LOOT',x0,ay,16,ui.GOLD);size=58
         for i,(key,entry) in enumerate(album[:(x1-x0)//(size+8)]):
             path=loot.ALBUM/f'{key}.png'
             if not path.exists():continue
