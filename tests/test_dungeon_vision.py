@@ -187,4 +187,9 @@ class DungeonVisionTests(unittest.TestCase):
         self.assertEqual(self.vision.screen(self.frames['story_agnar']),'STORY')  # Agnar, World Boss
 
 
+    def test_an_offer_whose_art_covers_persuade_is_still_an_offer_with_its_cost(self):
+        frame=self.frames['offer_columbus_rod']  # la caña de Columbus tapa PERSUADE y el último 0
+        self.assertEqual(self.vision.screen(frame),'FAMILIAR_OFFER');self.assertEqual(self.vision.offer_cost(frame),8000)
+
+
 if __name__=='__main__':unittest.main()

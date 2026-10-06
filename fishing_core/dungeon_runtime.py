@@ -461,7 +461,7 @@ class DungeonRunner:
         intent={'attempt_id':attempt,'familiar':name,'cost':cost,'currency':'GOLD','effect_confirmed':False}
         atomic_json(path,intent)
         if not same(self.capture()):raise SafetyStop('La oferta cambió antes de Persuade; no se gasta oro')
-        self.click('FAMILIAR_OFFER',(528,704),'PERSUADE',(360,640,720,780))
+        self.click('FAMILIAR_OFFER',(528,704))  # FAMILIAR_OFFER ya exige PERSUADE (tolerante), BRIBE y DECLINE
         self.wait('PERSUADE_CONFIRM',10)
         self.click('PERSUADE_CONFIRM',(814,750),'DECLINE_YES',(670,695,955,805))
         def outcome(f):

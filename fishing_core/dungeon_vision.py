@@ -103,7 +103,7 @@ class DungeonVision:
                          if any(v.startswith(key+'_TOWN') for v in self.templates)}
         self.digits=BaitReader(extra={k:v for k,v in self.templates.items() if k.startswith('DIGIT_')})
 
-    def locate(self,frame,key,roi,threshold=.97):
+    def locate(self,frame,key,roi,threshold=.97,max_diff=12):
         x,y,x1,y1=roi;image=frame[y:y1,x:x1];ref=self.templates[key]
         if image.shape[0]<ref.shape[0] or image.shape[1]<ref.shape[1]:return None
         mask=self.home_masks.get(key)
@@ -114,7 +114,7 @@ class DungeonVision:
         # Correlación sola acepta ventanas oscurecidas por un diálogo/pago.
         difference=np.abs(matched.astype(np.int16)-ref)
         if mask is not None:difference=difference[mask!=0]
-        if score>=threshold and float(difference.mean())<=12:return x+px,y+py
+        if score>=threshold and float(difference.mean())<=max_diff:return x+px,y+py
         return self.locate(frame,'HEROIC_IDLE',roi,threshold) if key=='HEROIC' else None
 
     def locate_all(self,frame,key,roi,threshold=.97):
@@ -153,9 +153,10 @@ class DungeonVision:
         if (self.locate(frame,'CAPTURE_SUCCESS',(540,50,1380,170)) and
                 self.locate(frame,'CAPTURE_CLOSE',(780,890,1140,1040))):return 'CAPTURE_SUCCESS'
         if self.locate(frame,'CONFIRM_HEADER',(770,270,1150,370)):return 'UNKNOWN'
-        if (self.locate(frame,'PERSUADE',(360,640,720,780)) and
-                self.locate(frame,'BRIBE',(1240,640,1535,780)) and
-                self.locate(frame,'DECLINE',(550,890,965,1015))):return 'FAMILIAR_OFFER'
+        # El dibujo del familiar puede tapar parte de PERSUADE (la caña de Columbus): BRIBE y DECLINE
+        # exactos y PERSUADE con algo de tolerancia.
+        if (self.locate(frame,'BRIBE',(1240,640,1535,780)) and self.locate(frame,'DECLINE',(550,890,965,1015)) and
+                self.locate(frame,'PERSUADE',(360,640,720,780),.8,max_diff=40)):return 'FAMILIAR_OFFER'
         if self.locate(frame,'LOADING',(790,470,1130,550)):return 'LOADING'
         if self.locate(frame,'ZONES_MENU',(820,120,1100,215)):return 'ZONES'
         boss=self.boss_screen(frame)
@@ -205,7 +206,9 @@ class DungeonVision:
     def offer_cost(self,frame):
         """Oro de Persuade en la oferta ("4,000"); None si no se lee."""
         if self.screen(frame)!='FAMILIAR_OFFER':return None
-        image=frame[560:630,490:665].copy();mask=(image.min(2)>=170).astype(np.uint8)
+        image=frame[560:630,490:665].copy()
+        image[(image.min(2)>=170)&(image.min(2)<235)]=0  # cifras blanco puro; la caña de Columbus es crema
+        mask=(image.min(2)>=170).astype(np.uint8)
         for x,y,w,h,_ in quantity_boxes(mask):
             if h<20:image[y:y+h,x:x+w]=0  # coma de miles
         return self.number(image)

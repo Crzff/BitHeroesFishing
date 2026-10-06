@@ -42,6 +42,12 @@ class RaidRunner(DungeonRunner):
         if type(max_gold) is not int or not 0<=max_gold<=10_000_000:raise ValueError('Cuota de oro inválida (0-10.000.000)')
         self.budget=FarmBudget(max_runs=runs,max_energy=runs*SHARD_COST,max_seconds=60*60,max_gold=max_gold,stop_on_defeat=False)
 
+    def finish_leftover_run(self,screen):
+        """Raid a medias al reanudar: la oferta también se persuade (con la cuota de oro), no se rechaza."""
+        if screen!='FAMILIAR_OFFER':return super().finish_leftover_run(screen)
+        self.leftovers=getattr(self,'leftovers',0)+1;frame=self.capture()
+        self.persuade(frame,f'{self.channel.run_id}:resume',f'resume-{self.leftovers}',self.offer_name(frame))
+
     def press(self,screen,action):
         xy,key,roi=action
         self.wait(lambda f:self.vision.screen(f)==screen and self.vision.locate(f,key,roi) is not None,10,f'{screen} · {key}')
