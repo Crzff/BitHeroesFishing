@@ -66,7 +66,7 @@ class RaidRuntimeTests(unittest.TestCase):
 
     def test_another_raid_on_screen_is_never_summoned(self):
         game=FakeGame()
-        with patch.object(VISION,'locate',side_effect=lambda f,k,r,*a:None if k=='RAID_NAME_STORM' else DungeonVision.locate(VISION,f,k,r,*a)):
+        with patch.object(VISION,'locate',side_effect=lambda f,k,r,*a,**kw:None if k=='RAID_NAME_STORM' else DungeonVision.locate(VISION,f,k,r,*a,**kw)):
             game.moves[('raid_window',(440,624))]='raid_astaroth'
             with self.assertRaisesRegex(SafetyStop,'Storm'):self.run_raid(game,[3])
         self.assertEqual(game.summons,0)

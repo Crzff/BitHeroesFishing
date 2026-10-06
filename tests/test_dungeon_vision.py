@@ -185,6 +185,7 @@ class DungeonVisionTests(unittest.TestCase):
 
     def test_any_story_dialog_is_recognised_by_its_arrow(self):
         self.assertEqual(self.vision.screen(self.frames['story_agnar']),'STORY')  # Agnar, World Boss
+        self.assertEqual(self.vision.screen(self.frames['story_raid']),'STORY')  # Kakunapac, en combate de raid
 
 
     def test_an_offer_whose_art_covers_persuade_is_still_an_offer_with_its_cost(self):

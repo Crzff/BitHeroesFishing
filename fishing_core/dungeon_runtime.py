@@ -222,7 +222,7 @@ class DungeonRunner:
             self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015))
             self.log.emit('FAMILIAR_DECLINED',message='Oferta de una run anterior rechazada al reanudar')
         elif screen=='DECLINE_CONFIRM':self.click('DECLINE_CONFIRM',(818,752),'DECLINE_YES',(670,695,955,805))
-        elif screen=='STORY':self.click('STORY',(1665,646),'STORY_ARROW',(1620,575,1720,720))
+        elif screen=='STORY':self.click('STORY',(1665,646))  # STORY ya exige la flecha
         elif screen=='CAPTURE_SUCCESS':self.click('CAPTURE_SUCCESS',(958,962),'CAPTURE_CLOSE',(780,890,1140,1040))
         elif screen=='RESUME_DUNGEON':
             # Desconexión a mitad de dungeon: la energía ya se gastó; continuarla da el botín.
@@ -621,7 +621,7 @@ class DungeonRunner:
                 if signature not in story_sent:
                     if len(story_sent)>=30:raise SafetyStop('Demasiados diálogos de historia')
                     self.wait(screen);story_sent.add(signature)
-                    self.click(screen,(1665,646),'STORY_ARROW',(1620,575,1720,720))
+                    self.click(screen,(1665,646))
             elif screen not in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','LOADING'):
                 unknown_since=unknown_since or time.monotonic()
                 if time.monotonic()-unknown_since>8:
