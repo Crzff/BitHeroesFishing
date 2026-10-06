@@ -41,4 +41,12 @@ class RunStepsTests(unittest.TestCase):
             self.assertEqual(results[0],('Quest','OK (ya hecho)'));self.assertEqual(ran,['Quest','Trials'])
 
 
+    def test_reaching_the_one_hour_session_limit_opens_another_session_without_using_the_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            limit=SafetyStop('Límite de sesión: 60 minutos')
+            raid,calls=self.failing(limit,limit,limit,SafetyStop('Pantalla no confirmada'))
+            results,_=self.run_chain([('Raid',raid)],Path(tmp)/'p.json')
+            self.assertEqual(results,[('Raid','OK')]);self.assertEqual(len(calls),5)  # 3 sesiones más + 1 reintento
+
+
 if __name__=='__main__':unittest.main()

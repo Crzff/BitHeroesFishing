@@ -128,7 +128,7 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
     if done:print(f'== Reanudando: ya hechos {", ".join(sorted(done))}',flush=True)
     for name,step in steps(config):
         if name in done:results.append((name,'OK (ya hecho)'));continue
-        print(f'== {name}',flush=True);retried=False;pauses=0
+        print(f'== {name}',flush=True);retried=False;pauses=0;sessions=0
         while True:
             try:
                 step();results.append((name,'OK'));done.add(name);save_progress(done);break
@@ -136,6 +136,9 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                 results.append((name,'F8'));return
             except (SafetyStop,RuntimeError,ValueError) as exc:
                 message=str(exc)
+                if 'Límite de sesión' in message and sessions<20:
+                    # Cada proceso de modo dura como mucho 1 h; con muchos recursos se abre otra sesión.
+                    sessions+=1;print(f'== {name} (sesión {sessions+1})',flush=True);continue
                 if 'DISCONNECTED' in message and not retried:
                     retried=True;print(f'== {name} (reconexión)',flush=True);continue
                 # Segundo plano: gamescope puede caerse (fallo del driver Vulkan). Relanzar el juego y repetir el modo.
