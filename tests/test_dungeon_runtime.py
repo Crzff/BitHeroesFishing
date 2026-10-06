@@ -663,4 +663,20 @@ class DungeonRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(SafetyStop,'60 minutos'):runner.check()
 
 
+    def test_restart_mid_run_declines_the_leftover_offer_and_reaches_home_without_spending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            states=['FAMILIAR_OFFER','DECLINE_CONFIRM','AUTO_ON','HOME'];clicks=[]
+            vision.screen.side_effect=lambda f:states[0]
+            def click(screen,xy,*a,**k):clicks.append((screen,xy));states.pop(0)
+            runner.click=Mock(side_effect=click)
+            def wait(predicate,timeout=10,expected=None):
+                frame='frame';assert predicate(frame);return frame
+            runner.wait=wait
+            with patch('fishing_core.dungeon_runtime.time.sleep',side_effect=lambda s:states.pop(0) if states[0]=='AUTO_ON' else None):
+                self.assertEqual(runner.ensure_home(),'HOME')
+            self.assertEqual(clicks,[('FAMILIAR_OFFER',(755,955)),('DECLINE_CONFIRM',(818,752))])  # nunca PERSUADE ni BRIBE
+            self.assertEqual(runner.budget.gold_reserved,0)
+
+
 if __name__=='__main__':unittest.main()

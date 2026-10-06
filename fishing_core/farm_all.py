@@ -110,6 +110,8 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                 results.append((name,str(exc)))
                 if str(exc).startswith('Derrota'):break
                 return  # estado del juego no confirmado: no seguir
+            except Exception as exc:  # un fallo inesperado se informa en vez de tumbar el lanzador en silencio
+                import traceback;traceback.print_exc();results.append((name,f'{type(exc).__name__}: {exc}'));return
 
 
 def report(results):

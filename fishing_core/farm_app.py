@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 
 from PIL import Image, ImageTk
@@ -329,11 +330,13 @@ class FarmApp(tk.Tk):
 
     def follow(self,process):
         steps=('Runas captura','Quest','Runas Item Find','PvP','World Boss','Raid','Expedition','Trials');results=[]
+        log=open(ROOT/'runs/farm_all.log','a',encoding='utf-8')  # causa de cada parada, para revisarla después
+        log.write(f'\n--- {time.strftime("%Y-%m-%d %H:%M:%S")} inicio pid {process.pid}\n');log.flush()
         for line in process.stdout:
-            line=line.strip()
+            line=line.strip();log.write(f'{time.strftime("%H:%M:%S")} {line}\n');log.flush()
             if line.startswith('== '):self.after(0,self.set_status,f'EN MARCHA · {line[3:].upper()} · F8 DETIENE')
             elif ': ' in line and line.split(':')[0] in steps:results.append(line)
-        process.wait()
+        code=process.wait();log.write(f'{time.strftime("%H:%M:%S")} fin código {code}\n');log.close()
         failed=[r for r in results if not r.endswith(': OK')]
         self.after(0,self.finish,'TERMINADO · TODO GASTADO' if not failed else 'PARADO · '+failed[-1][:46].upper())
 

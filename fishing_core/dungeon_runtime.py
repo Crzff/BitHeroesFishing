@@ -171,12 +171,18 @@ class DungeonRunner:
         self.io._move((960,1070))  # Zona neutra: no confundir hover con cambio de estado.
 
     def ensure_home(self,keep=()):
-        """Cierra con su X verificada las ventanas de modo abiertas hasta llegar a Home (o a una de keep)."""
-        for _ in range(10):
+        """Cierra con su X verificada las ventanas de modo abiertas hasta llegar a Home (o a una de keep).
+        Si el juego quedó a mitad de una run (bot reiniciado), la deja terminar: Auto encendido, ofertas
+        rechazadas (no gasta) y el resultado se cierra con TOWN."""
+        running=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM')
+        for _ in range(40):
             frame=self.wait(lambda f:self.vision.screen(f)=='HOME' or self.vision.screen(f) in keep or
-                            self.vision.screen(f) in WINDOW_CLOSERS or self.vision.screen(f) in MENU_PARENTS,60,'Home o ventana conocida')
+                            self.vision.screen(f) in WINDOW_CLOSERS or self.vision.screen(f) in MENU_PARENTS or
+                            self.vision.screen(f) in running,60,'Home o ventana conocida')
             screen=self.vision.screen(frame)
             if screen=='HOME' or screen in keep:return screen
+            if screen in running:
+                self.finish_leftover_run(screen);continue
             if screen in MENU_PARENTS:self.close_menu(screen);continue
             xy,key,roi=WINDOW_CLOSERS[screen];time.sleep(.4)
             if xy is None:  # botón que cambia de sitio: se localiza
@@ -187,6 +193,19 @@ class DungeonRunner:
                 self.wait(lambda f:self.vision.screen(f)!='DISCONNECTED',90,'reconexión')
             time.sleep(1)
         raise SafetyStop('No se pudo volver a Home cerrando ventanas')
+
+    def finish_leftover_run(self,screen):
+        """Un paso de una run que quedó a medias al reiniciar el bot; nunca gasta."""
+        if screen=='FAMILIAR_OFFER':
+            # Sin sesión no hay cuota de oro: rechazar es gratis (BRIBE nunca).
+            self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015))
+            self.log.emit('FAMILIAR_DECLINED',message='Oferta de una run anterior rechazada al reanudar')
+        elif screen=='DECLINE_CONFIRM':self.click('DECLINE_CONFIRM',(818,752),'DECLINE_YES',(670,695,955,805))
+        elif screen in ('AUTO_OFF','AUTO_OFF_BATTLE'):
+            time.sleep(2)
+            if self.vision.screen(self.capture())==screen:self.click(screen,(1880,530))
+        else:time.sleep(2)  # la run sigue sola con Auto
+        time.sleep(.5)
 
     def cost_shown(self,frame):
         x,y,x1,y1=COST_ROI;return self.vision.number(frame[y:y1,x:x1])
