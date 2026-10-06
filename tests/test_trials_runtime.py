@@ -100,4 +100,20 @@ class TrialsRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(SafetyStop,'3000'):runner.set_difficulty()
         self.assertEqual(state['clicks'],[(1416,826)]);self.assertEqual(state['shown'],499)
 
+    def test_a_long_range_is_crossed_by_jumping_toward_the_level(self):
+        # Semana con rango 440-755: unos 300 niveles, 5 visibles, cada paso de rueda baja 2 niveles.
+        from unittest.mock import patch
+        top=[755];steps=[]
+        runner=TrialsRunner.__new__(TrialsRunner)
+        runner.vision=SimpleNamespace(trials_levels=lambda f:[(317+128*i,top[0]-i) for i in range(5) if top[0]-i>=440])
+        runner.capture=lambda:None
+        def wheel(n):steps.append(n);top[0]=max(444,min(755,top[0]-2*n))
+        runner.wheel=wheel
+        with patch('fishing_core.trials_runtime.time.sleep'):y=runner.scroll_to_level(499)
+        self.assertIsNotNone(y);self.assertIn(499,[top[0]-i for i in range(5)])
+        self.assertLess(len(steps),15)  # salta, no baja de 3 en 3
+        top[0]=755
+        with patch('fishing_core.trials_runtime.time.sleep'):self.assertIsNone(runner.scroll_to_level(300))  # fuera del rango
+
+
 if __name__=='__main__':unittest.main()

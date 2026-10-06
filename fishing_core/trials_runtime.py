@@ -89,6 +89,30 @@ class TrialsRunner(DungeonRunner):
             previous=signature;self.wheel(3)
         return None
 
+    def scroll_to_level(self,target):
+        """Fila del nivel en el segundo menú (niveles de mayor a menor, a veces cientos): mide cuántos
+        niveles mueve cada paso de rueda y salta hacia el objetivo; None si no está."""
+        time.sleep(1.2);per=None;still=0
+        for _ in range(80):
+            levels=self.vision.trials_levels(self.capture())
+            if not levels:return None
+            hit=next((y for y,n in levels if n==target),None)
+            if hit is not None:return hit
+            top=max(n for _,n in levels);bottom=min(n for _,n in levels)
+            if bottom<=target<=top:return None  # debería verse: no está en la lista
+            gap=bottom-target if target<bottom else target-top  # niveles que faltan
+            steps=1 if per is None else max(1,min(40,int(gap/per)))
+            if target>top:steps=-steps
+            self.wheel(steps);after=self.vision.trials_levels(self.capture())
+            if not after:return None
+            moved=abs(min(n for _,n in after)-bottom)
+            if moved==0:
+                still+=1
+                if still>=2:return None  # final de la lista
+                continue
+            still=0;per=max(.5,moved/abs(steps))
+        return None
+
     def choose(self,y,label):
         xy=(930,y);self.check();self.io.click(xy);time.sleep(.25);self.io._move((960,1070))
         self.log.emit('DUNGEON_INPUT',screen=label,xy=list(xy))
@@ -105,7 +129,7 @@ class TrialsRunner(DungeonRunner):
         if y is None:raise SafetyStop(f'La dificultad {target} no está en el menú; no se cambia')
         self.choose(y,'TRIALS_RANGE')
         self.wait(lambda f:menu(f) and bool(self.vision.trials_levels(f)),10,'niveles del rango')
-        y=self.scroll_to(lambda f:next((y for y,n in self.vision.trials_levels(f) if n==target),None),'nivel')
+        y=self.scroll_to_level(target)
         if y is None:raise SafetyStop(f'El nivel {target} no aparece en su rango; no se cambia')
         self.choose(y,'TRIALS_LEVEL')
         self.wait(lambda f:self.vision.screen(f)=='TRIALS' and self.difficulty_shown(f)==target,10,f'dificultad {target}')
