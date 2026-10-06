@@ -183,4 +183,8 @@ class DungeonVisionTests(unittest.TestCase):
         self.assertIsNone(vision.familiar_name(self.frames['offer_tealk']))  # sin candidatos no se adivina
 
 
+    def test_any_story_dialog_is_recognised_by_its_arrow(self):
+        self.assertEqual(self.vision.screen(self.frames['story_agnar']),'STORY')  # Agnar, World Boss
+
+
 if __name__=='__main__':unittest.main()

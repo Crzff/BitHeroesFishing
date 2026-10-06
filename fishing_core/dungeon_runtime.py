@@ -108,12 +108,18 @@ class DungeonRunner:
         return np.frombuffer(shot.bgra,np.uint8).reshape(1080,1920,4)[:,:,:3].copy()
 
     def wait(self,predicate,timeout=10,expected=None):
-        deadline=time.monotonic()+timeout;stable=0;frame=None
+        deadline=time.monotonic()+timeout;stable=0;frame=None;stories=0
         while time.monotonic()<deadline:
             frame=self.capture()
             okay=predicate(frame) if callable(predicate) else self.vision.screen(frame)==predicate
             stable=stable+1 if okay else 0
             if stable>=2:return frame
+            if (not okay and predicate not in ('STORY','STORY_ZORUL') and stories<30 and
+                    self.vision.screen(frame) in ('STORY','STORY_ZORUL')):
+                # Diálogo de historia (primer jefe, mazmorra...): se pasa con su flecha; no gasta nada.
+                self.check();self.io.click((1665,646));time.sleep(.25);self.io._move((960,1070))
+                self.log.emit('DUNGEON_INPUT',screen='STORY',xy=[1665,646]);stories+=1
+                deadline+=2;time.sleep(.8);continue
             time.sleep(.12)
         expected=expected or (predicate if isinstance(predicate,str) else 'lectura estable')
         screen=self.vision.screen(frame) if frame is not None else 'SIN_LECTURA'
@@ -414,9 +420,13 @@ class DungeonRunner:
 
         Nunca BRIBE (gemas). Sin cuota o coste ilegible no se gasta: la oferta se rechaza.
         """
-        frame=self.wait('FAMILIAR_OFFER');cost=self.vision.offer_cost(frame)
-        if self.offer_name(frame)!=name or cost is None or self.vision.offer_cost(self.capture())!=cost:
+        frame=self.wait('FAMILIAR_OFFER');cost=self.vision.offer_cost(frame);glyph=familiar_glyph(frame)
+        # Sin nombre del catálogo (Raid persuade a cualquiera) la identidad es la imagen del nombre.
+        same=(lambda f:self.offer_name(f)==name) if name else \
+             (lambda f:(lambda g:g is not None and glyph is not None and g.shape==glyph.shape and np.array_equal(g,glyph))(familiar_glyph(f)))
+        if not same(frame) or cost is None or self.vision.offer_cost(self.capture())!=cost:
             raise SafetyStop('Oferta del objetivo inestable o coste ilegible; no se gasta oro')
+        if not name:name=self.vision.read_text(glyph).title() if glyph is not None else 'Familiar'
         action=f'persuade-{offer}'
         try:
             # El saldo de oro se muestra abreviado (7,6M): la protección es la cuota de sesión.
@@ -428,13 +438,14 @@ class DungeonRunner:
         path=self.channel.directory/f'persuade-{offer}.intent.json'
         intent={'attempt_id':attempt,'familiar':name,'cost':cost,'currency':'GOLD','effect_confirmed':False}
         atomic_json(path,intent)
-        self.click('FAMILIAR_OFFER',(528,704),'PERSUADE',(360,640,720,780),expected_familiar=name)
+        if not same(self.capture()):raise SafetyStop('La oferta cambió antes de Persuade; no se gasta oro')
+        self.click('FAMILIAR_OFFER',(528,704),'PERSUADE',(360,640,720,780))
         self.wait('PERSUADE_CONFIRM',10)
         self.click('PERSUADE_CONFIRM',(814,750),'DECLINE_YES',(670,695,955,805))
         def outcome(f):
             screen=self.vision.screen(f)
             if screen=='FAMILIAR_OFFER':  # no se unió y el juego ofrece el siguiente; el mismo nombre es ambiguo
-                other=self.offer_name(f);return other is not None and other!=name
+                return familiar_glyph(f) is not None and not same(f)
             return screen in ('CAPTURE_SUCCESS','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','LOADING','BATTLE_VICTORY','VICTORY','AUTO_ON','AUTO_OFF')
         frame=self.wait(outcome,20,'resultado de Persuade')
         captured=self.vision.screen(frame)=='CAPTURE_SUCCESS'
@@ -467,10 +478,19 @@ class DungeonRunner:
                     try:frame=self.wait(lambda f:self.offer_name(f) is not None,3,'nombre de familiar')
                     except SafetyStop:pass
                 offer=f'{cycle}-{declined+1}';name=self.offer_name(frame)
-                if not self.decline_other(frame,attempt,offer):
-                    if not (isinstance(name,str) and normalize(name) in {normalize(n) for n in self.targets}):
-                        raise SafetyStop('Oferta de familiar desconocido: pausa para decidir; no se gasta oro ni gemas')
-                    self.persuade(frame,attempt,offer,name)
+                known=isinstance(name,str) and normalize(name) in {normalize(n) for n in self.targets}
+                try:
+                    if getattr(self,'persuade_all',False):self.persuade(frame,attempt,offer,name)  # Raid: cualquiera
+                    elif not self.decline_other(frame,attempt,offer):
+                        if not known:raise LookupError
+                        self.persuade(frame,attempt,offer,name)
+                except LookupError:
+                    raise SafetyStop('Oferta de familiar desconocido: pausa para decidir; no se gasta oro ni gemas') from None
+                except SafetyStop:
+                    # La oferta puede cerrarse sola antes de pulsar nada: sin intención escrita no hubo gasto.
+                    sent=[p for p in (f'decline-{offer}',f'persuade-{offer}') if (self.channel.directory/f'{p}.intent.json').exists()]
+                    if sent or self.vision.screen(self.capture())=='FAMILIAR_OFFER':raise
+                    self.log.emit('FAMILIAR_OFFER_GONE',message='La oferta se cerró sola antes de decidir; se sigue');unknown_since=None;continue
                 declined+=1;unknown_since=None;continue
             if screen=='WB_DEFEAT' and getattr(self,'defeat_continues',False):
                 # Expedition/Trials: perder es normal. Cerrar con TOWN y seguir gastando.
@@ -536,18 +556,18 @@ class DungeonRunner:
                 unknown_since=None;time.sleep(.12);continue
             battle_off_since=None
             if screen=='AUTO_ON':auto_started=True  # Auto de combate no acredita Auto del mapa.
-            elif screen=='STORY_ZORUL':
+            elif screen in ('STORY_ZORUL','STORY'):
                 signature=hash(frame[420:813,780:1590].tobytes())
                 if signature not in story_sent:
-                    if len(story_sent)>=4:raise SafetyStop('Demasiados diálogos de historia')
-                    self.wait('STORY_ZORUL');story_sent.add(signature)
-                    self.click('STORY_ZORUL',(1665,646),'STORY_ARROW',(1620,575,1720,720))
+                    if len(story_sent)>=30:raise SafetyStop('Demasiados diálogos de historia')
+                    self.wait(screen);story_sent.add(signature)
+                    self.click(screen,(1665,646),'STORY_ARROW',(1620,575,1720,720))
             elif screen not in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','LOADING'):
                 unknown_since=unknown_since or time.monotonic()
                 if time.monotonic()-unknown_since>8:
                     cv2.imwrite(str(self.channel.directory/'unknown.png'),frame[100:915,320:1600])
                     raise SafetyStop('Pantalla/oferta/derrota no reconocida: pausa sin Persuade ni gasto')
-            if screen in ('AUTO_ON','AUTO_ON_BATTLE','BATTLE_VICTORY','STORY_ZORUL','LOADING'):unknown_since=None
+            if screen in ('AUTO_ON','AUTO_ON_BATTLE','BATTLE_VICTORY','STORY_ZORUL','STORY','LOADING'):unknown_since=None
             time.sleep(.12)
         raise SafetyStop('Dungeon sin cierre confirmado en 3 minutos; no se repite')
 

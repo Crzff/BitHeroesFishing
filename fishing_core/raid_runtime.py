@@ -29,14 +29,17 @@ SHARDS_ROI=(880,100,1050,145)
 class RaidRunner(DungeonRunner):
     defeat_continues=True
 
-    def __init__(self,io,capture,vision,channel,log,runs,raid='STORM',difficulty='Heroic'):
+    persuade_all=True  # crzf: en Raid todos los familiares son buenos; se persuade cualquiera con oro
+
+    def __init__(self,io,capture,vision,channel,log,runs,raid='STORM',difficulty='Heroic',max_gold=0):
         if raid not in RAIDS or difficulty not in DIFFICULTY_BUTTONS:raise ValueError('Raid o dificultad no disponible')
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.raid,self.raid_difficulty=raid,difficulty
         self.runs=runs;self.deadline=time.monotonic()+60*60
         self.plan={'dungeon_id':'RAID_STORM','difficulty':'Heroic','runs':runs,'energy_limit':runs,'target':''}
         self.cost=SHARD_COST;self.balance=None
-        self.budget=FarmBudget(max_runs=runs,max_energy=runs*SHARD_COST,max_seconds=60*60,max_gold=0,stop_on_defeat=False)
+        if type(max_gold) is not int or not 0<=max_gold<=10_000_000:raise ValueError('Cuota de oro inválida (0-10.000.000)')
+        self.budget=FarmBudget(max_runs=runs,max_energy=runs*SHARD_COST,max_seconds=60*60,max_gold=max_gold,stop_on_defeat=False)
 
     def press(self,screen,action):
         xy,key,roi=action
@@ -90,7 +93,7 @@ class RaidRunner(DungeonRunner):
         self.log.emit('RAID_STATUS',message='Shards gastados · detenido',budget=self.budget.payload())
 
 
-def run_raid(runs,raid='STORM',difficulty='Heroic'):
+def run_raid(runs,raid='STORM',difficulty='Heroic',max_gold=0):
     from .game_window import ENV_WINDOW,focus_window
     from .dungeon_vision import DungeonVision
     from .gamescope import backend
@@ -106,7 +109,7 @@ def run_raid(runs,raid='STORM',difficulty='Heroic'):
         os.environ.pop('FARM_LAUNCHER_PID',None)
         log=Telemetry('RAID',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
-            RaidRunner(io,capture,DungeonVision(),channel,log,runs,raid,difficulty).run()
+            RaidRunner(io,capture,DungeonVision(),channel,log,runs,raid,difficulty,max_gold).run()
     except (Exception,KeyboardInterrupt) as exc:
         if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
         raise

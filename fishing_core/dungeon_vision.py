@@ -176,6 +176,8 @@ class DungeonVision:
                 self.locate(frame,'BATTLE_CONTINUE',(1000,950,1310,1055))):return 'BATTLE_VICTORY'
         if self.locate(frame,'STORY_ZORUL',(1200,415,1480,520)) and self.locate(frame,'STORY_ARROW',(1620,575,1720,720)):
             return 'STORY_ZORUL'
+        # Cualquier otro diálogo de historia (Agnar, Nyxn...): misma flecha amarilla a la derecha.
+        if self.locate(frame,'STORY_ARROW',(1620,575,1720,720)):return 'STORY'
         map_hud=self.locate(frame,'DUNGEON_MAP_HUD',(1680,130,1860,175))
         if self.locate(frame,'AUTO_OFF',(1835,410,1920,610)):
             return 'AUTO_OFF' if map_hud else 'AUTO_OFF_BATTLE'

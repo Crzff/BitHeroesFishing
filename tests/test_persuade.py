@@ -33,7 +33,7 @@ class FakeGame:
 
 
 class PersuadeTests(unittest.TestCase):
-    def run_offer(self,game,max_gold):
+    def run_offer(self,game,max_gold,name='Tealk'):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);path=Path(tmp.name)
         plan=validate_supported({'dungeon_id':'Z5D3','difficulty':'Heroic','runs':1,'energy_limit':30,
                                  'targets':['Tealk'],'max_gold':max_gold})
@@ -45,7 +45,7 @@ class PersuadeTests(unittest.TestCase):
         def sleep(s):clock[0]+=s
         fake=SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep,perf_counter_ns=lambda:0)
         with patch('fishing_core.dungeon_runtime.time',fake):
-            runner.persuade(FRAMES['offer_tealk_cost'],'t:1','1-1','Tealk')
+            runner.persuade(FRAMES['offer_tealk_cost'],'t:1','1-1',name)
         return runner,path
 
     def test_capture_spends_the_read_gold_once_and_closes_the_window(self):
@@ -84,6 +84,13 @@ class PersuadeTests(unittest.TestCase):
         for bad in (-1,'100',10_000_001,1.5):
             with self.assertRaises(ValueError):
                 validate_supported({'dungeon_id':'Z5D3','difficulty':'Heroic','runs':1,'energy_limit':30,'max_gold':bad})
+
+
+    def test_raid_persuades_a_familiar_outside_the_catalogue_by_its_name_image(self):
+        game=FakeGame();runner,path=self.run_offer(game,10_000,name=None)  # Raid: cualquier familiar
+        self.assertEqual(game.clicks,[(528,704),(814,750),(958,962)]);self.assertNotIn(BRIBE,game.clicks)
+        intent=json.loads((path/'persuade-1-1.intent.json').read_text())
+        self.assertEqual((intent['familiar'],intent['captured'],intent['currency']),('Tealk',True,'GOLD'))
 
 
 if __name__=='__main__':unittest.main()

@@ -190,8 +190,13 @@ class FarmApp(tk.Tk):
             self.choice_row(x0,y0+34+i*58,lw,name.upper()[:24],r['raid']==key,lambda k=key:self.set_raid(k),h=50)
         self.label('DIFICULTAD',rx,y0,20,ui.GOLD)
         self.buttons(DIFFICULTY_COLORS,r['difficulty'],rx,y0+34,x1-rx,60,self.set_raid_difficulty,on='purple')
-        for i,line in enumerate(('1 SHARD POR RUN','HASTA AGOTARLOS','UNA DERROTA NO DETIENE')):
+        for i,line in enumerate(('1 SHARD POR RUN','HASTA AGOTARLOS','UNA DERROTA NO DETIENE','PERSUADE A CUALQUIER FAMILIAR')):
             self.label(line,rx,y0+260+i*36,15,ui.TEXT)
+        self.label('ORO PARA PERSUADIR (NUNCA GEMAS)',rx,y0+420,15,ui.GOLD)
+        gold=int(r.get('max_gold',250_000))
+        for i,value in enumerate(GOLD_STEPS):
+            self.put(ui.button(short(value),(x1-rx-8)//2,46,'purple' if gold==value else 'gray',18),
+                     rx+(i%2)*((x1-rx+8)//2),y0+452+(i//2)*54,lambda v=value:self.set_raid_gold(v))
 
     def draw_trials(self):
         x0,y0,x1,y1=self.window('TRIALS');level=int(self.config_data['trials']['difficulty']);current=trials_range(level)
@@ -303,6 +308,7 @@ class FarmApp(tk.Tk):
     def set_tier(self,tier):self.config_data['boss']['tier']=tier;self.save()
     def set_boss_difficulty(self,level):self.config_data['boss']['difficulty']=level.title();self.save()
     def set_raid(self,key):self.config_data['raid']['raid']=key;self.save()
+    def set_raid_gold(self,value):self.config_data['raid']['max_gold']=value;self.save()
     def set_raid_difficulty(self,level):self.config_data['raid']['difficulty']=level.title();self.save()
     def set_trials_range(self,span):self.config_data['trials']['difficulty']=span[2];self.save()
 
