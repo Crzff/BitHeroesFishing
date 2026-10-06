@@ -523,7 +523,8 @@ class DungeonRunner:
                 # RERUN entra directamente en la siguiente run (sin TEAM ni ACCEPT) y gasta en ese
                 # momento: reservar e intención antes del clic, como ACCEPT.
                 following=f'{self.channel.run_id}:{cycle+1}'
-                if not self.budget.reserve_entry(following,resource='ENERGY',balance=self.balance,cost=self.cost):
+                if not self.budget.reserve_entry(following,resource=getattr(self,'entry_resource','ENERGY'),
+                                                 balance=self.balance,cost=self.cost):
                     raise SafetyStop('Entrada ya reservada; no repetir RERUN')
                 atomic_json(self.channel.directory/f'entry-{cycle+1}.intent.json',
                             {'attempt_id':following,'plan':self.plan,'balance':self.balance,'cost':self.cost,'via':'RERUN',

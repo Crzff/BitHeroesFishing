@@ -30,6 +30,7 @@ class RaidRunner(DungeonRunner):
     defeat_continues=True
 
     persuade_all=True  # crzf: en Raid todos los familiares son buenos; se persuade cualquiera con oro
+    entry_resource='SHARDS'  # RERUN reserva shards, no energía
 
     def __init__(self,io,capture,vision,channel,log,runs,raid='STORM',difficulty='Heroic',max_gold=0):
         if raid not in RAIDS or difficulty not in DIFFICULTY_BUTTONS:raise ValueError('Raid o dificultad no disponible')
@@ -79,15 +80,17 @@ class RaidRunner(DungeonRunner):
             raise SafetyStop('Raid ya reservada; no repetir SUMMON')
         atomic_json(self.channel.directory/f'raid-{cycle}.intent.json',{'attempt_id':attempt,'shards':balance,'effect_confirmed':False})
         self.press('RAID',SUMMON);self.press('RAID_DIFFICULTY',DIFFICULTY_BUTTONS[self.raid_difficulty]);self.press('TEAM',ACCEPT)
+        self.balance=balance-SHARD_COST  # cota inferior para decidir RERUN (la regeneración solo suma)
         self.log.emit('RAID_STARTED',attempt_id=attempt,shards_before=balance)
         return attempt
 
     def run(self):
+        following=None
         for cycle in range(1,self.runs+1):
-            attempt=self.enter(cycle)
+            attempt=following or self.enter(cycle)  # tras RERUN la raid ya está en marcha
             if attempt is None:break
-            # observe(): Auto del mapa/combate, ofertas (sin objetivo se rechazan), victoria -> TOWN.
-            self.observe(attempt,cycle,auto_started=True)
+            # observe(): Auto, ofertas (se persuade cualquiera), victoria -> RERUN si quedan shards, si no TOWN.
+            following=self.observe(attempt,cycle,auto_started=True,rerun=cycle<self.runs)
             atomic_json(self.channel.directory/f'raid-{cycle}.intent.json',{'attempt_id':attempt,'outcome':'VICTORY','effect_confirmed':True})
         self.open();self.press('RAID',CLOSE);self.wait('HOME')
         self.log.emit('RAID_STATUS',message='Shards gastados · detenido',budget=self.budget.payload())

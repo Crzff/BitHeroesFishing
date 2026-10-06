@@ -32,15 +32,20 @@ class FakeGame:
 
 
 class RaidRuntimeTests(unittest.TestCase):
-    def run_raid(self,game,shards,runs=5,difficulty='Heroic'):
+    def run_raid(self,game,shards,runs=5,difficulty='Heroic',reruns=0):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp);io=Mock();io.click.side_effect=game.click
             channel=SimpleNamespace(directory=path,run_id='test',stop_path=path/'stop.json')
             runner=RaidRunner(io,Mock(),VISION,channel,Mock(),runs,'STORM',difficulty)
             runner.capture=lambda:FRAMES['raid_window' if game.state=='battle' else game.state]
+            left=[reruns]
             def observe(attempt,cycle,**kw):
-                assert game.state=='battle';game.state='raid_window'
+                assert game.state=='battle'
                 runner.budget.finish_run(attempt,'VICTORY',closure_confirmed=True)
+                if kw.get('rerun') and left[0]:  # RERUN: la siguiente raid empieza sin SUMMON ni TEAM
+                    left[0]-=1;following=f'test:{cycle+1}'
+                    runner.budget.reserve_entry(following,resource=runner.entry_resource,balance=5,cost=1);return following
+                game.state='raid_window'
             runner.observe=Mock(side_effect=observe)
             clock=[0.0]
             def sleep(seconds):clock[0]+=seconds
@@ -65,6 +70,13 @@ class RaidRuntimeTests(unittest.TestCase):
             game.moves[('raid_window',(440,624))]='raid_astaroth'
             with self.assertRaisesRegex(SafetyStop,'Storm'):self.run_raid(game,[3])
         self.assertEqual(game.summons,0)
+
+
+    def test_rerun_chains_raids_without_summoning_again_and_spends_shards(self):
+        game=FakeGame();runner=self.run_raid(game,[3,0],reruns=2)
+        self.assertEqual(game.summons,1)  # una sola entrada por SUMMON; las otras dos por RERUN
+        self.assertEqual(runner.budget.energy_reserved,3);self.assertEqual(runner.budget.resource,'SHARDS')
+        self.assertEqual([c.kwargs['rerun'] for c in runner.observe.call_args_list],[True,True,True])
 
 
 if __name__=='__main__':unittest.main()
