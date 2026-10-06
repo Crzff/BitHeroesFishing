@@ -83,6 +83,8 @@ def loot_rarity(bgr):
     if hi<120:return None
     if lo>=200:return 'COMMON'  # borde blanco: oro, XP y consumibles sin rareza
     hue=cv2.cvtColor(np.uint8([[bgr]]),cv2.COLOR_BGR2HSV)[0,0,0]
+    # Rojos del juego: épico salmón (240,128,112) y mítico rojo rosado (240,80,112); los separa el verde.
+    if (hue<=8 or hue>=166) and r>=200:return 'EPIC' if g>=105 else 'MYTHIC'
     if 45<=hue<=80:return 'COMMON'
     if 82<=hue<=100:return 'SET'
     if 101<=hue<=128:return 'RARE'

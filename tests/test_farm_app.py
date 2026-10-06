@@ -94,6 +94,13 @@ class FarmAppClickTests(unittest.TestCase):
         self.click_where(self.by_default('step_level',10));self.assertEqual(farm_config.load()['trials']['difficulty'],674)
         self.click_where(self.by_default('step_level',-10));self.assertEqual(farm_config.load()['trials']['difficulty'],664)
 
+    def test_the_loot_window_refreshes_itself_while_open(self):
+        from unittest.mock import patch
+        self.app.screen='loot';self.app.render();self.assertIsNotNone(self.app.loot_job)
+        with patch.object(self.app,'render') as render:self.app.refresh_loot();render.assert_called_once()
+        self.app.screen='main'
+        with patch.object(self.app,'render') as render:self.app.refresh_loot();render.assert_not_called()
+
     def test_every_screen_renders(self):
         for screen in ('main','quest','boss','raid','trials','pvp','expedition','loot'):
             self.app.screen=screen;self.app.render();self.assertTrue(self.app.zones)

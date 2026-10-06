@@ -256,6 +256,11 @@ class FarmApp(tk.Tk):
             if entry['count']>1:self.label(str(entry['count']),x+4,ay+30,13)
         self.label('GASTADO EN ESTA SESION',x0,y1-96,16,ui.GOLD)
         self.put(ui.button('REINICIAR',200,50,'red',20),x1-200,y0,self.reset_loot)
+        if not getattr(self,'loot_job',None):self.loot_job=self.after(5000,self.refresh_loot)  # se actualiza sola
+
+    def refresh_loot(self):
+        self.loot_job=None
+        if self.screen=='loot':self.render()
 
     # --- acciones ---------------------------------------------------------------
     def on_click(self,event):

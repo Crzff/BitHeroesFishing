@@ -48,4 +48,12 @@ class LootTests(unittest.TestCase):
             loot.spend('ENERGY',30);loot.familiar('Tealk');self.assertFalse((Path(tmp)/'l.json').exists())
 
 
+    def test_border_colours_of_the_game_map_to_each_rarity(self):
+        import numpy as np
+        from fishing_core.dungeon_vision import loot_rarity
+        colours={(128,252,145):'COMMON',(125,145,254):'RARE',(240,128,112):'EPIC',(243,222,121):'LEGENDARY',
+                 (240,80,112):'MYTHIC',(128,240,240):'SET'}  # RGB medidos en el LOOT RECAP
+        for rgb,rarity in colours.items():self.assertEqual(loot_rarity(np.uint8(rgb[::-1])),rarity,rgb)
+
+
 if __name__=='__main__':unittest.main()
