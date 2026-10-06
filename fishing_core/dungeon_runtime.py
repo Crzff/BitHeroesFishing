@@ -45,7 +45,8 @@ COST_DROPDOWN=(1370,416)
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 # Pantallas de una run en marcha que pueden quedar al reiniciar el bot.
-LEFTOVER_SCREENS=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM','STORY')
+LEFTOVER_SCREENS=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM','STORY',
+                  'RESUME_DUNGEON')
 
 
 class OfferChanged(Exception):
@@ -181,7 +182,7 @@ class DungeonRunner:
         Si el juego quedó a mitad de una run (bot reiniciado), la deja terminar: Auto encendido, ofertas
         rechazadas (no gasta) y el resultado se cierra con TOWN."""
         running=LEFTOVER_SCREENS
-        for _ in range(40):
+        for _ in range(240):  # una run reanudada puede durar varios minutos (cada vuelta ~2 s)
             frame=self.wait(lambda f:self.vision.screen(f)=='HOME' or self.vision.screen(f) in keep or
                             self.vision.screen(f) in WINDOW_CLOSERS or self.vision.screen(f) in MENU_PARENTS or
                             self.vision.screen(f) in running,60,'Home o ventana conocida')
@@ -208,6 +209,10 @@ class DungeonRunner:
             self.log.emit('FAMILIAR_DECLINED',message='Oferta de una run anterior rechazada al reanudar')
         elif screen=='DECLINE_CONFIRM':self.click('DECLINE_CONFIRM',(818,752),'DECLINE_YES',(670,695,955,805))
         elif screen=='STORY':self.click('STORY',(1665,646),'STORY_ARROW',(1620,575,1720,720))
+        elif screen=='RESUME_DUNGEON':
+            # Desconexión a mitad de dungeon: la energía ya se gastó; continuarla da el botín.
+            self.click('RESUME_DUNGEON',(812,750),'DECLINE_YES',(670,695,955,805))
+            self.log.emit('DUNGEON_STATUS',message='Dungeon interrumpida por desconexión: se continúa')
         elif screen in ('AUTO_OFF','AUTO_OFF_BATTLE'):
             time.sleep(2)
             if self.vision.screen(self.capture())==screen:self.click(screen,(1880,530))

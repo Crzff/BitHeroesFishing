@@ -1877,6 +1877,15 @@
     "LOOT_DIGIT_8": [
       "glifo binario a 27 px",
       "cantidad de la casilla de LOOT RECAP"
+    ],
+    "RESUME_DUNGEON": [
+      [
+        640,
+        400,
+        1280,
+        500
+      ],
+      "aviso: te desconectaste de una dungeon, \u00bfcontinuar?"
     ]
   },
   "notes": [

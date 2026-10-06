@@ -152,6 +152,8 @@ class DungeonVision:
                 and self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'PERSUADE_CONFIRM'
         if (self.locate(frame,'CAPTURE_SUCCESS',(540,50,1380,170)) and
                 self.locate(frame,'CAPTURE_CLOSE',(780,890,1140,1040))):return 'CAPTURE_SUCCESS'
+        if (self.locate(frame,'RESUME_DUNGEON',(640,400,1280,500)) and
+                self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'RESUME_DUNGEON'  # "UH OH! ¿continuar?"
         if self.locate(frame,'CONFIRM_HEADER',(770,270,1150,370)):return 'UNKNOWN'
         # El dibujo del familiar puede tapar parte de PERSUADE (la caña de Columbus): BRIBE y DECLINE
         # exactos y PERSUADE con algo de tolerancia.

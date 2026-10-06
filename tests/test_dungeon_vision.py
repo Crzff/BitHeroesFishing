@@ -192,4 +192,8 @@ class DungeonVisionTests(unittest.TestCase):
         self.assertEqual(self.vision.screen(frame),'FAMILIAR_OFFER');self.assertEqual(self.vision.offer_cost(frame),8000)
 
 
+    def test_the_disconnected_from_a_dungeon_notice_is_recognised(self):
+        self.assertEqual(self.vision.screen(self.frames['resume_dungeon']),'RESUME_DUNGEON')
+
+
 if __name__=='__main__':unittest.main()
