@@ -104,7 +104,8 @@ class FarmApp(tk.Tk):
 
     def resource(self,name,height=40):
         img=Image.open(ui.ICONS/f'res/{name}.png').convert('RGBA')
-        return img.resize((round(img.width*height/img.height),height),Image.NEAREST)
+        scale=height/max(img.size)  # mismo cuadro para todos (energía es diagonal, xeals cuadrado)
+        return img.resize((max(1,round(img.width*scale)),max(1,round(img.height*scale))),Image.NEAREST)
 
     def draw_main(self):
         x0,y0,x1,y1=self.window('FARM BOT',back=False)
