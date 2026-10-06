@@ -150,8 +150,9 @@ class DungeonVision:
                 self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'WB_NOT_FULL'
         if (self.locate(frame,'CONFIRM_HEADER',(770,270,1150,370)) and self.locate(frame,'PERSUADE_GOLD',(800,500,1320,640))
                 and self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'PERSUADE_CONFIRM'
-        if (self.locate(frame,'CAPTURE_SUCCESS',(540,50,1380,170)) and
-                self.locate(frame,'CAPTURE_CLOSE',(780,890,1140,1040))):return 'CAPTURE_SUCCESS'
+        # El dibujo del familiar puede tapar el título (alas de Callumoth): CLOSE exacto y título tolerante.
+        if (self.locate(frame,'CAPTURE_CLOSE',(780,890,1140,1040)) and
+                self.locate(frame,'CAPTURE_SUCCESS',(540,50,1380,170),.8,max_diff=40)):return 'CAPTURE_SUCCESS'
         if (self.locate(frame,'RESUME_DUNGEON',(640,400,1280,500)) and
                 self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'RESUME_DUNGEON'  # "UH OH! ¿continuar?"
         if self.locate(frame,'CONFIRM_HEADER',(770,270,1150,370)):return 'UNKNOWN'

@@ -46,7 +46,7 @@ ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 # Pantallas de una run en marcha que pueden quedar al reiniciar el bot.
 LEFTOVER_SCREENS=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM','STORY',
-                  'RESUME_DUNGEON')
+                  'RESUME_DUNGEON','CAPTURE_SUCCESS')
 
 
 class OfferChanged(Exception):
@@ -209,6 +209,7 @@ class DungeonRunner:
             self.log.emit('FAMILIAR_DECLINED',message='Oferta de una run anterior rechazada al reanudar')
         elif screen=='DECLINE_CONFIRM':self.click('DECLINE_CONFIRM',(818,752),'DECLINE_YES',(670,695,955,805))
         elif screen=='STORY':self.click('STORY',(1665,646),'STORY_ARROW',(1620,575,1720,720))
+        elif screen=='CAPTURE_SUCCESS':self.click('CAPTURE_SUCCESS',(958,962),'CAPTURE_CLOSE',(780,890,1140,1040))
         elif screen=='RESUME_DUNGEON':
             # Desconexión a mitad de dungeon: la energía ya se gastó; continuarla da el botín.
             self.click('RESUME_DUNGEON',(812,750),'DECLINE_YES',(670,695,955,805))
@@ -460,11 +461,12 @@ class DungeonRunner:
         Nunca BRIBE (gemas). Sin cuota o coste ilegible no se gasta: la oferta se rechaza.
         """
         frame=self.wait('FAMILIAR_OFFER');cost=self.vision.offer_cost(frame);glyph=familiar_glyph(frame)
-        # Sin nombre del catálogo (Raid persuade a cualquiera) la identidad es la imagen del nombre.
-        same=(lambda f:self.offer_name(f)==name) if name else \
-             (lambda f:(lambda g:g is not None and glyph is not None and g.shape==glyph.shape and np.array_equal(g,glyph))(familiar_glyph(f)))
-        if not same(frame) or cost is None or self.vision.offer_cost(self.capture())!=cost:
-            raise SafetyStop('Oferta del objetivo inestable o coste ilegible; no se gasta oro')
+        # Identidad antes de pulsar: sigue la oferta, con el mismo coste y, si es del catálogo, el mismo
+        # nombre. La imagen del nombre no sirve: el dibujo del familiar puede taparla y moverse (Callumoth).
+        same=lambda f:(self.vision.screen(f)=='FAMILIAR_OFFER' and self.vision.offer_cost(f)==cost and
+                       (not name or self.offer_name(f) in (name,None)))
+        if cost is None:raise SafetyStop('Coste de Persuade ilegible; no se gasta oro')
+        if not same(self.capture()):raise OfferChanged()  # nada reservado ni pulsado: se vuelve a leer
         if not name:name=self.vision.read_text(glyph).title() if glyph is not None else 'Familiar'
         action=f'persuade-{offer}'
         try:
@@ -477,14 +479,16 @@ class DungeonRunner:
         path=self.channel.directory/f'persuade-{offer}.intent.json'
         intent={'attempt_id':attempt,'familiar':name,'cost':cost,'currency':'GOLD','effect_confirmed':False}
         atomic_json(path,intent)
-        if not same(self.capture()):raise SafetyStop('La oferta cambió antes de Persuade; no se gasta oro')
         self.click('FAMILIAR_OFFER',(528,704))  # FAMILIAR_OFFER ya exige PERSUADE (tolerante), BRIBE y DECLINE
         self.wait('PERSUADE_CONFIRM',10)
         self.click('PERSUADE_CONFIRM',(814,750),'DECLINE_YES',(670,695,955,805))
+        left=[False]  # la oferta pagada tiene que haberse cerrado antes de aceptar otra: nunca se paga dos veces
         def outcome(f):
             screen=self.vision.screen(f)
-            if screen=='FAMILIAR_OFFER':  # no se unió y el juego ofrece el siguiente; el mismo nombre es ambiguo
-                return familiar_glyph(f) is not None and not same(f)
+            if screen not in ('FAMILIAR_OFFER','PERSUADE_CONFIRM'):left[0]=True
+            if screen=='FAMILIAR_OFFER':  # no se unió y el juego ofrece el siguiente
+                other=self.offer_name(f)
+                return (other!=name) if (name and other) else (left[0] and familiar_glyph(f) is not None)
             return screen in ('CAPTURE_SUCCESS','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','LOADING','BATTLE_VICTORY','VICTORY','AUTO_ON','AUTO_OFF')
         frame=self.wait(outcome,20,'resultado de Persuade')
         captured=self.vision.screen(frame)=='CAPTURE_SUCCESS'

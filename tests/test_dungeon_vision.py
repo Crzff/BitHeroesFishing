@@ -196,4 +196,8 @@ class DungeonVisionTests(unittest.TestCase):
         self.assertEqual(self.vision.screen(self.frames['resume_dungeon']),'RESUME_DUNGEON')
 
 
+    def test_a_capture_whose_art_covers_the_title_is_still_a_capture(self):
+        self.assertEqual(self.vision.screen(self.frames['capture_callumoth']),'CAPTURE_SUCCESS')  # alas sobre el título
+
+
 if __name__=='__main__':unittest.main()
