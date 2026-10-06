@@ -184,7 +184,7 @@ class DungeonVision:
             return 'STORY_ZORUL'
         # Cualquier otro diálogo de historia (Agnar, Nyxn...): misma flecha amarilla a la derecha.
         # La flecha es igual en todos; el fondo detrás cambia (mapa, combate de raid): algo de tolerancia.
-        if self.locate(frame,'STORY_ARROW',(1600,560,1740,740),.88,max_diff=40):return 'STORY'
+        if self.locate(frame,'STORY_ARROW',(1600,560,1740,740),.88,max_diff=40) or self.dialog_box(frame):return 'STORY'
         map_hud=self.locate(frame,'DUNGEON_MAP_HUD',(1680,130,1860,175))
         if self.locate(frame,'AUTO_OFF',(1835,410,1920,610)):
             return 'AUTO_OFF' if map_hud else 'AUTO_OFF_BATTLE'
@@ -424,6 +424,19 @@ class DungeonVision:
         text=text[3:] if text.startswith('THE') else text
         scored=sorted((edit_distance(clean(name),text[:len(clean(name))]),name) for name in names)
         return scored[0][1] if scored[0][0]<=2 and (len(scored)==1 or scored[1][0]>scored[0][0]+1) else None
+
+    @staticmethod
+    def dialog_box(frame):
+        """Recuadro de diálogo de historia aunque un personaje tape la flecha: borde inferior gris
+        (144,151,158) de 900+ px y el interior oscuro encima."""
+        band=frame[700:880].astype(np.int16);bottom=np.abs(band-np.array((158,151,144),np.int16)).sum(2)<=24
+        for i in range(bottom.shape[0]):
+            row=np.concatenate([[0],bottom[i].astype(np.int8),[0]]);edges=np.nonzero(np.diff(row))[0]
+            for x0,x1 in zip(edges[::2],edges[1::2]):
+                if x1-x0>=900:
+                    y=700+i;inner=frame[max(0,y-260):y-25,x0+40:x1-40]
+                    if (inner.max(2)<45).mean()>.5:return True
+        return False
 
     def loot_cells(self,frame):
         """Casillas visibles: [{'kind','rarity','amount','icon'}]; kind GOLD/XP/MATERIAL/ITEM."""
