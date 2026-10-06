@@ -679,4 +679,17 @@ class DungeonRuntimeTests(unittest.TestCase):
             self.assertEqual(runner.budget.gold_reserved,0)
 
 
+    def test_an_offer_that_changes_while_deciding_is_re_read_without_clicking(self):
+        from fishing_core.dungeon_runtime import OfferChanged
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            brute,sitra=data['offer_brute'],data['offer_sitra']
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.plan['target']='Tealk';runner.vision=DungeonVision()
+            runner.capture=lambda:sitra  # al confirmar ya está la siguiente oferta
+            runner.wait=lambda predicate,timeout=10,expected=None:sitra
+            with self.assertRaises(OfferChanged):runner.decline_other(brute,'test:1','1-1')
+            io.click.assert_not_called();self.assertFalse((Path(tmp)/'decline-1-1.intent.json').exists())
+
+
 if __name__=='__main__':unittest.main()

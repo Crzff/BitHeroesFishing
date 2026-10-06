@@ -44,6 +44,12 @@ COST_ROI=(1210,392,1310,448)
 COST_DROPDOWN=(1370,416)
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
+# Pantallas de una run en marcha que pueden quedar al reiniciar el bot.
+LEFTOVER_SCREENS=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM','STORY')
+
+
+class OfferChanged(Exception):
+    """La oferta cambió mientras se decidía (entró la siguiente): se vuelve a evaluar sin pulsar nada."""
 MENU_PARENTS={'SETTINGS':('HOME',),'TEAM':ENTRY_SCREENS,
               'DIFFICULTY':MAP_SCREENS,'DUNGEON_SPECIAL':MAP_SCREENS,'ZONES':MAP_SCREENS,
               **{screen:('HOME',) for screen in MAP_SCREENS}}
@@ -174,7 +180,7 @@ class DungeonRunner:
         """Cierra con su X verificada las ventanas de modo abiertas hasta llegar a Home (o a una de keep).
         Si el juego quedó a mitad de una run (bot reiniciado), la deja terminar: Auto encendido, ofertas
         rechazadas (no gasta) y el resultado se cierra con TOWN."""
-        running=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM')
+        running=LEFTOVER_SCREENS
         for _ in range(40):
             frame=self.wait(lambda f:self.vision.screen(f)=='HOME' or self.vision.screen(f) in keep or
                             self.vision.screen(f) in WINDOW_CLOSERS or self.vision.screen(f) in MENU_PARENTS or
@@ -201,6 +207,7 @@ class DungeonRunner:
             self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015))
             self.log.emit('FAMILIAR_DECLINED',message='Oferta de una run anterior rechazada al reanudar')
         elif screen=='DECLINE_CONFIRM':self.click('DECLINE_CONFIRM',(818,752),'DECLINE_YES',(670,695,955,805))
+        elif screen=='STORY':self.click('STORY',(1665,646),'STORY_ARROW',(1620,575,1720,720))
         elif screen in ('AUTO_OFF','AUTO_OFF_BATTLE'):
             time.sleep(2)
             if self.vision.screen(self.capture())==screen:self.click(screen,(1880,530))
@@ -295,7 +302,8 @@ class DungeonRunner:
         self.log.emit('DUNGEON_STATUS',message='Ajustes comprobados · cero oro/gemas',settings=seen)
 
     def go_home(self):
-        if self.vision.screen(self.capture()) in WINDOW_CLOSERS:self.ensure_home()
+        # Ventanas de modo o una run que quedó a medias (bot reiniciado): ensure_home las resuelve.
+        if self.vision.screen(self.capture()) in tuple(WINDOW_CLOSERS)+LEFTOVER_SCREENS:self.ensure_home()
         frame=self.wait(lambda frame:self.vision.screen(frame)=='HOME' or self.vision.screen(frame) in MENU_PARENTS,12)
         for _ in range(4):
             screen=self.vision.screen(frame)
@@ -413,7 +421,7 @@ class DungeonRunner:
         if targets and (not isinstance(name,str) or normalize(name) in targets):return False
         same=lambda f:(lambda g:g is not None and np.array_equal(g,glyph))(familiar_glyph(f))
         frame=self.wait('FAMILIAR_OFFER')
-        if not same(frame):raise SafetyStop('Nombre de familiar inestable; no se rechaza')
+        if not same(frame):raise OfferChanged()
         path=self.channel.directory/f'decline-{offer}.intent.json'
         if path.exists():raise SafetyStop('Rechazo ya registrado; no se repite una decisión incierta')
         intent={'attempt_id':attempt,'familiar':name,'target':target,'action':'DECLINE','effect_confirmed':False}
@@ -508,6 +516,8 @@ class DungeonRunner:
                         self.persuade(frame,attempt,offer,name)
                 except LookupError:
                     raise SafetyStop('Oferta de familiar desconocido: pausa para decidir; no se gasta oro ni gemas') from None
+                except OfferChanged:
+                    unknown_since=None;time.sleep(.3);continue  # nada pulsado: se lee la oferta nueva
                 except SafetyStop:
                     # La oferta puede cerrarse sola antes de pulsar nada: sin intención escrita no hubo gasto.
                     sent=[p for p in (f'decline-{offer}',f'persuade-{offer}') if (self.channel.directory/f'{p}.intent.json').exists()]
