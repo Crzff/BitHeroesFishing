@@ -150,14 +150,15 @@ class DungeonRunner:
         raise SafetyStop(f'Pantalla no confirmada: {expected}; observada {screen}'+(f' · {familiar}' if familiar else ''))
 
     def record_loot(self):
-        """Suma el LOOT RECAP visible y el que queda bajo el scroll (las casillas repetidas no cuentan dos veces)."""
+        """Suma oro, XP y solo lo mítico y de conjunto del LOOT RECAP (crzf: lo demás no compensa el tiempo).
+        Se recorre el scroll para no perder ninguno; no se pasa el ratón por nada (equipo = flecha)."""
         if not loot.ENABLED:return
         seen={};previous=None
         for _ in range(8):
             cells=self.vision.loot_cells(self.capture())
             for cell in cells:
-                if cell['kind']=='MATERIAL':cell['kind']=self.loot_kind(cell)  # sin flecha: material, consumible o equipo
-            for cell in cells:seen.setdefault((cell['icon'][::8,::8].tobytes(),cell['amount']),cell)
+                if cell['kind'] in ('GOLD','XP') or cell['rarity'] in loot.TRACKED:
+                    seen.setdefault((cell['icon'][::8,::8].tobytes(),cell['amount']),cell)
             signature=[(c['kind'],c['rarity'],c['amount']) for c in cells]
             if len(cells)<6 or signature==previous:break
             previous=signature;self.wheel(1,(1320,770));time.sleep(.6)

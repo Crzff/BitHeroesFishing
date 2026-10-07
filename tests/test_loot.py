@@ -72,4 +72,21 @@ class LootTests(unittest.TestCase):
             loot.remember_kind('abc','CONSUMABLE',path);self.assertEqual(loot.known_kind('abc',path),'CONSUMABLE')
 
 
+    def test_the_bot_only_counts_gold_xp_mythic_and_set_without_hovering(self):
+        import numpy as np
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from fishing_core.dungeon_runtime import DungeonRunner
+        icon=lambda n:np.full((109,109,3),n,np.uint8)
+        cells=[{'kind':'GOLD','rarity':'COMMON','amount':500,'icon':icon(1)},{'kind':'MATERIAL','rarity':'RARE','amount':9,'icon':icon(2)},
+               {'kind':'ITEM','rarity':'MYTHIC','amount':1,'icon':icon(3)},{'kind':'MATERIAL','rarity':'SET','amount':2,'icon':icon(4)}]
+        runner=DungeonRunner.__new__(DungeonRunner);runner.io=Mock();runner.log=Mock();runner.capture=Mock()
+        runner.vision=SimpleNamespace(loot_cells=lambda f:cells);runner.loot_kind=Mock()
+        with tempfile.TemporaryDirectory() as tmp,patch.object(loot,'ENABLED',True),patch.object(loot,'PATH',Path(tmp)/'l.json'), \
+                patch.object(loot,'ALBUM',Path(tmp)/'a'):
+            runner.record_loot();data=loot.load()
+        self.assertEqual((data['gold'],data['items'],data['materials']),(500,{'MYTHIC':1},{'SET':2}))
+        runner.loot_kind.assert_not_called();runner.io._move.assert_not_called()
+
+
 if __name__=='__main__':unittest.main()
