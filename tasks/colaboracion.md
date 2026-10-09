@@ -24,3 +24,4 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
 
 - t3 (Codex): huecos de runa vacíos (INSERT) se saltan; 493 OK.
 - t4 (Codex, timeout 124 pero diff completo): Mercader → DECLINE; 495 OK.
+- t5 (Codex, timeout 124 con diff completo): SETTINGS ampliado, IDLE_PROMPT, EVENT_WINDOW; 500 OK.

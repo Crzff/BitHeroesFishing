@@ -8,6 +8,12 @@ import numpy as np
 from .bait_inventory import BaitReader,quantity_boxes
 
 ASSETS=Path(__file__).resolve().parent.parent/'assets/dungeon_templates.npz'
+SETTINGS={'gold':('GOLD',False),'gems':('GEMS',False),'duplicates':('DUPLICATES',False),
+          'notifications':('SETTING_NOTIFICATIONS',False),'animations':('SETTING_ANIMATIONS',False),
+          'tips':('SETTING_TIPS',False),'merchants':('SETTING_MERCHANTS',True),
+          'treasures':('SETTING_TREASURES',True),'music':('SETTING_MUSIC',True),'sound':('SETTING_SOUND',True)}
+NEW_TEMPLATES=tuple(key for key,_ in SETTINGS.values() if key.startswith('SETTING_'))+(
+    'AUDIO_ZERO','IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS','EVENT_CLOSE')
 
 
 def familiar_glyph(frame):
@@ -99,7 +105,7 @@ class DungeonVision:
     def __init__(self,path=ASSETS):
         with np.load(path,allow_pickle=False) as data:
             self.templates={key:data[key] for key in data.files}
-        for key in ('MERCHANT_TITLE','MERCHANT_DECLINE'):
+        for key in ('MERCHANT_TITLE','MERCHANT_DECLINE')+NEW_TEMPLATES:
             template=cv2.imread(str(ASSETS.parent/f'{key.lower()}.png'))
             if template is not None:self.templates[key]=template
         # ponytail: fondos/variantes observados; máscara alfa etiquetada si otro fondo falla.
@@ -151,6 +157,10 @@ class DungeonVision:
 
     def screen(self,frame):
         if frame.shape!=(1080,1920,3):return 'UNKNOWN'
+        if (self.locate(frame,'IDLE_TITLE',(700,450,1200,610)) and
+                self.locate(frame,'IDLE_YES',(770,680,1140,830))):return 'IDLE_PROMPT'
+        if (self.locate(frame,'EVENT_TITLE',(700,90,1220,210)) and
+                self.locate(frame,'EVENT_ENDS',(570,220,1380,300))):return 'EVENT_WINDOW'
         if (all(key in self.templates for key in ('MERCHANT_TITLE','MERCHANT_DECLINE')) and
                 self.locate(frame,'MERCHANT_TITLE',(720,220,1160,335)) and
                 self.locate(frame,'MERCHANT_DECLINE',(990,765,1250,865))):return 'MERCHANT'
@@ -478,22 +488,37 @@ class DungeonVision:
         return None
 
     def setting(self,frame,name):
+        """Estado del padre; para audio, True acredita volumen cero, None es lectura desconocida."""
         if self.screen(frame)!='SETTINGS':return None
-        key={'gold':'GOLD','gems':'GEMS','duplicates':'DUPLICATES'}[name]
-        pos=self.locate(frame,key,(550,340,1390,860))
+        key=SETTINGS[name][0]
+        pos=self.locate(frame,key,(475,340,1390,860))
         if pos is None:return None
         x,y=pos
+        if name in ('music','sound'):
+            roi=(830,max(340,y-70),1300,min(860,y+100))
+            center=y+(28 if name=='music' else 30)
+            bar=frame[center-15:center+15,850:1250]
+            b,g,r=bar.astype(np.int16).transpose(2,0,1)
+            green=(g>150)&(g>b+60)&(g>r+60)
+            blue=(b>130)&(g>100)&(r<100)
+            if green.sum()<=10 and self.locate(frame,'AUDIO_ZERO',roi):return True
+            return False if green.sum()>10 and blue.sum()>300 else None
         # Solo el padre a x≈478: las rarezas debajo tienen sangría y otro estado.
         for key,state in [('EMPTY',False),('EMPTY_HOVER',False),('CHECKED',True)]:
             if self.locate(frame,key,(x-83,y-15,x-11,y+58),.94):return state
         return None
 
     def setting_box(self,frame,name):
-        """Centro de la casilla de un ajuste de SETTINGS (para desmarcarla); None si no se ve."""
+        """Casilla padre o extremo izquierdo de audio en SETTINGS; None si no se acredita."""
         if self.screen(frame)!='SETTINGS':return None
-        pos=self.locate(frame,{'gold':'GOLD','gems':'GEMS','duplicates':'DUPLICATES'}[name],(550,340,1390,860))
+        pos=self.locate(frame,SETTINGS[name][0],(475,340,1390,860))
         if pos is None:return None
         x,y=pos
+        if name in ('music','sound'):
+            # El mismo tirador/barra se desplaza con su etiqueta, también con WINDOWED en Steam.
+            if self.setting(frame,name) is None:return None
+            bar=self.locate(frame,'AUDIO_ZERO',(830,max(340,y-70),1300,min(860,y+100)))
+            return (868,bar[1]+43) if bar else (868,y+(28 if name=='music' else 30))
         for key in ('CHECKED','EMPTY','EMPTY_HOVER'):
             box=self.locate(frame,key,(x-83,y-15,x-11,y+58),.94)
             if box:h,w=self.templates[key].shape[:2];return box[0]+w//2,box[1]+h//2

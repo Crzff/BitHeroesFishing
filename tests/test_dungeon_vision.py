@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import cv2
@@ -10,6 +11,60 @@ FIXTURES=Path(__file__).parent/'fixtures/dungeons.npz'
 
 
 class DungeonVisionTests(unittest.TestCase):
+    def test_settings_parents_and_audio_follow_labels(self):
+        for fixture,name,state,xy in (
+                ('settings_notifications','notifications',True,(510,574)),
+                ('settings_animations','animations',True,(510,651)),
+                ('settings_merchants','merchants',False,(510,464)),
+                ('settings_treasures_tips','treasures',False,(510,477)),
+                ('settings_treasures_tips','tips',True,(510,667))):
+            frame=self.frames[fixture]
+            self.assertEqual(self.vision.screen(frame),'SETTINGS')
+            self.assertIs(self.vision.setting(frame,name),state,name)
+            self.assertEqual(self.vision.setting_box(frame,name),xy,name)
+            changed=frame.copy();x,y=xy
+            changed[y-32:y+32,x-32:x+32]=self.vision.templates['EMPTY' if state else 'CHECKED']
+            self.assertIs(self.vision.setting(changed,name),not state,name)
+        for fixture,zero in (('settings_audio_50',False),('settings_audio_zero',True)):
+            frame=self.frames[fixture]
+            self.assertEqual(self.vision.screen(frame),'SETTINGS')
+            for name,y in (('music',408),('sound',530)):
+                self.assertIs(self.vision.setting(frame,name),zero,(fixture,name))
+                self.assertEqual(self.vision.setting_box(frame,name),(868,y))
+                shifted=frame.copy();shifted[340:860]=0;shifted[440:860]=frame[340:760]
+                self.assertIs(self.vision.setting(shifted,name),zero)
+                self.assertEqual(self.vision.setting_box(shifted,name),(868,y+100))
+                missing=frame.copy();missing[y-50:y+50,830:1350]=0
+                self.assertIsNone(self.vision.setting(missing,name))
+                self.assertIsNone(self.vision.setting_box(missing,name))
+        for name,y,other in (('music',408,'sound'),('sound',530,'music')):
+            mixed=self.frames['settings_audio_50'].copy()
+            mixed[y-50:y+50,830:1350]=self.frames['settings_audio_zero'][y-50:y+50,830:1350]
+            self.assertIs(self.vision.setting(mixed,name),True)
+            self.assertIs(self.vision.setting(mixed,other),False)
+            low=self.frames['settings_audio_zero'].copy()
+            low[y-5:y+5,946:950]=(90,240,90)  # Incluso una franja verde pequeña impide acreditar cero.
+            self.assertIs(self.vision.setting(low,name),False)
+        self.assertIsNone(self.vision.setting(self.frames['settings_notifications'],'animations'))
+        self.assertIsNone(self.vision.setting(self.frames['settings_merchants'],'animations'))
+
+    def test_idle_and_event_require_both_labels_without_reclassifying_other_fixtures(self):
+        locate=self.vision.locate
+        for name,frame in self.frames.items():
+            with patch.object(self.vision,'locate',side_effect=lambda f,k,r,*a,**kw:
+                              None if k in ('IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS') else locate(f,k,r,*a,**kw)):
+                before=self.vision.screen(frame)
+            expected={'idle_prompt':'IDLE_PROMPT','halloween_event':'EVENT_WINDOW'}.get(name,before)
+            self.assertEqual(self.vision.screen(frame),expected,name)
+        for fixture,screen,boxes in (
+                ('idle_prompt','IDLE_PROMPT',((772,497,1144,580),(796,704,1084,793))),
+                ('halloween_event','EVENT_WINDOW',((747,117,1166,177),(618,244,1328,281)))):
+            frame=self.frames[fixture]
+            for x,y,x1,y1 in boxes:
+                damaged=frame.copy();damaged[y:y1,x:x1]=0
+                self.assertNotEqual(self.vision.screen(damaged),screen)
+            self.assertNotEqual(self.vision.screen(frame//2),screen)
+
     def test_merchant_requires_title_and_decline_and_excludes_other_fixtures(self):
         frame=self.frames['merchant_offer']
         self.assertEqual(self.vision.screen(frame),'MERCHANT')

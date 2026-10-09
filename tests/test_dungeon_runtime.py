@@ -16,6 +16,98 @@ from fishing_core.farm_budget import FarmBudget
 
 
 class DungeonRuntimeTests(unittest.TestCase):
+    def test_settings_real_frames_click_only_differing_parents_and_audio_ends(self):
+        from fishing_core.dungeon_vision import DungeonVision,SETTINGS
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('settings_audio_50','settings_audio_zero','settings_notifications',
+                    'settings_animations','settings_merchants','settings_treasures_tips',
+                    'settings_gold','settings_gems','settings_duplicates')}
+        pages=('settings_audio_50','settings_notifications','settings_animations','settings_merchants',
+               'settings_treasures_tips','settings_gold','settings_gems','settings_duplicates')
+        for already_desired in (False,True):
+            with self.subTest(already_desired=already_desired),tempfile.TemporaryDirectory() as tmp:
+                runner,io,_=self.runner(Path(tmp));vision=DungeonVision();runner.vision=vision
+                vision.screen=Mock(return_value='SETTINGS')  # La clasificación completa se comprueba en visión.
+                runner.plan['target']='Tealk';position=[0];clicks=[]
+                images=[frames[name].copy() for name in pages];expected=[]
+                for index,image in enumerate(images):
+                    for name,(_,desired) in SETTINGS.items():
+                        value=vision.setting(image,name)
+                        if value is None or value==desired:continue
+                        xy=vision.setting_box(image,name)
+                        if already_desired:
+                            if name in ('music','sound'):images[index]=frames['settings_audio_zero'].copy();image=images[index]
+                            else:
+                                x,y=xy;image[y-32:y+32,x-32:x+32]=vision.templates['CHECKED' if desired else 'EMPTY']
+                        else:expected.append(xy)
+                runner.capture=Mock(side_effect=lambda:images[position[0]])
+                def wait(predicate,timeout=10,expected=None):
+                    image=runner.capture()
+                    if callable(predicate) and not predicate(image):raise SafetyStop('Cambio sin confirmar')
+                    return image
+                runner.wait=wait;runner.close_menu=Mock()
+                def scroll(screen,amount):position[0]=0 if amount<0 else min(position[0]+1,len(images)-1)
+                runner.scroll_menu=Mock(side_effect=scroll)
+                def click(screen,xy,*args):
+                    if screen=='HOME':return
+                    image=images[position[0]];matches=[name for name,(_,desired) in SETTINGS.items()
+                            if vision.setting(image,name) is not None and vision.setting_box(image,name)==xy]
+                    self.assertEqual(len(matches),1,xy);name=matches[0];desired=SETTINGS[name][1]
+                    self.assertNotEqual(vision.setting(image,name),desired);clicks.append(xy)
+                    if name in ('music','sound'):
+                        y=xy[1];image[y-50:y+50,830:1350]=frames['settings_audio_zero'][y-50:y+50,830:1350]
+                    else:
+                        x,y=xy;image[y-32:y+32,x-32:x+32]=vision.templates['CHECKED' if desired else 'EMPTY']
+                runner.click=Mock(side_effect=click)
+                runner.verify_settings()
+                self.assertEqual(clicks,expected)
+                saved=json.loads((Path(tmp)/'native_settings.json').read_text())
+                self.assertEqual(saved['checked'],{name:desired for name,(_,desired) in SETTINGS.items()})
+                self.assertEqual(saved['missing'],[]);self.assertTrue(runner.safety_checked)
+                io.click.assert_not_called()
+
+    def test_idle_yes_and_event_close_are_verified_and_never_enter_event_shop(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('idle_prompt','halloween_event','home','auto_on')}
+        for fixture,xy,key,roi in (('idle_prompt',(958,750),'IDLE_YES',(770,680,1140,830)),
+                                   ('halloween_event',(1600,150),'EVENT_CLOSE',(1520,80,1660,215))):
+            for damaged in (False,True):
+                with self.subTest(fixture=fixture,damaged=damaged),tempfile.TemporaryDirectory() as tmp:
+                    runner,io,_=self.runner(Path(tmp));runner.vision=DungeonVision();state=[fixture]
+                    image=frames[fixture].copy()
+                    if damaged:
+                        x,y,x1,y1=roi;image[y:y1,x:x1]=0
+                    runner.capture=Mock(side_effect=lambda:image if state[0]==fixture else frames['home'])
+                    def wait(predicate,timeout=10,expected=None):
+                        frame=runner.capture()
+                        if callable(predicate) and not predicate(frame):raise SafetyStop('Pantalla no confirmada')
+                        return frame
+                    runner.wait=wait;io.click.side_effect=lambda point:state.__setitem__(0,'home')
+                    with patch('fishing_core.dungeon_runtime.time.sleep'):
+                        if damaged:
+                            with self.assertRaises(SafetyStop):runner.ensure_home()
+                            io.click.assert_not_called()
+                        else:
+                            self.assertEqual(runner.ensure_home(),'HOME');io.click.assert_called_once_with(xy)
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp));runner.vision=DungeonVision();state=['idle_prompt']
+            reads=[0]
+            def capture():
+                if state[0]=='auto_on':
+                    reads[0]+=1
+                    if reads[0]>1:raise SafetyStop('fin offline')
+                return frames[state[0]]
+            runner.capture=Mock(side_effect=capture)
+            def wait(predicate,timeout=10,expected=None):
+                frame=runner.capture()
+                if callable(predicate) and not predicate(frame):raise SafetyStop('Pantalla no confirmada')
+                return frame
+            runner.wait=wait;io.click.side_effect=lambda point:state.__setitem__(0,'auto_on')
+            with patch('fishing_core.dungeon_runtime.time.sleep'),self.assertRaisesRegex(SafetyStop,'fin offline'):
+                runner.observe('test:1',1,auto_started=True)
+            io.click.assert_called_once_with((958,750))
+
     def test_merchant_declines_only_in_observation_and_home_recovery(self):
         from fishing_core.dungeon_vision import DungeonVision
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
@@ -443,6 +535,7 @@ class DungeonRuntimeTests(unittest.TestCase):
                     position[0]=0 if amount<0 else position[0]+amount
                 runner.scroll_menu=Mock(side_effect=scroll)
                 def setting(frame,name):
+                    if name not in ('gold','gems','duplicates'):return None
                     start={'gold':30,'gems':42,'duplicates':48}[name]
                     if unsafe=='unknown' or not start<=position[0]<start+12:return None
                     return name in ticked or (unsafe=='no_box' and name=='gold')
@@ -454,11 +547,24 @@ class DungeonRuntimeTests(unittest.TestCase):
                 else:
                     runner.verify_settings()
                     self.assertTrue(runner.safety_checked)
-                    self.assertLessEqual(runner.scroll_menu.call_count,10)  # Reset + como máximo 9 avances.
+                    saved=json.loads((Path(tmp)/'native_settings.json').read_text())
+                    self.assertEqual(saved['missing'],['notifications','animations','tips','merchants','treasures','music','sound'])
+                    self.assertTrue(any(call.args==('DUNGEON_STATUS',) and 'Aviso:' in call.kwargs.get('message','')
+                                        for call in runner.log.emit.call_args_list))
+                    self.assertEqual(runner.scroll_menu.call_count,36)  # También busca los opcionales ausentes.
                     runner.close_menu.assert_called_once_with('SETTINGS')
                     self.assertEqual(runner.click.call_count,2 if unsafe else 1)  # SETTINGS + solo la casilla marcada
                 io.click.assert_not_called()
                 self.assertEqual(runner.budget.payload()['entries_reserved'],0)
+
+    def test_new_setting_change_must_be_confirmed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp));runner.click=Mock();runner.scroll_menu=Mock();runner.close_menu=Mock()
+            vision.setting.side_effect=lambda frame,name:True if name=='notifications' else False if name in ('gold','gems','duplicates') else None
+            vision.setting_box.return_value=(510,574)
+            with self.assertRaisesRegex(SafetyStop,'Lectura no confirmada'):runner.verify_settings()
+            self.assertFalse(runner.safety_checked);runner.close_menu.assert_not_called()
+            self.assertFalse((Path(tmp)/'native_settings.json').exists());io.click.assert_not_called()
 
     def test_familiar_offer_always_pauses_before_persuade_or_bribe(self):
         with tempfile.TemporaryDirectory() as tmp:

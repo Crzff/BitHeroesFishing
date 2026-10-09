@@ -10,7 +10,7 @@ import numpy as np
 
 from .control_flow import SafetyStop
 from .dungeon_catalog import FAMILIARS,dungeon,farm_plan,normalize
-from .dungeon_vision import DungeonVision,familiar_glyph
+from .dungeon_vision import DungeonVision,familiar_glyph,SETTINGS
 from . import loot
 from .farm_budget import FarmBudget
 from .game_window import ENV_WINDOW,WindowGuard
@@ -30,6 +30,7 @@ SESSION_SECONDS=3600
 # Ventanas de modo -> su X (coordenada, plantilla, ROI). Sin plantilla: basta la pantalla reconocida.
 # Tras una desconexión: RECONNECT, recompensa diaria gratuita (CLAIM) e ITEMS. Nunca compra.
 WINDOW_CLOSERS={'DISCONNECTED':((960,742),'RECONNECT',(770,665,1150,820)),
+                'EVENT_WINDOW':((1600,150),'EVENT_CLOSE',(1520,80,1660,215)),
                 'SEASON_REWARDS':((960,962),'SEASON_CLAIM',(740,885,1180,1040)),
                 'ITEMS':(None,'ITEMS_CLOSE',(1200,150,1500,450)),
                 'TRIALS_REWARDS':(None,'ITEMS_CLOSE',(1600,100,1740,240)),
@@ -48,7 +49,7 @@ ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 # Pantallas de una run en marcha que pueden quedar al reiniciar el bot.
 LEFTOVER_SCREENS=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM','STORY',
-                  'RESUME_DUNGEON','CAPTURE_SUCCESS','MERCHANT')
+                  'RESUME_DUNGEON','CAPTURE_SUCCESS','MERCHANT','IDLE_PROMPT')
 
 
 class OfferChanged(Exception):
@@ -258,6 +259,7 @@ class DungeonRunner:
     def finish_leftover_run(self,screen):
         """Un paso de una run que quedó a medias al reiniciar el bot; nunca gasta."""
         if screen=='MERCHANT':self.decline_merchant()
+        elif screen=='IDLE_PROMPT':self.dismiss_idle()
         elif screen=='FAMILIAR_OFFER':
             # Sin sesión no hay cuota de oro: rechazar es gratis (BRIBE nunca).
             self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015))
@@ -286,6 +288,10 @@ class DungeonRunner:
                 raise SafetyStop('Confirmación desconocida tras DECLINE del mercader; no se pulsa')
             return True
         self.wait(closed,5,'mercader rechazado')
+
+    def dismiss_idle(self):
+        self.click('IDLE_PROMPT',(958,750),'IDLE_YES',(770,680,1140,830))
+        self.wait(lambda f:self.vision.screen(f)!='IDLE_PROMPT',5,'aviso de inactividad cerrado')
 
     def cost_shown(self,frame):
         x,y,x1,y1=COST_ROI;return self.vision.number(frame[y:y1,x:x1])
@@ -353,24 +359,27 @@ class DungeonRunner:
         self.scroll_menu('SETTINGS',-80);seen={};changed=[]
         for _ in range(35):
             frame=self.wait('SETTINGS')
-            for name in ('gold','gems','duplicates'):
+            for name,(_,desired) in SETTINGS.items():
                 value=self.vision.setting(frame,name)
                 if value is not None:
                     second=self.capture()
                     if self.vision.setting(second,name)!=value:raise SafetyStop('Ajuste nativo inestable')
                     # crzf: auto persuadir con oro/gemas nunca; con objetivos tampoco rechazar duplicados.
-                    if value and (name in ('gold','gems') or self.targets):
+                    if value!=desired and (name!='duplicates' or self.targets):
                         xy=self.vision.setting_box(second,name)
                         if xy is None:raise SafetyStop(f'Gasto nativo activado: {name}; no se entra')
                         self.click('SETTINGS',xy)
-                        frame=self.wait(lambda f:self.vision.setting(f,name) is False,5,f'{name} desactivado')
-                        value=False;changed.append(name)
-                        self.log.emit('DUNGEON_STATUS',message=f'Ajuste {name} desactivado por el bot')
+                        frame=self.wait(lambda f:self.vision.setting(f,name) is desired,5,f'{name} verificado')
+                        value=desired;changed.append(name)
+                        self.log.emit('DUNGEON_STATUS',message=f'Ajuste {name} cambiado por el bot')
                     seen[name]=value
-            if len(seen)==3:break
+            if len(seen)==len(SETTINGS):break
             self.scroll_menu('SETTINGS',6)  # Calibrado: 8 salta una lectura; 6 conserva solape.
-        if len(seen)!=3:raise SafetyStop('No se pudieron comprobar todos los ajustes anti-gasto')
-        atomic_json(self.channel.directory/'native_settings.json',{'checked':seen,'changed_by_bot':changed})
+        if not all(name in seen for name in ('gold','gems','duplicates')):
+            raise SafetyStop('No se pudieron comprobar todos los ajustes anti-gasto')
+        missing=[name for name in SETTINGS if name not in seen]
+        if missing:self.log.emit('DUNGEON_STATUS',message='Aviso: ajustes no encontrados: '+', '.join(missing))
+        atomic_json(self.channel.directory/'native_settings.json',{'checked':seen,'changed_by_bot':changed,'missing':missing})
         self.close_menu('SETTINGS');self.safety_checked=True
         self.log.emit('DUNGEON_STATUS',message='Ajustes comprobados · cero oro/gemas',settings=seen)
 
@@ -585,6 +594,8 @@ class DungeonRunner:
         unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180;battle_autos=0;map_autos=0;map_off_since=None;battle_off_since=None
         while time.monotonic()<deadline:
             frame=self.capture();screen=self.vision.screen(frame)
+            if screen=='IDLE_PROMPT':
+                self.dismiss_idle();unknown_since=None;continue
             if screen=='MERCHANT':
                 self.decline_merchant();unknown_since=None;continue
             if screen=='FAMILIAR_OFFER':
