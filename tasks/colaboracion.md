@@ -29,3 +29,4 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
 - t7 (Codex): Gauntlet en hueco Trials, REDUCED EFFECTS/BATTLE TEXT; 508 OK. GvG pendiente (auto mode bloqueó aceptar la confirmación de gremio en la calibración).
 - t8a/t8b (Codex) boosts: en vivo FMANI ya activos, Steam consumió 4, KORTZZ consumió Speed y la compra paró por icono de tienda animado (arreglado con máscara).
 - t12a/t12b (Codex) backend CDP: validado en vivo, ciclo completo de KORTZZ sin gamescope. Calibración rueda: mouseMoved previo + deltaY 100/paso.
+- Fase 2 (seguridad) s1–s4 (Codex) hecha: escrituras privadas, identidad CDP, compras seguras, retención, plazo supervisor, hashes, intermediario CDP por pipe. Pendiente DACL Windows y lock con red.

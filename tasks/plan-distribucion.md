@@ -24,8 +24,8 @@ con un backend que también sirva en Windows; después seguridad; al final insta
 
 Hecho (2026-10-09): escrituras privadas y sin enlaces; identidad del navegador revalidada en CDP; compras con artículo
 exacto, cuota persistente y casilla separada; retención de registros; capturas sin chat; plazo del supervisor;
-instalación con hashes (falta generar requirements.lock con red). Pendiente: CDP por pipe con intermediario (s4) y
-DACL de Windows.
+instalación con hashes (falta generar requirements.lock con red). CDP por pipe con intermediario (s4, validado en vivo con perfil de prueba).
+Pendiente: DACL de Windows (archivos y named pipe) y generar requirements.lock con red.
 
 - Revisión de guardas (nunca gemas; compras solo boosts Minor con oro; F8; paradas ante
   pantallas desconocidas), aislamiento de perfiles, CDP solo en 127.0.0.1, sin secretos
