@@ -280,6 +280,8 @@ class FarmApp(tk.Tk):
         self.label('CAMBIAR RUNAS (CAPTURA / ITEM FIND)',x0+58,y+8,18)
         self.put(ui.checkbox(self.config_data['boosts'],44),x0,y+52,None if running else self.toggle_boosts)
         self.label('BOOSTS MINOR (SI NO HAY NINGUNO)',x0+58,y+60,18)
+        self.put(ui.checkbox(self.config_data['boosts_buy'],28),x0+470,y+8,None if running else self.toggle_boosts_buy)
+        self.label('COMPRAR MINOR CON ORO SI FALTA',x0+508,y+12,14)
         self.put(ui.button('CUENTAS',140,40,'gray' if running else 'blue',18),x1-470,y+52,
                  None if running else self.open_accounts)
         tabs=self.account_tabs()
@@ -493,6 +495,10 @@ class FarmApp(tk.Tk):
     def toggle_boosts(self):
         if self.running():return
         self.config_data['boosts']^=True;self.save()
+
+    def toggle_boosts_buy(self):
+        if self.running():return
+        self.config_data['boosts_buy']^=True;self.save()
 
     def toggle_account(self,account):
         if self.running():return

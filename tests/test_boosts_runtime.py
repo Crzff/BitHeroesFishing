@@ -193,6 +193,9 @@ class ShopGame(Game):
             else:
                 assert xy==(814,748)
                 assert (self.runner.channel.directory/'boost-item_find.intent.json').exists()
+                import json
+                quota=json.loads(self.runner.quota_path().read_text())['purchases']
+                assert len(quota)==1 and quota[0]['confirmed'] is False and quota[0]['cost']==10000
                 self.bought.append('item_find');self.missing=();self.state=self.after_yes
         else:
             super().click(xy)
@@ -221,6 +224,9 @@ class BoostsShopTests(unittest.TestCase):
         game=ShopGame(self.frames,**kwargs)
         runner=ShopRunner(game,None,DungeonVision(),SimpleNamespace(
             directory=Path(directory.name),stop_path=Path(directory.name)/'stop'),game)
+        runner.quota_path=lambda:Path(directory.name)/'boost_purchases.json'
+        config=patch('fishing_core.farm_config.load',return_value={'boosts_buy':True})
+        config.start();self.addCleanup(config.stop)
         game.runner=runner
         return runner,game
 
@@ -242,6 +248,8 @@ class BoostsShopTests(unittest.TestCase):
         import json
         intent=json.loads((runner.channel.directory/'boost-item_find.intent.json').read_text())
         self.assertTrue(intent['effect_confirmed']);self.assertEqual(intent['cost'],10000)
+        quota=json.loads(runner.quota_path().read_text())['purchases']
+        self.assertEqual(len(quota),1);self.assertTrue(quota[0]['confirmed'])
 
     @patch('fishing_core.boosts_runtime.time.sleep')
     def test_diamond_never_clicked(self,sleep):
@@ -258,6 +266,18 @@ class BoostsShopTests(unittest.TestCase):
                 self.assertEqual(game.clicks[-1],(1102,748));self.assertEqual(game.bought,[])
                 path=runner.channel.directory/'boost-item_find.intent.json'
                 self.assertEqual(path.exists(),bad=='yes')
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_ambiguous_names_no_then_stop(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        original=runner.locate
+        def ambiguous(frame,key,roi):
+            if game.state=='shop_purchase_confirm' and key=='purchase_name_xp':return (742,478)
+            return original(frame,key,roi)
+        with patch.object(runner,'locate',side_effect=ambiguous):
+            with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+        self.assertEqual(game.clicks[-1],(1102,748));self.assertEqual(game.bought,[])
+        self.assertFalse(runner.quota_path().exists())
 
     @patch('fishing_core.boosts_runtime.time.sleep')
     def test_active_never_opens_shop(self,sleep):
@@ -317,6 +337,66 @@ class BoostsShopTests(unittest.TestCase):
                 with self.assertRaises(SafetyStop):runner.shop_article(frame,kind)
         self.assertTrue(runner.purchase_valid(self.frames['shop_purchase_confirm'],'item_find'))
 
+    def test_real_confirmations_only_validate_their_own_article(self):
+        runner,game=self.runner()
+        for kind in BOOSTS:
+            frame=self.frames['shop_purchase_confirm'+('' if kind=='item_find' else '_'+kind)]
+            for expected in BOOSTS:
+                with self.subTest(kind=kind,expected=expected):
+                    self.assertEqual(runner.purchase_valid(frame,expected),kind==expected)
+            blank=frame.copy();blank[450:558,630:1290]=0
+            self.assertFalse(runner.purchase_valid(blank,kind))
+            no_price=frame.copy()
+            if kind=='gold':no_price[518:562,1020:1230]=0
+            else:no_price[562:609,690:1005 if kind in ('item_find','xp') else 947]=0
+            self.assertFalse(runner.purchase_valid(no_price,kind))
+        frame=self.frames['shop_purchase_confirm'].copy()
+        ref=runner.vision.templates['BOOST_PURCHASE_NAME_SPEED']
+        h,w=ref.shape[:2];frame[605:605+h,690:690+w]=ref
+        self.assertFalse(runner.purchase_valid(frame,'item_find'))
+        original=runner.locate
+        with patch.object(runner,'locate',side_effect=lambda f,k,r: (740,478) if k=='purchase_name_xp' else original(f,k,r)):
+            self.assertFalse(runner.purchase_valid(self.frames['shop_purchase_confirm'],'item_find'))
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_buy_disabled_never_opens_shop(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        before=game.clicks.copy()
+        with patch('fishing_core.farm_config.load',return_value={'boosts_buy':False}):runner.buy_missing(missing)
+        self.assertEqual(game.clicks,before);self.assertEqual(game.bought,[])
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_exhausted_persistent_quota_never_opens_shop(self,sleep):
+        from fishing_core.protocol import atomic_json
+        import time
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        for kinds in (['gold']*4,['item_find']*3):
+            with self.subTest(kinds=kinds):
+                atomic_json(runner.quota_path(),{'purchases':[{'boost':k,'cost':10000 if k=='item_find' else 5000,
+                    'time':time.time(),'confirmed':False} for k in kinds]})
+                before=game.clicks.copy();runner.buy_missing(missing)
+                self.assertEqual(game.clicks,before);self.assertEqual(game.bought,[])
+                self.assertEqual(game.events[-1][0],'BOOST_QUOTA')
+
+    def test_quota_expiry_and_invalid_data(self):
+        from fishing_core.protocol import atomic_json
+        import time
+        runner,game=self.runner()
+        with patch('fishing_core.boosts_runtime.time.time',return_value=100000):
+            atomic_json(runner.quota_path(),{'purchases':[{'boost':'xp','cost':10000,'time':13600,'confirmed':False}]})
+            self.assertEqual(runner.quota()[1],[])
+        atomic_json(runner.quota_path(),{'purchases':[{'boost':'xp','cost':1,'time':time.time(),'confirmed':True}]})
+        with self.assertRaises(SafetyStop):runner.quota()
+
+    def test_quota_is_shared_between_session_directories(self):
+        from fishing_core.protocol import atomic_json
+        import time
+        first,game=self.runner();second,other=self.runner()
+        second.quota_path=first.quota_path
+        atomic_json(first.quota_path(),{'purchases':[{'boost':'xp','cost':10000,'time':time.time(),'confirmed':False}]*3})
+        self.assertFalse(second.quota_available(second.quota()[1],['item_find']))
+        self.assertEqual(game.bought,[]);self.assertEqual(other.bought,[])
+
     @patch('fishing_core.boosts_runtime.time.sleep')
     def test_unknown_after_yes_no_further_clicks(self,sleep):
         runner,game=self.runner();missing=self.review_missing(runner,game)
@@ -324,6 +404,8 @@ class BoostsShopTests(unittest.TestCase):
         with self.assertRaises(SafetyStop):runner.buy_missing(missing)
         self.assertEqual(game.clicks[-1],(814,748));self.assertEqual(game.bought,['item_find'])
         self.assertFalse(any(event=='BOOST_BOUGHT' for event,_ in game.events))
+        import json
+        self.assertFalse(json.loads(runner.quota_path().read_text())['purchases'][0]['confirmed'])
 
 
 class BoostShopIconTests(unittest.TestCase):

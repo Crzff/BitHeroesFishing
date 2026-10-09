@@ -1,6 +1,7 @@
 """Consumo y compra acotados de los cuatro Minor; sin integración en farm_all."""
 
 import os
+import json
 import time
 from pathlib import Path
 
@@ -19,8 +20,8 @@ PROFILE_CLOSE=(1652,112)
 KEYS=('active','slot','flag','filter','consumables','consumables_selected','profile_close','activated','done','yes',
       *BOOSTS,*(f'confirm_{kind}' for kind in BOOSTS),
       'shop','shop_tab','shop_list','shop_close','one','coin','diamond','no',
-      'purchase_header','purchase_item_find','purchase_gold','price_10000','price_5000',
-      'coin_xp','coin_speed','price_10000_right','price_5000_right',
+      'purchase_header','purchase_item_find','purchase_name_xp','purchase_name_gold','purchase_name_speed','purchase_gold','price_10000','price_5000',
+      'coin_xp','coin_speed','price_10000_right','price_5000_right','price_5000_dialog',
       *(f'shop_{kind}' for kind in BOOSTS))
 SHOP_ROI=(320,330,1540,905)
 PRICES={'item_find':10000,'xp':10000,'gold':5000,'speed':5000}
@@ -42,6 +43,10 @@ class BoostsRunner(DungeonRunner):
         # Casilla de boost: solo el anillo del marco (el icono cambia y la barra pasa de verde a amarillo con el tiempo).
         ring=np.ones(self.vision.templates['BOOST_SLOT'].shape[:2],np.uint8);ring[13:-13,13:-13]=0
         self.vision.home_masks['BOOST_SLOT']=ring
+        # Oro reparte el nombre en dos líneas; excluir FOR y el precio de la segunda.
+        name_mask=np.ones(self.vision.templates['BOOST_PURCHASE_NAME_GOLD'].shape[:2],np.uint8)
+        name_mask[40:,185:]=0
+        self.vision.home_masks['BOOST_PURCHASE_NAME_GOLD']=name_mask
         self.deadline=time.monotonic()+10*60
 
     def boosts_active(self,frame):
@@ -119,7 +124,7 @@ class BoostsRunner(DungeonRunner):
             image=image.copy()
             image[~((image[:,:,1]>=170)&(image[:,:,0]<160)&(image[:,:,2]<160))]=0
         actual=letters(image)
-        for suffix in ('','_RIGHT'):
+        for suffix in ('','_RIGHT',*(('_DIALOG',) if expected==5000 else ())):
             reference=letters(self.vision.templates[f'BOOST_PRICE_{expected}{suffix}'])
             if len(actual)==len(reference) and bool(actual) and all(
                     a.shape==b.shape and np.mean(a==b)>=.97 for a,b in zip(actual,reference)):return True
@@ -145,25 +150,55 @@ class BoostsRunner(DungeonRunner):
         return ((l+r)//2,(t+b)//2)
 
     def purchase_valid(self,frame,kind):
-        area=(690,450,1230,630)
+        area=(630,450,1290,630)
         if self.locate(frame,'purchase_gold',area) is None:return False
-        if kind=='item_find' and self.locate(frame,'purchase_item_find',area) is None:return False
-        # Sin referencias de confirmación de los otros tres: no se reutiliza el texto
-        # de la lista como supuesto nombre del diálogo. GOLD y precio siguen obligatorios.
-        if kind!='item_find' and self.locate(frame,'purchase_item_find',area) is not None:return False
+        names=[k for k in BOOSTS if self.locate(frame,'purchase_item_find' if k=='item_find' else 'purchase_name_'+k,area) is not None]
+        if names!=[kind]:return False
         pos=self.locate(frame,'purchase_gold',area)
         x,y=pos
-        return self.price(frame[y-5:y+47,730:x-15],PRICES[kind],green=True)
+        if kind=='gold':return self.price(frame[y-44:y,1020:1230],PRICES[kind],green=True)
+        return self.price(frame[y:y+47,690:x-15],PRICES[kind],green=True)
 
     def reject_purchase(self):
         self.press((1102,748),'no',(990,695,1230,800),('purchase_header',(780,265,1140,370)))
         raise SafetyStop('Confirmación de compra no coincide')
 
+    def quota_path(self):
+        from .accounts import account_id,steam_account
+        from .telemetry import ROOT
+        account=account_id() or steam_account()
+        if account is None:raise SafetyStop('Cuenta de compras no identificada')
+        return ROOT/'runs/accounts'/account/'boost_purchases.json'
+
+    def quota(self):
+        path=self.quota_path();now=time.time()
+        try:
+            data=json.loads(path.read_text()) if path.exists() else {'purchases':[]}
+            entries=data['purchases']
+            if not isinstance(entries,list):raise ValueError('cuota inválida')
+            for entry in entries:
+                if (entry['boost'] not in BOOSTS or type(entry['time']) not in (int,float) or
+                        not np.isfinite(entry['time']) or entry['time']>now or
+                        type(entry['cost']) is not int or entry['cost']!=PRICES[entry['boost']] or
+                        type(entry['confirmed']) is not bool):raise ValueError('reserva inválida')
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            raise SafetyStop('Cuota de boosts ilegible o inválida') from exc
+        return path,[entry for entry in entries if now-entry['time']<24*60*60]
+
+    def quota_available(self,entries,kinds):
+        okay=len(entries)+len(kinds)<=4 and sum(e['cost'] for e in entries)+sum(PRICES[k] for k in kinds)<=30000
+        if not okay:self.log.emit('BOOST_QUOTA',message='Cuota de compras Minor agotada')
+        return okay
+
     def buy_missing(self,missing):
         if not missing:return
+        from . import farm_config
+        if farm_config.load().get('boosts_buy') is not True:return
         if missing!=getattr(self,'missing',None):raise SafetyStop('Compra sin faltantes de run()')
         kinds=[kind for kind in BOOSTS if BOOSTS[kind] in missing]
         if len(kinds)!=len(missing):raise SafetyStop('Faltantes inválidos')
+        _,entries=self.quota()
+        if not self.quota_available(entries,kinds):return
         for kind in kinds:
             if (self.channel.directory/f'boost-{kind}.intent.json').exists():
                 raise SafetyStop('Ya existe intención de compra; no se repite')
@@ -188,6 +223,11 @@ class BoostsRunner(DungeonRunner):
             if not self.purchase_valid(frame,kind):self.reject_purchase()
             path=self.channel.directory/f'boost-{kind}.intent.json'
             if path.exists():self.reject_purchase()
+            quota_path,entries=self.quota()
+            if not self.quota_available(entries,[kind]):self.reject_purchase()
+            reservation={'boost':kind,'cost':PRICES[kind],'time':time.time(),'confirmed':False}
+            entries.append(reservation)
+            atomic_json(quota_path,{'purchases':entries})
             intent={'boost':BOOSTS[kind],'quantity':1,'cost':PRICES[kind],
                     'currency':'GOLD','effect_confirmed':False}
             atomic_json(path,intent)
@@ -199,6 +239,8 @@ class BoostsRunner(DungeonRunner):
             self.log.emit('DUNGEON_INPUT',screen='BOOST_PURCHASE_YES',xy=[814,748])
             # Solo la desaparición del diálogo y la lista permiten continuar; sin clics de recuperación.
             self.wait(self.shop_ready,10,'lista tras YES')
+            reservation['confirmed']=True
+            atomic_json(quota_path,{'purchases':entries})
             atomic_json(path,{**intent,'effect_confirmed':True})
             self.log.emit('BOOST_BOUGHT',boost=BOOSTS[kind],quantity=1,gold=PRICES[kind])
         self.press((1660,146),'shop_close',(1600,80,1730,210),('shop_list',(1000,180,1250,255)))

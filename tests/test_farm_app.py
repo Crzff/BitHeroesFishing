@@ -321,9 +321,11 @@ class FarmAppMultiTests(unittest.TestCase):
             self.app.toggle_run()
             start.assert_called_once_with({a:r for a,r in self.data.items() if a!='perfil-1'})
         before=self.farm_app.ENABLED_ACCOUNTS.read_bytes();boosts=self.app.config_data['boosts']
-        self.app.toggle_account('steam');self.app.toggle_boosts()
+        boosts_buy=self.app.config_data['boosts_buy']
+        self.app.toggle_account('steam');self.app.toggle_boosts();self.app.toggle_boosts_buy()
         self.assertEqual(self.farm_app.ENABLED_ACCOUNTS.read_bytes(),before)
         self.assertEqual(self.app.config_data['boosts'],boosts)
+        self.assertEqual(self.app.config_data['boosts_buy'],boosts_buy)
 
     def test_no_enabled_account_does_not_start(self):
         from unittest.mock import patch
@@ -338,6 +340,8 @@ class FarmAppMultiTests(unittest.TestCase):
             self.app.choose_account(account)
             before=self.app.config_data['boosts'];self.app.toggle_boosts()
             self.assertEqual(farm_config.load(self.app.config_path())['boosts'],not before)
+            before=self.app.config_data['boosts_buy'];self.app.toggle_boosts_buy()
+            self.assertEqual(farm_config.load(self.app.config_path())['boosts_buy'],not before)
 
     def test_new_checkboxes_are_drawn_and_blocked_while_running(self):
         from unittest.mock import patch
@@ -352,6 +356,8 @@ class FarmAppMultiTests(unittest.TestCase):
             texts=[c.args[0] for c in label.call_args_list]
             self.assertEqual(texts.count('FARMEAR'),3)
             self.assertIn('BOOSTS MINOR (SI NO HAY NINGUNO)',texts)
+            self.assertIn('COMPRAR MINOR CON ORO SI FALTA',texts)
+            self.assertEqual(sum(getattr(a,'__name__','')=='toggle_boosts_buy' for a in actions),int(not running))
             for x0,y0,x1,y1,action in self.app.zones:
                 self.assertLessEqual(x1,self.farm_app.W);self.assertLessEqual(y1,self.farm_app.H)
 

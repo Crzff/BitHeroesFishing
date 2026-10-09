@@ -17,6 +17,7 @@ DEFAULT={'modes':{mode:True for mode in MODES},
          'pvp':{'opponent':4},
          'runes':True,
          'boosts':True,  # sin ningún boost activo: consumir los 4 Minor (crzf)
+         'boosts_buy':True,  # comprar con oro los Minor ausentes (crzf)
          'background':False}  # True: juego en gamescope (JUEGO_SEGUNDO_PLANO.sh), sin foco
 
 
