@@ -23,7 +23,7 @@ class FarmAppTests(unittest.TestCase):
         self.assertEqual(loaded['quest']['targets'],['Mummih','Tealk'])
         self.assertEqual([name for name,_ in farm_all.steps(loaded)],['Boosts','Quest','PvP','World Boss','Expedition','Trials'])
         loaded['runes']=True
-        self.assertEqual([name for name,_ in farm_all.steps(loaded)][:3],['Runas captura','Quest','Runas Item Find'])
+        self.assertEqual([name for name,_ in farm_all.steps(loaded)][:4],['Boosts','Runas captura','Quest','Runas Item Find'])
 
     def test_broken_config_falls_back_to_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:
