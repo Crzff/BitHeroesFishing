@@ -67,6 +67,9 @@ def steps(config):
     from .runes_runtime import run_runes
     from .trials_runtime import run_trials
     on=config['modes'];runes=config['runes'];plan=[]
+    if config.get('boosts'):
+        from .boosts_runtime import run_boosts
+        plan.append(('Boosts',run_boosts))
     if on['quest']:
         if runes:plan.append(('Runas captura',lambda:run_runes('CAPTURE')))
         plan.append(('Quest',lambda:quest(config)))

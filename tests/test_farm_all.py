@@ -266,3 +266,12 @@ class SingleDungeonTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class FarmAllBoostsStepTests(unittest.TestCase):
+    def test_boosts_go_first_and_can_be_turned_off(self):
+        from fishing_core import farm_config
+        config=farm_config.load(Path('/nonexistent/farm_config.json'))
+        self.assertEqual(farm_all.steps(config)[0][0],'Boosts')
+        config['boosts']=False
+        self.assertNotIn('Boosts',[name for name,_ in farm_all.steps(config)])
