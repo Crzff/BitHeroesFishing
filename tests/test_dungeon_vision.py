@@ -75,6 +75,10 @@ class DungeonVisionTests(unittest.TestCase):
                 self.assertNotEqual(self.vision.screen(damaged),screen)
             self.assertNotEqual(self.vision.screen(frame//2),screen)
 
+    def test_gauntlet_icon_is_found_over_any_town_background(self):
+        for name in ('home_gvg_gauntlet','home_gauntlet_steam'):
+            self.assertEqual(self.vision.locate(self.frames[name],'HOME_GAUNTLET',(1720,590,1920,830)),(1765,642),name)
+
     def test_merchant_requires_title_and_decline_and_excludes_other_fixtures(self):
         frame=self.frames['merchant_offer']
         self.assertEqual(self.vision.screen(frame),'MERCHANT')

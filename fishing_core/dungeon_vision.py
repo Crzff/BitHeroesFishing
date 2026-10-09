@@ -14,7 +14,7 @@ SETTINGS={'gold':('GOLD',False),'gems':('GEMS',False),'duplicates':('DUPLICATES'
           'tips':('SETTING_TIPS',False),'merchants':('SETTING_MERCHANTS',True),
           'treasures':('SETTING_TREASURES',True),'music':('SETTING_MUSIC',True),'sound':('SETTING_SOUND',True)}
 NEW_TEMPLATES=tuple(key for key,_ in SETTINGS.values() if key.startswith('SETTING_'))+(
-    'AUDIO_ZERO','IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS','EVENT_CLOSE','HOME_GAUNTLET','GAUNTLET_TITLE','EVENT_PLAY')
+    'AUDIO_ZERO','IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS','EVENT_CLOSE','HOME_GAUNTLET','HOME_GAUNTLET_TOWN1','GAUNTLET_TITLE','EVENT_PLAY')
 
 
 def familiar_glyph(frame):
@@ -114,7 +114,7 @@ class DungeonVision:
         # El fondo de la ciudad cambia: comparar solo los píxeles comunes a todas las variantes observadas.
         self.home_masks={key:np.all([np.all(self.templates[key]==self.templates[v],axis=2) for v in self.templates
                                      if v.startswith(key+'_TOWN')],axis=0).astype(np.uint8)
-                         for key in ('HOME_QUEST','HOME_SETTINGS','HOME_BOSS','HOME_PVP','HOME_RAID','HOME_EXPEDITION','HOME_TRIALS')
+                         for key in ('HOME_QUEST','HOME_SETTINGS','HOME_BOSS','HOME_PVP','HOME_RAID','HOME_EXPEDITION','HOME_TRIALS','HOME_GAUNTLET')
                          if any(v.startswith(key+'_TOWN') for v in self.templates)}
         self.digits=BaitReader(extra={k:v for k,v in self.templates.items() if k.startswith('DIGIT_')})
 
