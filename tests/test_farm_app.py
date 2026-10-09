@@ -224,6 +224,7 @@ class FarmAppMultiTests(unittest.TestCase):
         def account_root(root,env=None):return self.root/(env or {}).get('FARM_ACCOUNT','default')
         for target,name,value in ((farm_app,'MULTI_SESSIONS',path),(farm_app,'state_root',account_root),
                                   (farm_app,'MULTI_STATUS',self.root/'multi_status.json'),
+                                  (farm_app,'ENABLED_ACCOUNTS',self.root/'enabled.json'),
                                   (farm_app,'runs_root',account_root),(farm_config,'PATH',self.root/'default.json')):
             patcher=patch.object(target,name,value);patcher.start();self.addCleanup(patcher.stop)
         for account in self.data:
@@ -281,6 +282,63 @@ class FarmAppMultiTests(unittest.TestCase):
                 if other!=account:self.assertEqual(paths[other].read_bytes(),before[other])
         self.assertFalse((self.root/'default.json').exists())
 
+    def test_enabled_accounts_persist_and_start_only_selected(self):
+        import json
+        from unittest.mock import Mock,patch
+        from fishing_core import farm_multi
+        self.app.toggle_account('perfil-1')
+        self.assertEqual(json.loads(self.farm_app.ENABLED_ACCOUNTS.read_text()),self.app.enabled_accounts)
+        self.assertEqual(self.farm_app.FarmApp().enabled_accounts,self.app.enabled_accounts)
+        with patch.object(farm_multi,'start_farm',return_value=Mock()) as start,patch.object(self.farm_app.threading,'Thread'):
+            self.app.toggle_run()
+            start.assert_called_once_with({a:r for a,r in self.data.items() if a!='perfil-1'})
+        before=self.farm_app.ENABLED_ACCOUNTS.read_bytes();boosts=self.app.config_data['boosts']
+        self.app.toggle_account('steam');self.app.toggle_boosts()
+        self.assertEqual(self.farm_app.ENABLED_ACCOUNTS.read_bytes(),before)
+        self.assertEqual(self.app.config_data['boosts'],boosts)
+
+    def test_no_enabled_account_does_not_start(self):
+        from unittest.mock import patch
+        from fishing_core import farm_multi
+        self.app.enabled_accounts=dict.fromkeys(self.data,False)
+        with patch.object(farm_multi,'start_farm') as start:
+            self.app.toggle_run();start.assert_not_called()
+        self.assertEqual(self.app.status,'ACTIVA AL MENOS UNA CUENTA')
+
+    def test_boosts_saved_per_account(self):
+        for account in self.data:
+            self.app.choose_account(account)
+            before=self.app.config_data['boosts'];self.app.toggle_boosts()
+            self.assertEqual(farm_config.load(self.app.config_path())['boosts'],not before)
+
+    def test_new_checkboxes_are_drawn_and_blocked_while_running(self):
+        from unittest.mock import patch
+        for running in (False,True):
+            self.app.img=self.farm_app.Image.new('RGBA',(self.farm_app.W,self.farm_app.H))
+            self.app.zones=[]
+            with patch.object(self.app,'running',return_value=running),patch.object(self.app,'label') as label:
+                self.app.draw_main()
+            actions=[action for *box,action in self.app.zones]
+            self.assertEqual(sum(getattr(a,'__name__','')=='toggle_boosts' for a in actions),int(not running))
+            self.assertEqual(sum('toggle_account' in getattr(getattr(a,'__code__',None),'co_names',()) for a in actions),3*int(not running))
+            texts=[c.args[0] for c in label.call_args_list]
+            self.assertEqual(texts.count('FARMEAR'),3)
+            self.assertIn('BOOSTS MINOR (SI NO HAY NINGUNO)',texts)
+            for x0,y0,x1,y1,action in self.app.zones:
+                self.assertLessEqual(x1,self.farm_app.W);self.assertLessEqual(y1,self.farm_app.H)
+
+    def test_unlaunched_accounts_are_grey_and_empty_selection_notice_visible(self):
+        from unittest.mock import patch
+        self.app.account_status={'steam':{'state':'EN MARCHA','step':'Quest','detail':''}}
+        with patch.object(self.app,'label') as label:
+            self.app.draw_account_status(0,0)
+        for name in ('FMANI','KORTZZ'):
+            self.assertIn(unittest.mock.call(f'{name} · DESACTIVADA',0,24 if name=='FMANI' else 48,14,self.farm_app.ui.DIM),label.call_args_list)
+        self.app.status='ACTIVA AL MENOS UNA CUENTA';self.app.zones=[]
+        with patch.object(self.app,'put'),patch.object(self.app,'label') as label:
+            self.app.draw_main()
+        self.assertIn(self.app.status,[c.args[0] for c in label.call_args_list])
+
     def test_multi_start_uses_farm_supervisor_without_legacy_worker(self):
         from unittest.mock import Mock,patch
         from fishing_core import farm_multi
@@ -306,6 +364,7 @@ class FarmAppClickTests(unittest.TestCase):
         # Nunca el modo multicuenta real: escribiría en runs/accounts/<cuenta>/farm_config.json.
         multi=patch.object(farm_app,'MULTI_SESSIONS',Path(tmp.name)/'sin-sesiones.json');multi.start();self.addCleanup(multi.stop)
         status=patch.object(farm_app,'MULTI_STATUS',Path(tmp.name)/'sin-estado.json');status.start();self.addCleanup(status.stop)
+        enabled=patch.object(farm_app,'ENABLED_ACCOUNTS',Path(tmp.name)/'enabled.json');enabled.start();self.addCleanup(enabled.stop)
         try:self.app=farm_app.FarmApp()
         except tkinter.TclError:self.skipTest('sin pantalla para Tk')
         self.app.withdraw();self.addCleanup(self.app.destroy)

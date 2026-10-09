@@ -26,6 +26,26 @@ class MultiFarmTests(unittest.TestCase):
         self.status_path=Path(tmp.name)/'multi_status.json'
         patcher=patch.object(farm_multi,'MULTI_STATUS',self.status_path);patcher.start();self.addCleanup(patcher.stop)
 
+    def test_farm_subset_status_and_trial_still_requires_three(self):
+        data={a:r for a,r in sessions().items() if a!='perfil-1'}
+        with patch.object(farm_multi,'require_calibrated_client') as check,patch.object(farm_multi,'Mutex'), \
+                patch.object(farm_multi.subprocess,'Popen',side_effect=[Mock(stdout=[],poll=Mock(return_value=0)) for _ in data]), \
+                patch.object(farm_multi,'close_children'),patch('builtins.print'):
+            self.assertEqual(farm_multi.run_farm(data),dict.fromkeys(data,0))
+            self.assertEqual(check.call_count,2)
+        self.assertEqual(set(json.loads(self.status_path.read_text())['accounts']),set(data))
+        for read_only in (False,True):
+            with self.assertRaises(ValueError):farm_multi.validate_trial(data,read_only)
+
+    def test_farm_subset_rejects_empty_unknown_incomplete_and_shared_endpoints(self):
+        data={a:r for a,r in sessions().items() if a!='perfil-1'}
+        incomplete=copy.deepcopy(data);incomplete['steam'].pop('FARM_GAMESCOPE_SERIAL')
+        shared=copy.deepcopy(data);shared['steam']['FARM_GAMESCOPE_DISPLAY']=shared['personal']['FARM_GAMESCOPE_DISPLAY']
+        for invalid in ({},{'unknown':{}},incomplete,shared):
+            with self.subTest(invalid=invalid),patch.object(farm_multi.subprocess,'Popen') as spawn:
+                with self.assertRaises(ValueError):farm_multi.start_farm(invalid)
+                spawn.assert_not_called()
+
     def test_status_steps_results_and_terminal_codes(self):
         children=[Mock(stdout=['== Quest (reintento)\n','Quest: motivo\n'],poll=Mock(return_value=code)) for code in (0,1,0)]
         snapshots=[];atomic=farm_multi.atomic_json

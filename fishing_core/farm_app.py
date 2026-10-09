@@ -28,9 +28,10 @@ from .accounts import NAMES as ACCOUNT_NAMES,runs_root,state_root
 
 MULTI_SESSIONS=ROOT/'runs/accounts/sessions.json'  # endpoints de los tres clientes (los escribe quien los abre)
 MULTI_STATUS=ROOT/'runs/accounts/multi_status.json'
+ENABLED_ACCOUNTS=ROOT/'runs/accounts/enabled.json'
 ACCOUNT_TABS=(('steam','STEAM'),('personal','FMANI'),('perfil-1','KORTZZ'))
 
-W,H=1180,920
+W,H=1180,1030
 NAMES={'quest':'QUEST','pvp':'PVP','boss':'WORLD BOSS','raid':'RAID','expedition':'EXPEDITION','trials':'TRIALS'}
 INFO={'expedition':['EVENTO SEMANAL: IDOL DIMENSION','5 BADGES, BAJA HASTA 1','NUNCA COMPRA BADGES','UNA DERROTA NO DETIENE']}
 CALIBRATED=set(NODES)
@@ -74,6 +75,12 @@ class FarmApp(tk.Tk):
         self.canvas.bind('<MouseWheel>',lambda e:self.on_wheel(e,-1 if e.delta>0 else 1))
         self.sessions=sessions;self.read_only=read_only;self.config_data=farm_config.load();self.screen='main';self.process=None
         self.multi=None;self.account=None
+        self.enabled_accounts=dict.fromkeys(ACCOUNT_NAMES,True)
+        try:
+            enabled=json.loads(ENABLED_ACCOUNTS.read_text())
+            if type(enabled) is dict and set(enabled)==set(ACCOUNT_NAMES) and all(type(v) is bool for v in enabled.values()):
+                self.enabled_accounts=enabled
+        except (OSError,ValueError):pass
         if sessions is None and MULTI_SESSIONS.exists():  # farmeo de las tres cuentas a la vez
             try:
                 from .farm_multi import trial_environments
@@ -108,7 +115,10 @@ class FarmApp(tk.Tk):
 
     def draw_account_status(self,x,y):
         for i,(account,name) in enumerate(ACCOUNT_TABS):
-            row=self.account_status.get(account,{});state=row.get('state','PARADO')
+            row=self.account_status.get(account,{})
+            if not row:
+                self.label(f'{name} · DESACTIVADA',x,y+i*24,14,ui.DIM);continue
+            state=row.get('state','PARADO')
             text=f"{name} · {row.get('step','Iniciando').upper()} · {state}"
             if state=='PARADO' and row.get('detail'):text+=': '+row['detail'][:60]
             self.label(text,x,y+i*24,14,TEXT_COLORS['green'] if state=='EN MARCHA' else TEXT_COLORS['red'] if state=='PARADO' else ui.DIM)
@@ -167,16 +177,21 @@ class FarmApp(tk.Tk):
         y=y0+2*(ch+20)+4
         self.put(ui.checkbox(self.config_data['runes'],44),x0,y,None if running else self.toggle_runes)
         self.label('CAMBIAR RUNAS (CAPTURA / ITEM FIND)',x0+58,y+8,18)
-        if self.multi:  # se configura una cuenta cada vez; START farmea las tres
-            self.label('CUENTA',x0,y+66,18,ui.GOLD)
+        self.put(ui.checkbox(self.config_data['boosts'],44),x0,y+52,None if running else self.toggle_boosts)
+        self.label('BOOSTS MINOR (SI NO HAY NINGUNO)',x0+58,y+60,18)
+        if self.multi:  # se configura una cuenta cada vez; START farmea las activas
+            self.label('CUENTA',x0,y+118,18,ui.GOLD)
             for i,(account,label) in enumerate(ACCOUNT_TABS):
-                self.put(ui.button(label,140,46,'blue' if self.account==account else 'gray',18),x0+110+i*152,y+52,
+                self.put(ui.button(label,140,46,'blue' if self.account==account else 'gray',18),x0+110+i*200,y+104,
                          lambda a=account:self.choose_account(a))  # ver otra cuenta no cambia nada; editar sigue bloqueado
+                self.put(ui.checkbox(self.enabled_accounts[account],32),x0+110+i*200,y+156,
+                         None if running else lambda a=account:self.toggle_account(a))
+                self.label('FARMEAR',x0+150+i*200,y+162,14)
         else:
-            self.put(ui.checkbox(self.config_data['background'],44),x0,y+56,None if running else self.toggle_background)
-            self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',x0+58,y+64,18)
-        if self.account_status:self.draw_account_status(x0,y+112)
-        else:self.label(self.status[:52],x0,y+124,16,ui.GOLD if running else ui.DIM)
+            self.put(ui.checkbox(self.config_data['background'],44),x0,y+104,None if running else self.toggle_background)
+            self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',x0+58,y+112,18)
+        if self.account_status and self.status!='ACTIVA AL MENOS UNA CUENTA':self.draw_account_status(x0,y+208)
+        else:self.label(self.status[:52],x0,y+220,16,ui.GOLD if running else ui.DIM)
         self.put(ui.loot_button(150,y1-y),x1-150-170,y,self.open_loot)
         self.put(ui.auto_button(running,150,y1-y),x1-150,y,self.toggle_run)
 
@@ -370,6 +385,16 @@ class FarmApp(tk.Tk):
         self.tier_scroll=max(0,tiers.index(b['tier'])-3) if b['tier'] in tiers else 0
     def toggle_mode(self,mode):self.config_data['modes'][mode]^=True;self.save()
     def toggle_runes(self):self.config_data['runes']^=True;self.save()
+    def toggle_boosts(self):
+        if self.running():return
+        self.config_data['boosts']^=True;self.save()
+
+    def toggle_account(self,account):
+        if self.running():return
+        self.enabled_accounts[account]^=True
+        ENABLED_ACCOUNTS.parent.mkdir(parents=True,exist_ok=True)
+        ENABLED_ACCOUNTS.write_text(json.dumps(self.enabled_accounts))
+
     def toggle_background(self):self.config_data['background']^=True;self.save()
     def step_zone(self,delta):self.zone=ZONES[(ZONES.index(self.zone)+delta)%len(ZONES)]
 
@@ -430,10 +455,12 @@ class FarmApp(tk.Tk):
             threading.Thread(target=self.follow,args=(self.process,),daemon=True).start();return
         if self.multi:
             from .farm_multi import start_farm
+            active={a:record for a,record in self.multi.items() if self.enabled_accounts[a]}
+            if not active:self.status='ACTIVA AL MENOS UNA CUENTA';return
             self.save()
-            try:self.process=start_farm(self.multi)
+            try:self.process=start_farm(active)
             except (ValueError,RuntimeError,OSError) as exc:self.status=('NO ARRANCA · '+str(exc))[:52].upper();return
-            self.status='EN MARCHA · 3 CUENTAS · STOP EN EL PANEL'
+            self.status=f'EN MARCHA · {len(active)} CUENTAS · STOP EN EL PANEL'
             threading.Thread(target=self.follow,args=(self.process,),daemon=True).start();return
         if not any(self.config_data['modes'].values()):self.status='NINGUN MODO ACTIVO';return
         background=self.config_data['background'] or os.environ.get('FARM_BACKEND')=='gamescope'

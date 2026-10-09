@@ -52,6 +52,7 @@ class Game:
                 other='speed' if self.pending!='speed' else 'gold'
                 self.state='consume_confirm_'+(other if self.wrong else self.pending)
         elif self.state.startswith('consume_confirm_'):
+            if xy==(1102,748):self.state='inventory_consumables_bottom';return
             assert xy==(814,748);assert self.state=='consume_confirm_'+self.pending
             self.used.append(self.pending);self.state='boost_activated'
         elif self.state=='boost_activated':
@@ -105,7 +106,16 @@ class BoostsRuntimeTests(unittest.TestCase):
     def test_wrong_confirmation_stops_before_yes(self,sleep):
         runner,game=self.runner(wrong=True)
         with self.assertRaises(SafetyStop):runner.run()
+        self.assertIn((1102,748),game.clicks)
         self.assertNotIn((814,748),game.clicks);self.assertEqual(game.used,[])
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_wrong_confirmation_without_no_has_no_dialog_click(self,sleep):
+        runner,game=self.runner(wrong=True)
+        locate=runner.locate
+        with patch.object(runner,'locate',side_effect=lambda frame,key,roi:None if key=='no' else locate(frame,key,roi)):
+            with self.assertRaises(SafetyStop):runner.run()
+        self.assertNotIn((1102,748),game.clicks);self.assertNotIn((814,748),game.clicks)
 
     @patch('fishing_core.boosts_runtime.time.sleep')
     def test_missing_returns_names_and_closes(self,sleep):

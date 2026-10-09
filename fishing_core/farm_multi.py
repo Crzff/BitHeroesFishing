@@ -19,14 +19,14 @@ DISPLAY_KEYS={'FARM_GAMESCOPE_DISPLAY','FARM_GAMESCOPE_SERIAL'}
 BRAVE_KEYS={'FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT','FARM_BRAVE_TARGET_ID'}
 
 
-def trial_environments(sessions):
+def trial_environments(sessions,farm=False):
     """Datos explícitos por cuenta; no mutar os.environ ni heredar otra identidad."""
-    if type(sessions) is not dict or set(sessions)!=set(NAMES):
-        raise ValueError('La prueba requiere exactamente Personal, Perfil 1 y Steam')
+    if type(sessions) is not dict or not sessions or not set(sessions)<=set(NAMES) or (not farm and set(sessions)!=set(NAMES)):
+        raise ValueError('El farmeo requiere al menos una cuenta conocida' if farm else 'La prueba requiere exactamente Personal, Perfil 1 y Steam')
     base={k:v for k,v in os.environ.items() if k not in DISPLAY_KEYS|BRAVE_KEYS|
           {'FARM_ACCOUNT','FARM_LAUNCHER_PID','FARM_SUPERVISOR_PID','FISHING_GAME_WINDOW','FISHING_RUN_ID'}}
     envs={};seen={key:set() for key in DISPLAY_KEYS|BRAVE_KEYS}
-    for account in NAMES:
+    for account in sessions:
         record=sessions[account];keys=DISPLAY_KEYS if account=='steam' else DISPLAY_KEYS|BRAVE_KEYS
         if type(record) is not dict or set(record)!=keys or any(type(v) is not str for v in record.values()):
             raise ValueError('Endpoints incompletos o campos no permitidos en la prueba')
@@ -97,7 +97,7 @@ def run_trial(sessions,read_only=False):
 
 def validate_farm(sessions):
     """Farmeo completo: cada cuenta con su configuración; Brave vivo y propio antes de arrancar ninguna."""
-    envs=trial_environments(sessions)
+    envs=trial_environments(sessions,farm=True)
     if account_id() is not None:raise ValueError('El supervisor no debe fijarse a una sola cuenta')
     for env in envs.values():
         env['FARM_MULTI_FARM']='1'
@@ -119,8 +119,8 @@ def start_farm(sessions):
 
 
 def run_farm(sessions):
-    """Las tres cuentas a la vez y por separado: una parada de una cuenta no detiene a las demás.
-    STOP (SIGINT al supervisor) detiene los tres motores propios."""
+    """Las cuentas recibidas a la vez: una parada de una cuenta no detiene a las demás.
+    STOP (SIGINT al supervisor) detiene todos los motores propios."""
     envs=validate_farm(sessions)
     lock=Mutex('MULTI_SUPERVISOR');workers={};results={}
     status={'supervisor_pid':os.getpid(),'started':time.time(),'accounts':{

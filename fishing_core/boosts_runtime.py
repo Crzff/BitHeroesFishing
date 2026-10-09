@@ -89,7 +89,11 @@ class BoostsRunner(DungeonRunner):
         roi=(x,y,x+ref.shape[1],y+ref.shape[0])
         self.press(xy,kind,roi)
         confirm='confirm_'+kind;area=(690,455,1230,625)
-        self.wait(self.on(confirm,area),5,f'confirmación de {BOOSTS[kind]}')
+        try:self.wait(self.on(confirm,area),5,f'confirmación de {BOOSTS[kind]}')
+        except SafetyStop:
+            if self.locate(self.capture(),'no',(990,695,1230,800)) is not None:
+                self.press((1102,748),'no',(990,695,1230,800))
+            raise
         # El nombre y YES deben coexistir en la captura inmediatamente anterior al gasto.
         self.press((814,748),confirm,area,('yes',(690,695,945,800)))
         self.wait(self.on('activated',(500,20,1410,120)),10,'boost activado')
