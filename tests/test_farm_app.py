@@ -21,7 +21,7 @@ class FarmAppTests(unittest.TestCase):
             config['quest']['targets']=['Mummih','Tealk'];config['modes']['raid']=False;config['runes']=False
             farm_config.save(config,path);loaded=farm_config.load(path)
         self.assertEqual(loaded['quest']['targets'],['Mummih','Tealk'])
-        self.assertEqual([name for name,_ in farm_all.steps(loaded)],['Quest','PvP','World Boss','Expedition','Trials'])
+        self.assertEqual([name for name,_ in farm_all.steps(loaded)],['Boosts','Quest','PvP','World Boss','Expedition','Trials'])
         loaded['runes']=True
         self.assertEqual([name for name,_ in farm_all.steps(loaded)][:3],['Runas captura','Quest','Runas Item Find'])
 

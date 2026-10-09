@@ -147,3 +147,170 @@ class BoostsRuntimeTests(unittest.TestCase):
             with self.assertRaises(SafetyStop):
                 runner.press((814,748),'confirm_item_find',(690,455,1230,625),('yes',(690,695,945,800)))
         self.assertEqual(game.clicks,[])
+
+
+class ShopGame(Game):
+    def __init__(self,frames,**kwargs):
+        super().__init__(frames,missing=('item_find',),**kwargs)
+        self.bought=[];self.bad=None;self.after_yes='shop_boosts_top'
+
+    def frame(self):
+        frame=super().frame()
+        if self.state=='shop_boosts_top' and self.bad=='diamond':
+            frame[480:548,570:636]=self.frames['shop_boosts_top'][480:548,1188:1254]
+        if self.state=='shop_purchase_confirm':
+            if self.bad=='currency':frame[562:604,1028:1180]=0
+            if self.bad=='name':
+                frame[473:558,722:1195]=self.frames['consume_confirm_gold'][473:558,722:1195]
+            if self.bad=='price':frame[562:604,850:1003]=0
+            if self.bad=='yes':frame[695:800,690:945]=0
+        return frame
+
+    def click(self,xy):
+        if xy==(1748,100):
+            assert self.state=='home_no_boosts';self.clicks.append(xy);self.state='shop_featured'
+        elif self.state=='shop_featured':
+            assert xy==(1116,218);self.clicks.append(xy);self.state='shop_boosts_top'
+        elif self.state.startswith('shop_boosts'):
+            self.clicks.append(xy)
+            if xy==(1660,146):self.state='home_no_boosts'
+            else:
+                assert xy==self.runner.shop_article(self.frame(),'item_find')
+                self.state='shop_purchase_confirm'
+        elif self.state=='shop_purchase_confirm':
+            self.clicks.append(xy)
+            if xy==(1102,748):self.state='shop_boosts_after_no'
+            else:
+                assert xy==(814,748)
+                assert (self.runner.channel.directory/'boost-item_find.intent.json').exists()
+                self.bought.append('item_find');self.missing=();self.state=self.after_yes
+        else:
+            super().click(xy)
+            if xy==(1652,112) and not self.bought and not self.used:self.state='home_no_boosts'
+
+
+class ShopRunner(SimRunner):
+    def wheel(self,amount,xy):
+        if self.io.state.startswith('shop_boosts'):
+            self.check();assert xy==(930,600)
+            self.io.state='shop_boosts_top'
+        else:super().wheel(amount,xy)
+
+
+class BoostsShopTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with np.load('tests/fixtures/dungeons.npz') as data:
+            cls.frames={n:data[n] for n in data.files if n.startswith((
+                'home_no_boosts','home_four_boosts','inventory_','consume_confirm_',
+                'boost_activated','shop_'))}
+
+    def runner(self,**kwargs):
+        import tempfile
+        directory=tempfile.TemporaryDirectory(dir='tests');self.addCleanup(directory.cleanup)
+        game=ShopGame(self.frames,**kwargs)
+        runner=ShopRunner(game,None,DungeonVision(),SimpleNamespace(
+            directory=Path(directory.name),stop_path=Path(directory.name)/'stop'),game)
+        game.runner=runner
+        return runner,game
+
+    def review_missing(self,runner,game):
+        # Aísla la ausencia única: consume() real verifica que Item Find no está.
+        with patch.object(runner,'consume',side_effect=lambda k: False if k=='item_find' else True):
+            missing=runner.run()
+        self.assertEqual(missing,[BOOSTS['item_find']])
+        return missing
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_real_item_find_purchase_then_consume(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        runner.buy_missing(missing)
+        self.assertEqual(game.bought,['item_find']);self.assertEqual(game.used,['item_find'])
+        self.assertEqual(sum(event=='BOOST_BOUGHT' for event,_ in game.events),1)
+        self.assertEqual(game.clicks.count((814,748)),2)
+        self.assertEqual(runner.missing,[])
+        import json
+        intent=json.loads((runner.channel.directory/'boost-item_find.intent.json').read_text())
+        self.assertTrue(intent['effect_confirmed']);self.assertEqual(intent['cost'],10000)
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_diamond_never_clicked(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game);game.bad='diamond'
+        with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+        self.assertEqual(game.clicks[-1],(1116,218));self.assertEqual(game.bought,[])
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_bad_confirmation_no_then_stop(self,sleep):
+        for bad in ('currency','name','price','yes'):
+            with self.subTest(bad=bad):
+                runner,game=self.runner();missing=self.review_missing(runner,game);game.bad=bad
+                with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+                self.assertEqual(game.clicks[-1],(1102,748));self.assertEqual(game.bought,[])
+                path=runner.channel.directory/'boost-item_find.intent.json'
+                self.assertEqual(path.exists(),bad=='yes')
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_active_never_opens_shop(self,sleep):
+        runner,game=self.runner(active=True)
+        runner.buy_missing(runner.run());self.assertEqual(game.clicks,[])
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_intent_blocks_repeat(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        (runner.channel.directory/'boost-item_find.intent.json').write_text('{}')
+        before=game.clicks.copy()
+        with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+        self.assertEqual(game.clicks,before)
+
+    def test_without_run_no_purchase(self):
+        runner,game=self.runner()
+        with self.assertRaises(SafetyStop):runner.buy_missing([BOOSTS['item_find']])
+        self.assertEqual(game.clicks,[])
+
+    def test_duplicates_and_unknown_boosts_never_open_shop(self):
+        runner,game=self.runner()
+        for missing in ([BOOSTS['item_find']]*5,['Major Item Find Scroll']):
+            runner.missing=missing.copy()
+            with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+        self.assertEqual(game.clicks,[])
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_confirmation_changes_after_intent_no_yes(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        from fishing_core.protocol import atomic_json
+        def record(path,data):
+            atomic_json(path,data);game.bad='name'
+        with patch('fishing_core.boosts_runtime.atomic_json',side_effect=record):
+            with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+        self.assertEqual(game.clicks[-1],(1102,748));self.assertEqual(game.bought,[])
+        self.assertTrue((runner.channel.directory/'boost-item_find.intent.json').exists())
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_quantity_changes_before_price_click_stops(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        original=runner.shop_article;calls=[]
+        def changed(frame,kind):
+            calls.append(kind)
+            if len(calls)==2:frame[960:1020,870:980]=0
+            return original(frame,kind)
+        with patch.object(runner,'shop_article',side_effect=changed):
+            with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+        self.assertEqual(game.clicks[-1],(1116,218));self.assertEqual(game.bought,[])
+
+    def test_all_minor_names_prices_and_1x(self):
+        runner,game=self.runner()
+        for kind,key in (('item_find','top'),('xp','top'),('gold','middle'),('speed','bottom')):
+            with self.subTest(kind=kind):
+                frame=self.frames['shop_boosts_'+key].copy()
+                self.assertIsNotNone(runner.shop_article(frame,kind))
+                frame[960:1020,870:980]=0
+                with self.assertRaises(SafetyStop):runner.shop_article(frame,kind)
+        self.assertTrue(runner.purchase_valid(self.frames['shop_purchase_confirm'],'item_find'))
+
+    @patch('fishing_core.boosts_runtime.time.sleep')
+    def test_unknown_after_yes_no_further_clicks(self,sleep):
+        runner,game=self.runner();missing=self.review_missing(runner,game)
+        game.after_yes='inventory_filter'
+        with self.assertRaises(SafetyStop):runner.buy_missing(missing)
+        self.assertEqual(game.clicks[-1],(814,748));self.assertEqual(game.bought,['item_find'])
+        self.assertFalse(any(event=='BOOST_BOUGHT' for event,_ in game.events))
