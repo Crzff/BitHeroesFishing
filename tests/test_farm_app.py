@@ -9,6 +9,15 @@ from fishing_core import farm_all, farm_config, pixel_ui
 from fishing_core.farm_app import CALIBRATED, familiars_of
 
 
+def setUpModule():
+    from unittest.mock import patch
+    from fishing_core import accounts
+    temporary=tempfile.TemporaryDirectory()
+    unittest.addModuleCleanup(temporary.cleanup)
+    patcher=patch.object(accounts,'ROOT',Path(temporary.name))
+    patcher.start();unittest.addModuleCleanup(patcher.stop)
+
+
 class FarmAppTests(unittest.TestCase):
     def test_tealks_palace_lists_its_four_familiars_and_only_calibrated_routes_are_selectable(self):
         self.assertEqual(set(familiars_of('Z5D3')),{'Mummih','Brute','Sitra','Tealk'})
@@ -219,10 +228,11 @@ class FarmAppMultiTests(unittest.TestCase):
     def setUp(self):
         import json
         from unittest.mock import Mock,patch
-        from fishing_core import farm_app
+        from fishing_core import farm_app,accounts
         from tests.test_farm_multi import sessions
         self.farm_app=farm_app;self.data=sessions()
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);self.root=Path(tmp.name)
+        patcher=patch.object(accounts,'ROOT',self.root);patcher.start();self.addCleanup(patcher.stop)
         path=self.root/'sessions.json';path.write_text(json.dumps(self.data))
         def account_root(root,env=None):return self.root/(env or {}).get('FARM_ACCOUNT','default')
         for target,name,value in ((farm_app,'MULTI_SESSIONS',path),(farm_app,'state_root',account_root),
@@ -255,7 +265,7 @@ class FarmAppMultiTests(unittest.TestCase):
             self.app.refresh_multi_status();self.assertTrue(self.app.running())
             self.app.draw_main();self.assertTrue(button.call_args.args[0])
             texts=[c.args[0] for c in label.call_args_list]
-            for text in ('STEAM · RAID · EN MARCHA','FMANI · RAID · EN MARCHA','KORTZZ · QUEST · PARADO: '+'x'*60):self.assertIn(text,texts)
+            for text in ('Steam · RAID · EN MARCHA','FMANI · RAID · EN MARCHA','KORTZZ · QUEST · PARADO: '+'x'*60):self.assertIn(text,texts)
             self.app.toggle_run();kill.assert_called_with(123,self.farm_app.signal.SIGINT)
         self.app.after.assert_called_with(2000,self.app.refresh_multi_status)
 
@@ -356,6 +366,78 @@ class FarmAppMultiTests(unittest.TestCase):
             thread.return_value.start.assert_called_once()
 
 
+class FarmAppAccountsTests(unittest.TestCase):
+    setUp=FarmAppMultiTests.setUp
+    def test_four_tabs_and_eight_fit_without_overlap(self):
+        from unittest.mock import patch
+        from fishing_core import accounts
+        accounts.add_account('Cuarta','browser');self.app.refresh_accounts()
+        self.assertEqual(self.app.account_tabs()[-1],('cuarta','Cuarta'))
+        self.assertEqual(len(self.app.account_tabs()),4)
+        for i in range(4):accounts.add_account(f'Extra {i}','browser')
+        self.app.refresh_accounts();self.app.img=self.farm_app.Image.new('RGBA',(self.farm_app.W,self.farm_app.H));self.app.zones=[]
+        with patch.object(self.app,'label'):self.app.draw_main()
+        tabs=[z for z in self.app.zones if 'choose_account' in getattr(getattr(z[-1],'__code__',None),'co_names',())]
+        self.assertEqual(len(tabs),8)
+        for left,right in zip(tabs,tabs[1:]):self.assertLessEqual(left[2],right[0])
+        self.assertTrue(self.app.enabled_accounts['cuarta'])
+
+    def test_add_remove_and_steam_disabled(self):
+        from unittest.mock import patch
+        self.app.screen='add_account';self.app.img=self.farm_app.Image.new('RGBA',(self.farm_app.W,self.farm_app.H));self.app.zones=[]
+        self.app.draw_add_account()
+        kinds=[a.__defaults__ for *box,a in self.app.zones if 'create_account' in getattr(getattr(a,'__code__',None),'co_names',())]
+        self.assertEqual(kinds,[('browser',)])
+        with patch.object(self.farm_app.simpledialog,'askstring',return_value='Nueva'):
+            self.app.create_account('browser')
+        self.assertIn(('nueva','Nueva'),self.app.account_tabs());self.assertEqual(self.app.screen,'accounts')
+        with patch.object(self.farm_app.messagebox,'askyesno',return_value=False):self.app.delete_account('nueva')
+        self.assertIn('nueva',self.app.enabled_accounts)
+        with patch.object(self.farm_app.messagebox,'askyesno',return_value=True) as confirm:self.app.delete_account('nueva')
+        self.assertIn('no se borran',confirm.call_args.args[1]);self.assertNotIn('nueva',self.app.enabled_accounts)
+        self.assertTrue((self.root/'steam'/'farm_config.json').exists())
+
+    def test_browser_launches_in_thread_and_results_polled_by_tk(self):
+        import threading
+        from unittest.mock import patch
+        main=threading.get_ident()
+        for visible in (True,False):
+            calls=[];threads=[];real_thread=threading.Thread
+            def factory(**kwargs):
+                thread=real_thread(**kwargs);threads.append(thread);return thread
+            def launch(account,visible):
+                calls.append((account,visible,threading.get_ident()));return object(),{'fixture':'session'}
+            with patch.object(self.farm_app,'launch_browser',side_effect=launch),patch.object(self.farm_app,'write_session') as write, \
+                    patch.object(self.farm_app.messagebox,'showinfo') as info,patch.object(self.farm_app.threading,'Thread',side_effect=factory):
+                self.app.open_browser('personal',visible)
+                threads[0].join(timeout=2);self.assertFalse(threads[0].is_alive())
+                self.assertEqual(calls[0][:2],('personal',visible));self.assertNotEqual(calls[0][2],main)
+                if visible:write.assert_not_called();info.assert_called_once()
+                else:write.assert_called_once_with('personal',{'fixture':'session'})
+                self.app.poll_browser();self.assertFalse(self.app.browser_busy)
+
+    def test_new_active_missing_session_blocks_start_and_stale_removed_session_ignored(self):
+        from unittest.mock import patch
+        from fishing_core import accounts,farm_multi
+        accounts.add_account('Nueva','browser');self.app.refresh_accounts()
+        with patch.object(farm_multi,'start_farm') as start:self.app.toggle_run();start.assert_not_called()
+        self.assertIn('FALTAN SESIONES',self.app.status)
+        self.app.toggle_account('nueva');accounts.remove_account('personal');self.app.refresh_accounts()
+        with patch.object(farm_multi,'start_farm') as start,patch.object(self.farm_app.threading,'Thread'):
+            self.app.toggle_run();self.assertEqual(set(start.call_args.args[0]),{'steam','perfil-1'})
+
+    def test_browser_error_and_running_block_management(self):
+        from unittest.mock import patch
+        with patch.object(self.farm_app,'launch_browser',side_effect=ValueError('fallo offline')), \
+                patch.object(self.farm_app.threading,'Thread') as thread:
+            self.app.open_browser('personal',False);thread.call_args.kwargs['target']();self.app.poll_browser()
+        self.assertIn('fallo offline',self.app.status)
+        with patch.object(self.app,'running',return_value=True),patch.object(self.farm_app,'add_account') as add, \
+                patch.object(self.farm_app,'launch_browser') as launch:
+            self.app.create_account('browser');self.app.open_browser('personal',False)
+            add.assert_not_called();launch.assert_not_called()
+
+
 class FarmAppClickTests(unittest.TestCase):
     """Clics simulados sobre las zonas dibujadas; la configuración va a un archivo temporal."""
     def setUp(self):
@@ -363,14 +445,23 @@ class FarmAppClickTests(unittest.TestCase):
         from unittest.mock import patch
         from fishing_core import farm_app
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
-        patcher=patch.object(farm_config,'PATH',Path(tmp.name)/'cfg.json');patcher.start();self.addCleanup(patcher.stop)
+        patcher=patch.object(farm_config,'PATH',Path(tmp.name)/'farm_config.json');patcher.start();self.addCleanup(patcher.stop)
         # Nunca el modo multicuenta real: escribiría en runs/accounts/<cuenta>/farm_config.json.
         multi=patch.object(farm_app,'MULTI_SESSIONS',Path(tmp.name)/'sin-sesiones.json');multi.start();self.addCleanup(multi.stop)
         status=patch.object(farm_app,'MULTI_STATUS',Path(tmp.name)/'sin-estado.json');status.start();self.addCleanup(status.stop)
         enabled=patch.object(farm_app,'ENABLED_ACCOUNTS',Path(tmp.name)/'enabled.json');enabled.start();self.addCleanup(enabled.stop)
-        try:self.app=farm_app.FarmApp()
-        except tkinter.TclError:self.skipTest('sin pantalla para Tk')
-        self.app.withdraw();self.addCleanup(self.app.destroy)
+        from unittest.mock import Mock
+        from fishing_core import accounts
+        for target,name,value in ((accounts,'ROOT',Path(tmp.name)),
+                                  (farm_app,'state_root',lambda root,env=None:Path(tmp.name)),
+                                  (farm_app,'runs_root',lambda root,env=None:Path(tmp.name)),
+                                  (farm_app.tk.Tk,'__init__',Mock(return_value=None)),
+                                  (farm_app.tk,'Canvas',Mock()),
+                                  (farm_app.ImageTk,'PhotoImage',lambda image:image)):
+            patcher=patch.object(target,name,value);patcher.start();self.addCleanup(patcher.stop)
+        for name in ('title','resizable','configure','protocol','after','after_cancel','bind','withdraw','destroy'):
+            patcher=patch.object(farm_app.FarmApp,name,Mock());patcher.start();self.addCleanup(patcher.stop)
+        self.app=farm_app.FarmApp();self.app.raid_scroll=0;self.app.loot_job=None
 
     def click_where(self,predicate):
         """Pulsa el centro de la primera zona cuya acción cumple predicate."""
@@ -428,7 +519,7 @@ class FarmAppClickTests(unittest.TestCase):
         with patch.object(self.app,'render') as render:self.app.refresh_loot();render.assert_not_called()
 
     def test_every_screen_renders(self):
-        for screen in ('main','quest','boss','raid','trials','pvp','expedition','loot'):
+        for screen in ('main','quest','boss','raid','trials','pvp','expedition','loot','accounts','add_account'):
             self.app.screen=screen;self.app.render();self.assertTrue(self.app.zones)
 
 class FarmAppAnimationTests(unittest.TestCase):

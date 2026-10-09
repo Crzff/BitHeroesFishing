@@ -67,6 +67,16 @@ def button(label,w,h=64,color='blue',size=26):
     return img
 
 
+def account_button(label,w,h=46,color='blue'):
+    """Ajusta el nombre completo a pestañas estrechas del registro (hasta ocho)."""
+    img=button('',w,h,color)
+    t=text(label,14)
+    if t.width>w-12:
+        t=t.resize((w-12,max(1,round(t.height*(w-12)/t.width))),Image.NEAREST)
+    img.alpha_composite(t,((w-t.width)//2,(h-t.height)//2))
+    return img
+
+
 def bands(img,box,outline,top,left,bottom,right,fill,px=4):
     """Bloque como los del juego: contorno y bandas interiores de px (luz/sombra por lado)."""
     d=ImageDraw.Draw(img);x0,y0,x1,y1=box

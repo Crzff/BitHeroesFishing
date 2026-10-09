@@ -14,6 +14,8 @@ import sys
 import threading
 import time
 import tkinter as tk
+from tkinter import messagebox, simpledialog
+from queue import Queue, Empty
 from pathlib import Path
 
 from PIL import Image, ImageTk, ImageEnhance
@@ -24,12 +26,12 @@ from .dungeon_catalog import CATALOG, FAMILIARS, dungeon
 from .dungeon_runtime import NODES
 from .raid_runtime import RAID_TIER, RAIDS
 from .telemetry import ROOT
-from .accounts import NAMES as ACCOUNT_NAMES,runs_root,state_root
+from .accounts import NAMES as ACCOUNT_NAMES,runs_root,state_root,load_accounts,add_account,remove_account
+from .browser_launcher import launch_browser,write_session
 
 MULTI_SESSIONS=ROOT/'runs/accounts/sessions.json'  # endpoints de los tres clientes (los escribe quien los abre)
 MULTI_STATUS=ROOT/'runs/accounts/multi_status.json'
 ENABLED_ACCOUNTS=ROOT/'runs/accounts/enabled.json'
-ACCOUNT_TABS=(('steam','STEAM'),('personal','FMANI'),('perfil-1','KORTZZ'))
 
 W,H=1180,1030
 NAMES={'quest':'QUEST','pvp':'PVP','boss':'WORLD BOSS','raid':'RAID','expedition':'EXPEDITION','trials':'TRIALS'}
@@ -79,19 +81,10 @@ class FarmApp(tk.Tk):
         for event,step in (('<Button-4>',-1),('<Button-5>',1)):self.canvas.bind(event,lambda e,s=step:self.on_wheel(e,s))
         self.canvas.bind('<MouseWheel>',lambda e:self.on_wheel(e,-1 if e.delta>0 else 1))
         self.sessions=sessions;self.read_only=read_only;self.config_data=farm_config.load();self.screen='main';self.process=None
-        self.multi=None;self.account=None
-        self.enabled_accounts=dict.fromkeys(ACCOUNT_NAMES,True)
-        try:
-            enabled=json.loads(ENABLED_ACCOUNTS.read_text())
-            if type(enabled) is dict and set(enabled)==set(ACCOUNT_NAMES) and all(type(v) is bool for v in enabled.values()):
-                self.enabled_accounts=enabled
-        except (OSError,ValueError):pass
-        if sessions is None and MULTI_SESSIONS.exists():  # farmeo de las tres cuentas a la vez
-            try:
-                from .farm_multi import trial_environments
-                self.multi=json.loads(MULTI_SESSIONS.read_text());trial_environments(self.multi)
-                self.account='steam';self.config_data=farm_config.load(self.config_path())
-            except (OSError,ValueError):self.multi=None
+        self.multi=None;self.account=None;self.browser_results=Queue();self.browser_busy=False
+        self.records=load_accounts();self.enabled_accounts={}
+        self.refresh_accounts()
+        if sessions is None:self.reload_sessions()
         self.status='LISTO · ELIGE MODOS Y PULSA START';self.zone=dungeon(self.config_data['quest']['dungeon'])['zone']
         if sessions is not None:
             self.status='PRUEBA LIMITADA · 3 CUENTAS · SIN ORO NI GEMAS'
@@ -99,6 +92,93 @@ class FarmApp(tk.Tk):
             self.bind('<space>',lambda e:(self.toggle_run(),self.render()))
         self.supervisor_pid=None;self.account_status={}
         self.protocol('WM_DELETE_WINDOW',self.quit_app);self.refresh_multi_status()
+
+    def account_tabs(self):return [(r['id'],r['name']) for r in self.records]
+
+    def refresh_accounts(self):
+        self.records=load_accounts()
+        try:enabled=json.loads(ENABLED_ACCOUNTS.read_text())
+        except (OSError,ValueError):enabled={}
+        if type(enabled) is not dict:enabled={}
+        self.enabled_accounts={r['id']:enabled.get(r['id'],True) if type(enabled.get(r['id'],True)) is bool else True
+                               for r in self.records}
+        if self.account not in self.enabled_accounts:
+            self.account=next(iter(self.enabled_accounts),None)
+            self.config_data=farm_config.load(self.config_path())
+            self.zone=dungeon(self.config_data['quest']['dungeon'])['zone']
+
+    def reload_sessions(self):
+        try:
+            data=json.loads(MULTI_SESSIONS.read_text())
+            self.multi=data if type(data) is dict else {}
+        except (OSError,ValueError):self.multi={}
+
+    def open_accounts(self):
+        if not self.running():self.screen='accounts'
+
+    def steam_available(self):return not any(r['type']=='steam' for r in self.records)
+
+    def draw_accounts(self):
+        x0,y0,x1,y1=self.window('CUENTAS');blocked=self.running() or self.browser_busy
+        for i,r in enumerate(self.records):
+            y=y0+i*76;self.put(ui.row(x1-x0,68),x0,y)
+            self.label(r['name'],x0+12,y+8,18,ui.GOLD)
+            self.label('STEAM' if r['type']=='steam' else 'NAVEGADOR',x0+12,y+38,14)
+            if r['type']=='browser':
+                self.put(ui.button('INICIAR SESIÓN',220,46,'blue',16),x1-520,y+10,
+                         None if blocked else lambda a=r['id']:self.open_browser(a,True))
+                self.put(ui.button('ABRIR',130,46,'green',16),x1-290,y+10,
+                         None if blocked else lambda a=r['id']:self.open_browser(a,False))
+            self.put(ui.button('QUITAR',140,46,'red',16),x1-150,y+10,
+                     None if blocked else lambda a=r['id']:self.delete_account(a))
+        self.put(ui.button('+ AÑADIR',200,48,'blue',18),x0,y1-110,
+                 None if blocked or len(self.records)>=8 else self.begin_add_account)
+        self.label(self.status[:90],x0,y1-50,14,ui.DIM)
+
+    def begin_add_account(self):
+        if not self.running() and not self.browser_busy and len(self.records)<8:self.screen='add_account'
+
+    def draw_add_account(self):
+        x0,y0,x1,y1=self.window('AÑADIR CUENTA')
+        self.label('ELIGE EL TIPO; DESPUÉS ESCRIBE EL NOMBRE',x0,y0,18)
+        blocked=self.running() or self.browser_busy or len(self.records)>=8
+        for i,(kind,label) in enumerate((('steam','STEAM'),('browser','NAVEGADOR'))):
+            allowed=not blocked and (kind!='steam' or self.steam_available())
+            self.put(ui.button(label,250,60,'blue' if allowed else 'gray',22),x0,y0+70+i*80,
+                     (lambda k=kind:self.create_account(k)) if allowed else None)
+
+    def create_account(self,kind):
+        if self.running() or self.browser_busy or len(self.records)>=8 or (kind=='steam' and not self.steam_available()):return
+        name=simpledialog.askstring('AÑADIR CUENTA','Nombre de la cuenta:',parent=self)
+        if name is None:return
+        try:
+            add_account(name,kind);self.refresh_accounts();self.save_enabled();self.screen='accounts';self.status='CUENTA AÑADIDA'
+        except (ValueError,OSError) as exc:self.status='NO SE AÑADE · '+str(exc)
+
+    def delete_account(self,account):
+        if self.running() or self.browser_busy:return
+        if not messagebox.askyesno('QUITAR CUENTA','¿Quitar del registro? Los datos y el perfil no se borran.',parent=self):return
+        try:
+            remove_account(account);self.refresh_accounts();self.save_enabled();self.status='CUENTA QUITADA · DATOS Y PERFIL CONSERVADOS'
+        except (ValueError,OSError) as exc:self.status='NO SE QUITA · '+str(exc)
+
+    def open_browser(self,account,visible):
+        if self.running() or self.browser_busy or not any(r['id']==account and r['type']=='browser' for r in self.records):return
+        if visible:messagebox.showinfo('INICIAR SESIÓN','Inicia sesión en tu cuenta en la ventana del navegador y ciérrala al terminar',parent=self)
+        self.browser_busy=True;self.status='ABRIENDO NAVEGADOR...'
+        def launch():
+            try:
+                process,session=launch_browser(account,visible=visible)
+                if not visible:write_session(account,session)
+                self.browser_results.put('NAVEGADOR VISIBLE · CIÉRRALO AL TERMINAR' if visible else 'SESIÓN PREPARADA')
+            except Exception as exc:self.browser_results.put('ERROR DE NAVEGADOR · '+str(exc))
+        threading.Thread(target=launch,daemon=True).start()
+        self.after(100,self.poll_browser)
+
+    def poll_browser(self):
+        try:result=self.browser_results.get_nowait()
+        except Empty:self.after(100,self.poll_browser);return
+        self.browser_busy=False;self.reload_sessions();self.set_status(result)
 
     def read_multi_status(self):
         self.supervisor_pid=None
@@ -119,7 +199,7 @@ class FarmApp(tk.Tk):
     def running(self):return self.process is not None or bool(getattr(self,'supervisor_pid',None))
 
     def draw_account_status(self,x,y):
-        for i,(account,name) in enumerate(ACCOUNT_TABS):
+        for i,(account,name) in enumerate(self.account_tabs()):
             row=self.account_status.get(account,{})
             if not row:
                 self.label(f'{name} · DESACTIVADA',x,y+i*24,14,ui.DIM);continue
@@ -138,7 +218,7 @@ class FarmApp(tk.Tk):
 
     def render(self):
         self.img=Image.new('RGBA',(W,H),(25,40,58,255));self.zones=[];self.wheel_zone=None
-        screens=("main","quest","boss","raid","trials","pvp","loot")
+        screens=("main","quest","boss","raid","trials","pvp","loot","accounts","add_account")
         getattr(self,f'draw_{self.screen if self.screen in screens else "info"}')()
         self.present()
 
@@ -201,17 +281,18 @@ class FarmApp(tk.Tk):
         self.label('CAMBIAR RUNAS (CAPTURA / ITEM FIND)',x0+58,y+8,18)
         self.put(ui.checkbox(self.config_data['boosts'],44),x0,y+52,None if running else self.toggle_boosts)
         self.label('BOOSTS MINOR (SI NO HAY NINGUNO)',x0+58,y+60,18)
-        if self.multi:  # se configura una cuenta cada vez; START farmea las activas
-            self.label('CUENTA',x0,y+118,18,ui.GOLD)
-            for i,(account,label) in enumerate(ACCOUNT_TABS):
-                self.put(ui.button(label,140,46,'blue' if self.account==account else 'gray',18),x0+110+i*200,y+104,
-                         lambda a=account:self.choose_account(a))  # ver otra cuenta no cambia nada; editar sigue bloqueado
-                self.put(ui.checkbox(self.enabled_accounts[account],32),x0+110+i*200,y+156,
+        self.put(ui.button('CUENTAS',140,40,'gray' if running else 'blue',18),x1-470,y+52,
+                 None if running else self.open_accounts)
+        tabs=self.account_tabs()
+        if tabs:
+            width=(x1-x0-340)//len(tabs)
+            for i,(account,label) in enumerate(tabs):
+                x=x0+i*width
+                self.put(ui.account_button(label,width-6,46,'blue' if self.account==account else 'gray'),x,y+104,
+                         lambda a=account:self.choose_account(a))
+                self.put(ui.checkbox(self.enabled_accounts[account],28),x,y+156,
                          None if running else lambda a=account:self.toggle_account(a))
-                self.label('FARMEAR',x0+150+i*200,y+162,14)
-        else:
-            self.put(ui.checkbox(self.config_data['background'],44),x0,y+104,None if running else self.toggle_background)
-            self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',x0+58,y+112,18)
+                self.label('FARMEAR',x,y+188,10)
         if self.account_status and self.status!='ACTIVA AL MENOS UNA CUENTA':self.draw_account_status(x0,y+208)
         else:self.label(self.status[:52],x0,y+220,16,ui.GOLD if running else ui.DIM)
         self.put(ui.loot_button(150,y1-y),x1-150-170,y,self.open_loot)
@@ -390,10 +471,10 @@ class FarmApp(tk.Tk):
         self.render()
 
     def config_path(self):
-        return state_root(ROOT,{'FARM_ACCOUNT':self.account})/'farm_config.json' if self.multi else None
+        return state_root(ROOT,{'FARM_ACCOUNT':self.account})/'farm_config.json' if self.account else None
 
     def loot_root(self):
-        return runs_root(ROOT,{'FARM_ACCOUNT':self.account}) if self.multi else None
+        return runs_root(ROOT,{'FARM_ACCOUNT':self.account}) if self.account else None
 
     def choose_account(self,account):
         self.account=account;self.config_data=farm_config.load(self.config_path())
@@ -425,6 +506,9 @@ class FarmApp(tk.Tk):
     def toggle_account(self,account):
         if self.running():return
         self.enabled_accounts[account]^=True
+        self.save_enabled()
+
+    def save_enabled(self):
         ENABLED_ACCOUNTS.parent.mkdir(parents=True,exist_ok=True)
         ENABLED_ACCOUNTS.write_text(json.dumps(self.enabled_accounts))
 
@@ -493,9 +577,13 @@ class FarmApp(tk.Tk):
             except (ValueError,RuntimeError,OSError):self.status='PRUEBA BLOQUEADA · CLIENTES NO CERTIFICADOS';return
             self.status='PRUEBA EN MARCHA · 3 CUENTAS · STOP EN EL PANEL'
             threading.Thread(target=self.follow,args=(self.process,),daemon=True).start();return
-        if self.multi:
+        if getattr(self,'browser_busy',False):self.status='ESPERA AL NAVEGADOR';return
+        if hasattr(self,'records'):
             from .farm_multi import start_farm
-            active={a:record for a,record in self.multi.items() if self.enabled_accounts[a]}
+            self.reload_sessions()
+            ids=[r['id'] for r in self.records if self.enabled_accounts[r['id']]]
+            if any(a not in self.multi for a in ids):self.status='FALTAN SESIONES · ABRE LAS CUENTAS ACTIVAS';return
+            active={a:self.multi[a] for a in ids}
             if not active:self.status='ACTIVA AL MENOS UNA CUENTA';return
             self.save()
             try:self.process=start_farm(active)
