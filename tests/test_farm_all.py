@@ -269,6 +269,19 @@ if __name__=='__main__':unittest.main()
 
 
 class FarmAllBoostsStepTests(unittest.TestCase):
+    def test_weekly_expedition_uses_gvg_and_can_return_to_expedition(self):
+        import copy
+        from fishing_core import farm_config
+        config=copy.deepcopy(farm_config.DEFAULT)
+        config['boosts']=False;config['runes']=False
+        config['modes']={key:key=='expedition' for key in config['modes']}
+        for weekly,name,module,function in (('GVG','GvG','gvg_runtime','run_gvg'),
+                                             ('EXPEDITION','Expedition','expedition_runtime','run_expedition')):
+            with self.subTest(weekly=weekly),patch.object(farm_all,'WEEKLY_EXPEDITION',weekly), \
+                    patch(f'fishing_core.{module}.{function}') as run:
+                steps=farm_all.steps(config);self.assertEqual([n for n,_ in steps],[name])
+                steps[0][1]();run.assert_called_once_with(60)
+
     def test_boosts_go_first_and_can_be_turned_off(self):
         from fishing_core import farm_config
         config=farm_config.load(Path('/nonexistent/farm_config.json'))

@@ -59,9 +59,13 @@ def quest(config,single=False,read_only=False):
     return code
 
 
+WEEKLY_EXPEDITION='GVG'
+
+
 def steps(config):
     from .boss_runtime import run_boss
     from .expedition_runtime import run_expedition
+    from .gvg_runtime import run_gvg
     from .pvp_runtime import run_pvp
     from .raid_runtime import run_raid
     from .runes_runtime import run_runes
@@ -74,7 +78,8 @@ def steps(config):
         if runes:plan.append(('Runas captura',lambda:run_runes('CAPTURE')))
         plan.append(('Quest',lambda:quest(config)))
     rest=[('PvP','pvp',lambda:run_pvp(60,int(config['pvp']['opponent']))),('World Boss','boss',lambda:run_boss(60,config['boss']['difficulty'],config['boss']['boss'],int(config['boss']['tier']))),
-          ('Raid','raid',lambda:run_raid(60,config['raid']['raid'],config['raid']['difficulty'],int(config['raid'].get('max_gold',250_000)))),('Expedition','expedition',lambda:run_expedition(60)),
+          ('Raid','raid',lambda:run_raid(60,config['raid']['raid'],config['raid']['difficulty'],int(config['raid'].get('max_gold',250_000)))),
+          ('GvG' if WEEKLY_EXPEDITION=='GVG' else 'Expedition','expedition',lambda:run_gvg(60) if WEEKLY_EXPEDITION=='GVG' else run_expedition(60)),
           ('Trials','trials',lambda:run_trials(60,int(config['trials']['difficulty'])))]
     if runes and any(on[mode] for _,mode,_ in rest):plan.append(('Runas Item Find',lambda:run_runes('ITEM_FIND')))
     plan+=[(name,step) for name,mode,step in rest if on[mode]]
