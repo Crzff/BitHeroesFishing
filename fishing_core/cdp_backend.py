@@ -3,9 +3,10 @@ import os
 from pathlib import Path
 import tempfile
 import uuid
+import time
 
-from .accounts import brave_target
-from .brave import Bridge
+from .accounts import brave_target, account_id
+from .brave import Bridge, browser_identity
 from .control_flow import SafetyStop
 from .telemetry import ROOT
 
@@ -26,6 +27,9 @@ class CdpIO:
         try:
             self.target=brave_target()
             if self.target is None:raise RuntimeError('CDP requiere una cuenta Brave explícita')
+            self.account=account_id()
+            self.identity=browser_identity(self.target[0],self.target[1],self.account)
+            self.identity_checked=time.monotonic()
             self.desktop=emergency_source()
             self.frames=tempfile.TemporaryDirectory(prefix='cdp-',dir=ROOT/'runs')
             self.frames_dir=Path(self.frames.name)/'frames';self.frames_dir.mkdir(mode=0o700)
@@ -42,8 +46,14 @@ class CdpIO:
         try:
             self.emergency()
             if brave_target()!=self.target:raise RuntimeError('Cambió el endpoint CDP propio')
+            if account_id()!=self.account:raise RuntimeError('Cambió la cuenta CDP propia')
+            now=time.monotonic()
+            if now-self.identity_checked>=2:
+                if browser_identity(self.target[0],self.target[1],self.account)!=self.identity:
+                    raise RuntimeError('Cambió la identidad del proceso Brave propio')
+                self.identity_checked=now
             self.bridge.call(op,**kwargs)
-        except (RuntimeError,ValueError) as exc:
+        except (RuntimeError,ValueError,OSError) as exc:
             self.failed=True
             raise SafetyStop(str(exc)) from exc
         except BaseException:

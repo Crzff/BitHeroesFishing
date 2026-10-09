@@ -14,6 +14,51 @@ DEFAULT_ACCOUNTS=[{'id':'steam','name':'Steam','type':'steam'},
                   {'id':'perfil-1','name':'KORTZZ','type':'browser'}]
 
 
+def secure_dir(path):
+    """Directorio privado POSIX; DACL exclusiva pendiente de la fase Windows."""
+    if os.name=='nt':return
+    path=Path(path)
+    if path.is_symlink():raise ValueError('Directorio enlazado')
+    if os.name!='nt':os.chmod(path,0o700)
+
+
+def secure_file(path):
+    """Archivo privado POSIX; DACL exclusiva pendiente de la fase Windows."""
+    if os.name=='nt':return
+    path=Path(path)
+    if path.is_symlink():raise ValueError('Archivo enlazado')
+    if os.name!='nt':os.chmod(path,0o600)
+
+
+def private_directory(path):
+    path=Path(path)
+    if path.is_symlink():raise ValueError('Directorio enlazado')
+    if any(parent.is_symlink() for parent in path.parents):raise ValueError('Padre enlazado')
+    if not path.exists():
+        if not path.parent.exists():private_directory(path.parent)
+        path.mkdir(mode=0o700,exist_ok=True)
+    secure_dir(path)
+    parents=list(path.parents)
+    runs=next((i for i,parent in enumerate(parents) if parent.name=='runs'),None)
+    if runs is not None:
+        for parent in parents[:runs+1]:secure_dir(parent)
+
+
+def private_file(path,mode='a',**kwargs):
+    path=Path(path)
+    if path.is_symlink() or path.parent.is_symlink():raise ValueError('Archivo o padre enlazado')
+    flags=os.O_WRONLY|os.O_CREAT|getattr(os,'O_NOFOLLOW',0)
+    flags|=os.O_EXCL if mode=='x' else os.O_APPEND if mode=='a' else os.O_TRUNC
+    fd=os.open(path,flags,0o600)
+    try:
+        if os.name!='nt':os.fchmod(fd,0o600)
+        secure_file(path)
+        stream=os.fdopen(fd,mode,encoding='utf-8',**kwargs)
+    except BaseException:
+        os.close(fd);raise
+    return stream
+
+
 def _validate(records):
     if type(records) is not list or len(records)>8:raise ValueError('Registro de cuentas inválido')
     ids=set();steam=0
@@ -38,13 +83,13 @@ def load_accounts():
 
 def save_accounts(records):
     records=_validate(records);path=ROOT/'runs/accounts/accounts.json'
-    path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+    private_directory(path.parent)
     if path.is_symlink():raise ValueError('Registro de cuentas enlazado')
     temporary=None
     try:
         fd,temporary=tempfile.mkstemp(prefix='.accounts-',dir=path.parent)
         with os.fdopen(fd,'w',encoding='utf-8') as stream:
-            os.chmod(temporary,0o600)
+            secure_file(temporary)
             json.dump(records,stream,ensure_ascii=False,indent=2);stream.write('\n')
             stream.flush();os.fsync(stream.fileno())
         os.replace(temporary,path);temporary=None
@@ -157,5 +202,6 @@ def prepare_profiles(root):
             path.mkdir(mode=0o700,exist_ok=True)
             if os.name!='nt' and part in (account,'brave-data') and (path.stat().st_uid!=os.getuid() or path.stat().st_mode&0o077):
                 raise ValueError('El directorio del perfil debe ser privado y pertenecer al usuario')
+            secure_dir(path)
         profiles[account]=path
     return profiles

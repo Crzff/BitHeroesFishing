@@ -13,6 +13,47 @@ from fishing_core import protocol
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_exclusive_temporary_collision_preserves_existing_file(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            path=Path(temp)/'cycle.json';collision=path.with_name('.cycle.json.fixed.tmp')
+            collision.write_text('preserve')
+            with patch.object(protocol.uuid,'uuid4') as random:
+                random.return_value.hex='fixed'
+                with self.assertRaises(FileExistsError):atomic_json(path,{})
+            self.assertEqual(collision.read_text(),'preserve')
+            self.assertFalse(path.exists())
+
+    def test_fsync_failure_cleans_temporary_and_preserves_destination(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            path=Path(temp)/'cycle.json';atomic_json(path,{'old':True})
+            with patch.object(protocol.os,'fsync',side_effect=OSError('fsync failed')):
+                with self.assertRaises(OSError):atomic_json(path,{'new':True})
+            self.assertEqual(protocol.read_json(path),{'old':True})
+            self.assertEqual(list(Path(temp).glob('*.tmp')),[])
+
+    @unittest.skipIf(os.name=='nt','Permisos y enlaces POSIX')
+    def test_private_atomic_files_and_random_temporaries(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            root=Path(temp);path=root/'runs'/'session'/'cycle.json'
+            sources=[];replace=os.replace
+            def record(source,target):
+                sources.append(source)
+                self.assertEqual(source.stat().st_mode&0o777,0o600)
+                self.assertEqual(source.parent,target.parent)
+                replace(source,target)
+            with patch.object(protocol.os,'replace',side_effect=record):
+                atomic_json(path,{'n':1});atomic_json(path,{'n':2})
+            self.assertNotEqual(sources[0],sources[1])
+            self.assertEqual(path.stat().st_mode&0o777,0o600)
+            for directory in (path.parent,path.parent.parent):
+                self.assertEqual(directory.stat().st_mode&0o777,0o700)
+            target=root/'untouched';target.write_text('original')
+            path.unlink();path.symlink_to(target)
+            with self.assertRaises(ValueError):atomic_json(path,{})
+            self.assertEqual(target.read_text(),'original')
+            parent=root/'linked';parent.symlink_to(path.parent,target_is_directory=True)
+            with self.assertRaises(ValueError):atomic_json(parent/'other.json',{})
+
     def setUp(self):
         self.req = dict(schema=1, run_id="run", cycle_id=1, attempt_id="a", state="CATCH_GAME",
                         issued_perf_ns=10, updated_perf_ns=20)

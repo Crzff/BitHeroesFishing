@@ -7,13 +7,14 @@ import hashlib
 import os
 import re
 import time
+import uuid
 from collections import Counter
 from functools import lru_cache
 from contextlib import contextmanager
 from pathlib import Path
 
 from .telemetry import ROOT
-from .accounts import runs_root
+from .accounts import runs_root, private_directory, secure_file
 
 ARMED_STATES = frozenset(("WAIT_CAST_RESULT", "CATCH_GAME"))
 LEASE_NS = 3_000_000_000
@@ -107,17 +108,28 @@ def read_json(path: Path):
 
 
 def atomic_json(path: Path, data: dict):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(path.name + f".{os.getpid()}.tmp")
+    if path.is_symlink() or path.parent.is_symlink():
+        raise ValueError('Destino IPC o padre enlazado')
+    private_directory(path.parent)
+    temp = None
     text = json.dumps(data, allow_nan=False)
     with _ipc_guard(path, 100) as owned:
         if not owned:
             _io_counts["write_lock_timeout"] += 1
             raise TimeoutError(f"IPC ocupado durante 100 ms: {path}")
         try:
-            temp.write_text(text, encoding="utf-8")
+            candidate = path.with_name('.' + path.name + '.' + uuid.uuid4().hex + '.tmp')
+            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+            temp = candidate
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                secure_file(temp)
+                stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
             for attempt in range(REPLACE_ATTEMPTS):
                 try:
+                    if path.is_symlink() or path.parent.is_symlink():
+                        raise ValueError('Destino IPC o padre enlazado')
                     os.replace(temp, path)
                     _io_counts["writes_ok"] += 1
                     break
@@ -128,7 +140,7 @@ def atomic_json(path: Path, data: dict):
                         raise
                     time.sleep(.002 * 2 ** attempt)
         finally:
-            temp.unlink(missing_ok=True)
+            if temp is not None:temp.unlink(missing_ok=True)
 
 
 def valid_request(request, run_id: str, now_ns: int) -> bool:
@@ -177,7 +189,7 @@ class Channel:
     def __init__(self, run_id: str, root: Path = ROOT):
         self.run_id = run_id
         self.directory = session_directory(run_id, root)
-        self.directory.mkdir(parents=True, exist_ok=True)
+        private_directory(self.directory)
         self.request_path = self.directory / "cycle.json"
         self.signal_path = self.directory / "CATCH_OK.signal"
         self.ready_path = self.directory / "catch_ready.json"

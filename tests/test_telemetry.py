@@ -1,5 +1,6 @@
 import json
 import csv
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,19 @@ from fishing_core.telemetry import Telemetry, new_run_id
 
 
 class TelemetryTests(unittest.TestCase):
+    @unittest.skipIf(os.name=='nt','Permisos POSIX')
+    def test_records_are_private_with_permissive_umask(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            previous=os.umask(0)
+            try:
+                t=Telemetry('CATCH',new_run_id(),Path(temp));t.close()
+            finally:os.umask(previous)
+            for path in t.directory.iterdir():
+                self.assertEqual(path.stat().st_mode&0o777,0o600)
+            self.assertEqual(t.legacy_log.stat().st_mode&0o777,0o600)
+            self.assertEqual(t.directory.stat().st_mode&0o777,0o700)
+            self.assertEqual(t.directory.parent.stat().st_mode&0o777,0o700)
+
     def test_complete_per_run_records(self):
         with tempfile.TemporaryDirectory() as temp:
             t = Telemetry("CATCH", new_run_id(), Path(temp))

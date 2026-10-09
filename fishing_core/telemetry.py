@@ -17,7 +17,7 @@ from uuid import uuid4
 from importlib import metadata
 
 from . import VERSION
-from .accounts import account_id, runs_root, state_root
+from .accounts import account_id, runs_root, state_root, private_directory, private_file
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_FIELDS = ["schema","run_id","cycle_id","attempt_id","track_id","utc","perf_ns",
@@ -65,7 +65,7 @@ class Telemetry:
         self.role = role
         self.run_id = run_id
         self.directory = runs_root(root) / run_id
-        self.directory.mkdir(parents=True, exist_ok=True)
+        private_directory(self.directory)
         self.path = self.directory / f"{role.lower()}_events.jsonl"
         self.legacy_log = state_root(root) / ("CATCH_LOG.txt" if role == "CATCH" else "CONTROL_LOG.txt")
         self.pending = queue.Queue(maxsize=8192)
@@ -88,9 +88,8 @@ class Telemetry:
             "source_sha256": source_hashes(root),
             "python":sys.version,"packages":packages,
         }
-        manifest_path.write_text(
-            json.dumps(manifest, indent=2), encoding="utf-8"
-        )
+        with private_file(manifest_path,'x') as stream:
+            stream.write(json.dumps(manifest, indent=2))
         self.worker = threading.Thread(target=self._write, name=f"log-{role}", daemon=True)
         self.worker.start()
         self.emit("PROCESS_START", human=True, version=VERSION)
@@ -114,10 +113,9 @@ class Telemetry:
 
     def _write(self):
         try:
-            with self.path.open("a", encoding="utf-8") as events, self.legacy_log.open(
-                "a", encoding="utf-8"
-            ) as legacy, (self.directory / f"{self.role.lower()}_samples_R1.csv").open(
-                "w",newline="",encoding="utf-8"
+            with private_file(self.path) as events, private_file(self.legacy_log
+            ) as legacy, private_file(self.directory / f"{self.role.lower()}_samples_R1.csv",
+                "w",newline=""
             ) as samples:
                 csv_writer=csv.DictWriter(samples,fieldnames=SAMPLE_FIELDS,extrasaction="ignore")
                 csv_writer.writeheader()

@@ -17,6 +17,22 @@ from fishing_core.telemetry import ROOT, Telemetry
 
 
 class AccountTests(unittest.TestCase):
+    @unittest.skipIf(os.name=='nt','Permisos y enlaces POSIX')
+    def test_registry_secures_existing_run_directories_and_rejects_parent_link(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp,patch.object(accounts,'ROOT',Path(tmp)):
+            root=Path(tmp);runs=root/'runs';runs.mkdir(mode=0o755)
+            parent=runs/'accounts';parent.mkdir(mode=0o755)
+            previous=os.umask(0)
+            try:accounts.save_accounts(accounts.DEFAULT_ACCOUNTS)
+            finally:os.umask(previous)
+            self.assertEqual((parent/'accounts.json').stat().st_mode&0o777,0o600)
+            for path in (runs,parent):self.assertEqual(path.stat().st_mode&0o777,0o700)
+            linked=root/'linked';linked.mkdir();(linked/'runs').symlink_to(runs,target_is_directory=True)
+            before=(parent/'accounts.json').read_bytes()
+            with patch.object(accounts,'ROOT',linked),self.assertRaises(ValueError):
+                accounts.save_accounts(accounts.DEFAULT_ACCOUNTS)
+            self.assertEqual((parent/'accounts.json').read_bytes(),before)
+
     def test_registry_defaults_do_not_write_and_are_independent(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)):
             self.assertEqual(accounts.load_accounts(),accounts.DEFAULT_ACCOUNTS)
