@@ -23,11 +23,13 @@ class GvgVision:
     """Extensión local; conserva el lector y las plantillas compartidas."""
     def __init__(self,vision):
         self.base=vision
-        for key in ('home','home_town','title','play','close','confirm','flee','yes','no'):
+        for key in ('home','home_town','home_town2','title','play','close','confirm','flee','yes','no'):
             template=cv2.imread(str(Path(__file__).resolve().parent.parent/f'assets/gvg_{key}.png'))
             if template is None:raise SafetyStop(f'Plantilla GVG_{key.upper()} no disponible')
             vision.templates['GVG_'+key.upper()]=template
-        vision.home_masks['GVG_HOME']=np.all(vision.templates['GVG_HOME']==vision.templates['GVG_HOME_TOWN'],axis=2).astype(np.uint8)
+        # Fondo de ciudad y personajes que pasan por encima: solo los píxeles comunes a las variantes reales.
+        home=vision.templates['GVG_HOME']
+        vision.home_masks['GVG_HOME']=np.all([np.all(home==vision.templates[k],axis=2) for k in ('GVG_HOME_TOWN','GVG_HOME_TOWN2')],axis=0).astype(np.uint8)
 
     def __getattr__(self,name):return getattr(self.base,name)
 
@@ -65,7 +67,10 @@ class GvgRunner(PvpRunner):
     def open(self):
         if self.vision.screen(self.capture())=='GVG':return
         screen=self.ensure_home(keep=('GVG',))
-        if screen=='HOME':self.press('HOME',HOME);self.wait('GVG')
+        if screen=='HOME':
+            # Los jugadores que pasan por la ciudad tapan el icono a ratos: esperar a verlo limpio.
+            self.wait(lambda f:self.vision.screen(f)=='HOME' and self.vision.locate(f,HOME[1],HOME[2]) is not None,15,'icono GvG')
+            self.press('HOME',HOME);self.wait('GVG')
 
     def badges(self):
         seen=None

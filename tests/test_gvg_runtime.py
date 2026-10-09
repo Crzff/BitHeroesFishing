@@ -159,3 +159,14 @@ class GvgRuntimeTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class GvgHomeIconTests(unittest.TestCase):
+    def test_icon_is_found_even_with_a_player_walking_over_it(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        from fishing_core.gvg_runtime import GvgVision,HOME
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frames={k:data[k] for k in data.files}
+        vision=GvgVision(DungeonVision())
+        for name in ('home_gvg_occluded','home_gvg_gauntlet','home_gauntlet_steam'):
+            self.assertEqual(vision.locate(frames[name],'GVG_HOME',HOME[2]),(1765,480),name)
+        self.assertIsNone(vision.locate(frames['gvg_window'],'GVG_HOME',HOME[2]))
