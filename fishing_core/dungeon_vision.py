@@ -10,10 +10,11 @@ from .bait_inventory import BaitReader,quantity_boxes
 ASSETS=Path(__file__).resolve().parent.parent/'assets/dungeon_templates.npz'
 SETTINGS={'gold':('GOLD',False),'gems':('GEMS',False),'duplicates':('DUPLICATES',False),
           'notifications':('SETTING_NOTIFICATIONS',False),'animations':('SETTING_ANIMATIONS',False),
+          'reduced_effects':('SETTING_REDUCED_EFFECTS',True),'battle_text':('SETTING_BATTLE_TEXT',False),
           'tips':('SETTING_TIPS',False),'merchants':('SETTING_MERCHANTS',True),
           'treasures':('SETTING_TREASURES',True),'music':('SETTING_MUSIC',True),'sound':('SETTING_SOUND',True)}
 NEW_TEMPLATES=tuple(key for key,_ in SETTINGS.values() if key.startswith('SETTING_'))+(
-    'AUDIO_ZERO','IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS','EVENT_CLOSE')
+    'AUDIO_ZERO','IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS','EVENT_CLOSE','HOME_GAUNTLET','GAUNTLET_TITLE','EVENT_PLAY')
 
 
 def familiar_glyph(frame):
@@ -61,7 +62,8 @@ MODE_SCREENS=(('DISCONNECTED',(('DISCONNECTED',(720,430,1200,640)),('RECONNECT',
               ('EXPEDITION',(('EXP_TITLE',(680,150,1220,310)),('EXP_PLAY',(1120,440,1445,710)))),
               ('IDOL_MAP',(('IDOL_TITLE',(560,50,1420,215)),)),
               ('PORTAL',(('PORTAL_TITLE',(710,130,1285,285)),('PORTAL_ENTER',(830,880,1150,1060)))),
-              ('TRIALS',(('TRIALS_TITLE',(620,150,1300,310)),('TRIALS_PLAY',(1120,450,1450,710)))))
+              ('TRIALS',(('TRIALS_TITLE',(620,150,1300,310)),('TRIALS_PLAY',(1120,450,1450,710)))),
+              ('GAUNTLET',(('GAUNTLET_TITLE',(620,150,1300,310)),('EVENT_PLAY',(1120,450,1450,710)))))
 
 
 # Runas menores (wiki 2026-10-05): bono por rareza común, rara, épica, legendaria y mítica.
@@ -128,6 +130,7 @@ class DungeonVision:
         difference=np.abs(matched.astype(np.int16)-ref)
         if mask is not None:difference=difference[mask!=0]
         if score>=threshold and float(difference.mean())<=max_diff:return x+px,y+py
+        if key=='TRIALS_PLAY':return self.locate(frame,'EVENT_PLAY',roi,threshold,max_diff)
         return self.locate(frame,'HEROIC_IDLE',roi,threshold) if key=='HEROIC' else None
 
     def locate_all(self,frame,key,roi,threshold=.97):

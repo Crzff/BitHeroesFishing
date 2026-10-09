@@ -13,7 +13,7 @@ from fishing_core.dungeon_vision import DungeonVision
 from fishing_core.trials_runtime import TrialsRunner
 
 with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
-    FRAMES={k:data[k] for k in data.files if k.startswith(('trials_','pvp_team'))}
+    FRAMES={k:data[k] for k in data.files if k.startswith(('trials_','pvp_team','gauntlet_','home_gvg'))}
 VISION=DungeonVision()
 
 
@@ -95,10 +95,43 @@ class TrialsRuntimeTests(unittest.TestCase):
         self.assertEqual(state['clicks'],[])
 
     def test_missing_difficulty_stops_without_choosing_or_playing(self):
-        runner,state,fake=self.menu_runner(3000)  # por encima de 2.735, el máximo
+        runner,state,fake=self.menu_runner(674)
+        runner.scroll_to_level=Mock(return_value=None)
         with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.trials_runtime.time',fake):
-            with self.assertRaisesRegex(SafetyStop,'3000'):runner.set_difficulty()
-        self.assertEqual(state['clicks'],[(1416,826)]);self.assertEqual(state['shown'],499)
+            with self.assertRaisesRegex(SafetyStop,'674'):runner.set_difficulty()
+        self.assertEqual(state['shown'],499)
+
+    def test_home_gauntlet_uses_verified_icon_and_existing_story_wait(self):
+        runner,_,fake=self.menu_runner(499)
+        state=['home_gvg_gauntlet'];runner.capture=lambda:FRAMES[state[0]]
+        runner.ensure_home=Mock(return_value='HOME');runner.set_difficulty=Mock();runner.check=Mock()
+        runner.io.click.side_effect=lambda xy:state.__setitem__(0,'gauntlet_story' if state[0]=='home_gvg_gauntlet' else 'gauntlet_window')
+        with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.trials_runtime.time',fake):runner.open()
+        self.assertEqual([c.args[0] for c in runner.io.click.call_args_list],[(1828,700),(1665,646)])
+        self.assertEqual(runner.event_screen(),'GAUNTLET')
+        self.assertEqual(TrialsRunner.difficulty_shown(runner,FRAMES['gauntlet_window']),54)
+
+
+    def test_available_maximum_below_config_is_confirmed_or_stops(self):
+        for confirmed in (True,False):
+            runner,state,fake=self.menu_runner(499)
+            runner.capture=lambda:FRAMES['gauntlet_window'];runner.difficulty_shown=lambda f:state['shown']
+            state['shown']=54;runner.click=Mock();runner.wait=Mock()
+            runner.vision=Mock();runner.vision.screen.return_value='GAUNTLET'
+            runner.vision.trials_ranges.return_value=[(320,1,54)]
+            runner.scroll_to=lambda find,label:find(None)
+            runner.scroll_to_level=Mock(return_value=320)
+            runner.choose=Mock()
+            def wait(predicate,*args):
+                if args and args[-1]=='dificultad 54':
+                    state['shown']=54 if confirmed else 53
+                    if not predicate(None):raise SafetyStop('Dificultad sin confirmar')
+            runner.wait.side_effect=wait
+            with patch('fishing_core.trials_runtime.time',fake):
+                if confirmed:runner.set_difficulty()
+                else:
+                    with self.assertRaises(SafetyStop):runner.set_difficulty()
+            runner.scroll_to_level.assert_called_once_with(54)
 
     def test_a_long_range_is_crossed_by_jumping_toward_the_level(self):
         # Semana con rango 440-755: unos 300 niveles, 5 visibles, cada paso de rueda baja 2 niveles.

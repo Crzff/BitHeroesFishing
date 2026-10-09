@@ -1,4 +1,4 @@
-"""Trials (evento semanal; esta semana Nyxn's Trials): gasta todos los tokens.
+"""Trials/Gauntlet (evento semanal): gasta todos los tokens.
 
 Perder es normal en Trials: la derrota se cierra y se sigue. La dificultad elegida
 (máximo de un rango del menú, p. ej. 499 = T9 azul, objetos de set) se fija con el
@@ -16,7 +16,9 @@ from .farm_budget import FarmBudget
 from .protocol import atomic_json
 
 TOKEN_COST=5
+EVENT_SCREENS=('TRIALS','GAUNTLET')
 HOME_TRIALS=((1830,710),'HOME_TRIALS',(1720,590,1920,830))
+HOME_GAUNTLET=((1828,700),'HOME_GAUNTLET',(1720,590,1920,830))
 PLAY=((1280,580),'TRIALS_PLAY',(1120,450,1450,710))
 CLOSE=((1490,236),'TRIALS_CLOSE',(1404,150,1584,330))
 ACCEPT=((1215,982),'ACCEPT',(1000,930,1420,1035))
@@ -43,14 +45,19 @@ class TrialsRunner(DungeonRunner):
         self.click(screen,xy,key,roi)
 
     def go_home(self):
-        self.wait('TRIALS',20)  # TOWN vuelve a la ventana de Trials.
+        self.wait(lambda f:self.vision.screen(f) in EVENT_SCREENS,20)
+
+    def event_screen(self):
+        screen=self.vision.screen(self.capture())
+        if screen not in EVENT_SCREENS:raise SafetyStop('Ventana Trials/Gauntlet no confirmada')
+        return screen
 
     def tokens(self):
         seen=None
         def known(frame):
             nonlocal seen
             current=None
-            if self.vision.screen(frame)=='TRIALS':
+            if self.vision.screen(frame) in EVENT_SCREENS:
                 x,y,x1,y1=TOKENS_ROI;im=frame[y:y1,x:x1]
                 current=self.vision.number(np.where(im.min(2,keepdims=True)>=240,im,0).astype(np.uint8))
             okay=current is not None and current==seen;seen=current
@@ -59,8 +66,12 @@ class TrialsRunner(DungeonRunner):
         return seen
 
     def open(self):
-        screen=self.ensure_home(keep=('TRIALS',))
-        if screen=='HOME':self.press('HOME',HOME_TRIALS);self.wait('TRIALS')
+        screen=self.ensure_home(keep=EVENT_SCREENS)
+        if screen=='HOME':
+            frame=self.capture()
+            actions=[a for a in (HOME_TRIALS,HOME_GAUNTLET) if self.vision.locate(frame,a[1],a[2]) is not None]
+            if len(actions)!=1:raise SafetyStop('Icono Trials/Gauntlet ausente o ambiguo')
+            self.press('HOME',actions[0]);self.wait(lambda f:self.vision.screen(f) in EVENT_SCREENS)
         self.set_difficulty()
 
     def difficulty_shown(self,frame):
@@ -77,8 +88,11 @@ class TrialsRunner(DungeonRunner):
             frame=self.capture();y=find(frame)
             if y is not None:return y
             rows=self.vision.menu_lines(frame);signature=[yy for yy,_ in rows],[line.tobytes() for _,line in rows]
+            if label=='rangos disponibles' and (not rows or len(self.vision.trials_ranges(frame))!=len(rows)):
+                raise SafetyStop('Rangos de dificultad ilegibles; no se cambia')
             if signature==previous:return None  # final de la lista
             previous=signature;self.wheel(3)
+        if label=='rangos disponibles':raise SafetyStop('Final de rangos no confirmado')
         return None
 
     def scroll_to_level(self,target):
@@ -111,31 +125,41 @@ class TrialsRunner(DungeonRunner):
 
     def set_difficulty(self):
         """Dos menús: rango que contiene la dificultad y nivel exacto; se confirma leyendo el campo."""
-        stable=lambda f:self.vision.screen(f)=='TRIALS' and self.difficulty_shown(f) is not None
+        stable=lambda f:self.vision.screen(f) in EVENT_SCREENS and self.difficulty_shown(f) is not None
         self.wait(stable,10,'dificultad de Trials');time.sleep(.5)
         target=self.trials_difficulty
         if self.difficulty_shown(self.capture())==target:return
         menu=lambda f:self.vision.locate(f,'WB_DIFF_MENU',(760,95,1160,240)) is not None
-        self.click('TRIALS',DIFF_DROPDOWN);self.wait(menu,10,'menú de dificultad')
+        self.click(self.event_screen(),DIFF_DROPDOWN);self.wait(menu,10,'menú de dificultad')
+        # Recorrer la lista completa: máximo extremo de rango <= config, o config
+        # si cae dentro de un rango. Nunca inferir el máximo del valor actual.
+        candidates=set()
+        def collect(frame):
+            for _,low,high in self.vision.trials_ranges(frame):
+                if low<=target:candidates.add(min(target,high))
+            return None
+        self.scroll_to(collect,'rangos disponibles')
+        if not candidates:raise SafetyStop(f'La dificultad {target} no está en el menú; no se cambia')
+        target=max(candidates)
         y=self.scroll_to(lambda f:next((y for y,low,high in self.vision.trials_ranges(f) if low<=target<=high),None),'rango')
-        if y is None:raise SafetyStop(f'La dificultad {target} no está en el menú; no se cambia')
+        if y is None:raise SafetyStop(f'Rango de dificultad {target} no confirmado')
         self.choose(y,'TRIALS_RANGE')
         self.wait(lambda f:menu(f) and bool(self.vision.trials_levels(f)),10,'niveles del rango')
         y=self.scroll_to_level(target)
         if y is None:raise SafetyStop(f'El nivel {target} no aparece en su rango; no se cambia')
         self.choose(y,'TRIALS_LEVEL')
-        self.wait(lambda f:self.vision.screen(f)=='TRIALS' and self.difficulty_shown(f)==target,10,f'dificultad {target}')
+        self.wait(lambda f:self.vision.screen(f) in EVENT_SCREENS and self.difficulty_shown(f)==target,10,f'dificultad {target}')
 
     def enter(self,cycle):
         self.open();balance=self.tokens()
         if balance<1:return None
         # PLAY con coste mayor que el saldo ofrece comprar tokens: nunca.
-        self.cost=self.set_cost('TRIALS',min(TOKEN_COST,balance),'COST_MENU_TOKENS')
+        self.cost=self.set_cost(self.event_screen(),min(TOKEN_COST,balance),'COST_MENU_TOKENS')
         attempt=f'{self.channel.run_id}:{cycle}'
         if not self.budget.reserve_entry(attempt,resource='TOKENS',balance=balance,cost=self.cost):
             raise SafetyStop('Trial ya reservado; no repetir PLAY')
         atomic_json(self.channel.directory/f'trials-{cycle}.intent.json',{'attempt_id':attempt,'tokens':balance,'effect_confirmed':False})
-        self.press('TRIALS',PLAY);self.press('TEAM',ACCEPT)
+        self.press(self.event_screen(),PLAY);self.press('TEAM',ACCEPT)
         self.log.emit('TRIALS_STARTED',attempt_id=attempt,tokens_before=balance,cost=self.cost)
         return attempt
 
@@ -144,7 +168,7 @@ class TrialsRunner(DungeonRunner):
             attempt=self.enter(cycle)
             if attempt is None:break
             self.observe(attempt,cycle,auto_started=False)
-        self.open();self.press('TRIALS',CLOSE);self.wait('HOME')
+        self.open();self.press(self.event_screen(),CLOSE);self.wait('HOME')
         self.log.emit('TRIALS_STATUS',message='Tokens gastados · detenido',budget=self.budget.payload())
 
 

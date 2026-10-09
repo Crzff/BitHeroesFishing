@@ -44,6 +44,7 @@ WINDOW_CLOSERS={'DISCONNECTED':((960,742),'RECONNECT',(770,665,1150,820)),
                 'WB_LIST':((1536,214),'WB_CLOSE',(1500,180,1575,250)),'WB_CAROUSEL':((1470,240),None,None),
                 'WB_SUMMON':((1266,260),None,None)}
 COST_ROI=(1210,392,1310,448)
+WINDOW_CLOSERS['GAUNTLET']=WINDOW_CLOSERS['TRIALS']
 COST_DROPDOWN=(1370,416)
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))

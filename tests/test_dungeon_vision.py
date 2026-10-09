@@ -11,10 +11,20 @@ FIXTURES=Path(__file__).parent/'fixtures/dungeons.npz'
 
 
 class DungeonVisionTests(unittest.TestCase):
+    def test_gauntlet_preserves_all_other_classifications(self):
+        locate=self.vision.locate
+        for name,frame in self.frames.items():
+            with patch.object(self.vision,'locate',side_effect=lambda f,k,r,*a,**kw:
+                              None if k=='GAUNTLET_TITLE' else locate(f,k,r,*a,**kw)):
+                before=self.vision.screen(frame)
+            self.assertEqual(self.vision.screen(frame),'GAUNTLET' if name=='gauntlet_window' else before,name)
+        self.assertEqual(self.vision.screen(self.frames['gauntlet_story']),'STORY')
     def test_settings_parents_and_audio_follow_labels(self):
         for fixture,name,state,xy in (
                 ('settings_notifications','notifications',True,(510,574)),
                 ('settings_animations','animations',True,(510,651)),
+                ('settings_effects_text','reduced_effects',False,(510,624)),
+                ('settings_effects_text','battle_text',True,(510,719)),
                 ('settings_merchants','merchants',False,(510,464)),
                 ('settings_treasures_tips','treasures',False,(510,477)),
                 ('settings_treasures_tips','tips',True,(510,667))):

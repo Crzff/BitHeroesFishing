@@ -21,9 +21,9 @@ class DungeonRuntimeTests(unittest.TestCase):
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
             frames={k:data[k] for k in ('settings_audio_50','settings_audio_zero','settings_notifications',
                     'settings_animations','settings_merchants','settings_treasures_tips',
-                    'settings_gold','settings_gems','settings_duplicates')}
+                    'settings_gold','settings_gems','settings_duplicates','settings_effects_text')}
         pages=('settings_audio_50','settings_notifications','settings_animations','settings_merchants',
-               'settings_treasures_tips','settings_gold','settings_gems','settings_duplicates')
+               'settings_treasures_tips','settings_gold','settings_gems','settings_duplicates','settings_effects_text')
         for already_desired in (False,True):
             with self.subTest(already_desired=already_desired),tempfile.TemporaryDirectory() as tmp:
                 runner,io,_=self.runner(Path(tmp));vision=DungeonVision();runner.vision=vision
@@ -548,7 +548,7 @@ class DungeonRuntimeTests(unittest.TestCase):
                     runner.verify_settings()
                     self.assertTrue(runner.safety_checked)
                     saved=json.loads((Path(tmp)/'native_settings.json').read_text())
-                    self.assertEqual(saved['missing'],['notifications','animations','tips','merchants','treasures','music','sound'])
+                    self.assertEqual(saved['missing'],['notifications','animations','reduced_effects','battle_text','tips','merchants','treasures','music','sound'])
                     self.assertTrue(any(call.args==('DUNGEON_STATUS',) and 'Aviso:' in call.kwargs.get('message','')
                                         for call in runner.log.emit.call_args_list))
                     self.assertEqual(runner.scroll_menu.call_count,36)  # También busca los opcionales ausentes.
