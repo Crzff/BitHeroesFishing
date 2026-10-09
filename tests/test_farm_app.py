@@ -305,6 +305,7 @@ class FarmAppClickTests(unittest.TestCase):
         patcher=patch.object(farm_config,'PATH',Path(tmp.name)/'cfg.json');patcher.start();self.addCleanup(patcher.stop)
         # Nunca el modo multicuenta real: escribiría en runs/accounts/<cuenta>/farm_config.json.
         multi=patch.object(farm_app,'MULTI_SESSIONS',Path(tmp.name)/'sin-sesiones.json');multi.start();self.addCleanup(multi.stop)
+        status=patch.object(farm_app,'MULTI_STATUS',Path(tmp.name)/'sin-estado.json');status.start();self.addCleanup(status.stop)
         try:self.app=farm_app.FarmApp()
         except tkinter.TclError:self.skipTest('sin pantalla para Tk')
         self.app.withdraw();self.addCleanup(self.app.destroy)

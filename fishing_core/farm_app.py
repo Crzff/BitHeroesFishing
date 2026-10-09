@@ -171,7 +171,7 @@ class FarmApp(tk.Tk):
             self.label('CUENTA',x0,y+66,18,ui.GOLD)
             for i,(account,label) in enumerate(ACCOUNT_TABS):
                 self.put(ui.button(label,140,46,'blue' if self.account==account else 'gray',18),x0+110+i*152,y+52,
-                         None if running else lambda a=account:self.choose_account(a))
+                         lambda a=account:self.choose_account(a))  # ver otra cuenta no cambia nada; editar sigue bloqueado
         else:
             self.put(ui.checkbox(self.config_data['background'],44),x0,y+56,None if running else self.toggle_background)
             self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',x0+58,y+64,18)
@@ -359,7 +359,7 @@ class FarmApp(tk.Tk):
     def reset_loot(self):
         root=self.loot_root();loot.reset(root/'loot_totals.json' if root else None)
     def open_mode(self,mode):
-        if self.process is None:self.screen=mode
+        if not self.running():self.screen=mode
         if mode=='boss':self.show_tier()
         if mode=='raid':  # que la raid elegida quede a la vista
             keys=list(reversed(RAIDS));self.raid_scroll=max(0,keys.index(self.config_data['raid']['raid'])-4)
