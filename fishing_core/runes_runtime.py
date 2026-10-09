@@ -9,6 +9,9 @@ resultado se comprueba en el tablero. BROWSE abre MELT y nunca se usa.
 
 import os
 import time
+from pathlib import Path
+
+import cv2
 
 from .control_flow import SafetyStop
 from .dungeon_runtime import DungeonRunner
@@ -19,6 +22,7 @@ PROFILE=((90,1010),'HOME_QUEST',(15,15,165,190))
 RUNES=((446,1014),'PROFILE_RUNES',(290,935,620,1080))
 SLOTS=((700,596),(1216,596))
 SWITCH=((958,570),'RUNE_SWITCH',(735,485,1190,655))
+INSERT_ROI=(735,355,1190,525)
 LIST_ROI=(620,380,1260,760)
 LIST_WHEEL=(958,560)
 LIST_CLOSE=(1344,304)
@@ -30,6 +34,10 @@ PROFILE_CLOSE=(1652,112)
 class RunesRunner(DungeonRunner):
     def __init__(self,io,capture,vision,channel,log):
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
+        if 'RUNE_INSERT' not in self.vision.templates:
+            template=cv2.imread(str(Path(__file__).resolve().parent.parent/'assets/rune_insert.png'))
+            if template is None:raise SafetyStop('Plantilla RUNE_INSERT no disponible')
+            self.vision.templates['RUNE_INSERT']=template
         self.deadline=time.monotonic()+10*60
 
     def on(self,key,roi):
@@ -81,7 +89,11 @@ class RunesRunner(DungeonRunner):
 
     def open_list(self,slot):
         self.board();self.check();self.io.click(SLOTS[slot]);time.sleep(.25);self.io._move((960,1070))
-        frame=self.wait(self.on('RUNE_SWITCH',SWITCH[2]),10,'opciones de runa')
+        frame=self.wait(lambda f:self.on('RUNE_SWITCH',SWITCH[2])(f) or self.on('RUNE_INSERT',INSERT_ROI)(f),10,'opciones de runa')
+        if self.on('RUNE_INSERT',INSERT_ROI)(frame):
+            self.check();self.io.click(OPTIONS_CLOSE);self.board()
+            self.log.emit('RUNE_SLOT_EMPTY',slot=slot,message=f'Hueco {slot+1}: vacío (0%)')
+            return None
         self.click_on(frame,SWITCH)
         frame=self.wait(lambda f:self.vision.locate(f,'MINOR_RUNE',(720,210,1200,365)) is not None,10,'lista de runas menores')
         time.sleep(1.5)  # la lista sigue deslizándose aunque ya se vea el título
@@ -137,7 +149,8 @@ class RunesRunner(DungeonRunner):
             current=self.slot_runes()
             values=[r[2] if r and r[0]==kind else 0 for r in current]
             slot=min((s for s in (0,1) if s not in tried),key=lambda s:values[s]);tried.add(slot)
-            self.open_list(slot);best=self.scan(kind)
+            if self.open_list(slot) is None:continue
+            best=self.scan(kind)
             if best is None or best[0]<=values[slot]:
                 self.close_list();continue
             if not self.click_best(kind,best):raise SafetyStop('La runa elegida desapareció de la lista')
@@ -152,6 +165,7 @@ class RunesRunner(DungeonRunner):
         """Si el juego quedó en la lista de runas, sus opciones, el tablero o el perfil, vuelve a Home."""
         steps=((lambda f:self.vision.locate(f,'MINOR_RUNE',(720,210,1200,365)),LIST_CLOSE),
                (lambda f:self.vision.locate(f,'RUNE_SWITCH',SWITCH[2]),OPTIONS_CLOSE),
+               (lambda f:self.vision.locate(f,'RUNE_INSERT',INSERT_ROI),OPTIONS_CLOSE),
                (lambda f:self.vision.locate(f,'RUNES_TITLE',(760,90,1160,245)),BOARD_CLOSE),
                (lambda f:self.vision.locate(f,*RUNES[1:]),PROFILE_CLOSE))
         for _ in range(6):

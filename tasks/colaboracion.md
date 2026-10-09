@@ -21,3 +21,5 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
   · Entorno real: 489 tests OK (3 omitidas), configs intactas. Pendiente: validación en vivo.
 - Error de Claude: lanzar el supervisor con `bash … &` hace que ignore SIGINT y STOP no lo para; lanzar
   siempre desde Python (como el panel) con SIGINT por defecto.
+
+- t3 (Codex): huecos de runa vacíos (INSERT) se saltan; 493 OK.
