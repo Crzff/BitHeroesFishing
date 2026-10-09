@@ -16,7 +16,7 @@ BOOSTS={'item_find':'Minor Item Find Scroll','xp':'Minor Experience Tome',
         'gold':'Minor Gold Potion','speed':'Minor Speed Kicks'}
 LIST_ROI=(1090,330,1540,930)
 PROFILE_CLOSE=(1652,112)
-KEYS=('active','flag','filter','consumables','profile_close','activated','done','yes',
+KEYS=('active','slot','flag','filter','consumables','consumables_selected','profile_close','activated','done','yes',
       *BOOSTS,*(f'confirm_{kind}' for kind in BOOSTS),
       'shop','shop_tab','shop_list','shop_close','one','coin','diamond','no',
       'purchase_header','purchase_item_find','purchase_gold','price_10000','price_5000',
@@ -39,7 +39,13 @@ class BoostsRunner(DungeonRunner):
         shop=self.vision.templates['BOOST_SHOP'];towns=[cv2.imread(str(Path(__file__).resolve().parent.parent/f'assets/boost_shop_town{i}.png')) for i in (1,2)]
         if all(t is not None and t.shape==shop.shape for t in towns):
             self.vision.home_masks['BOOST_SHOP']=np.all([np.all(shop==t,axis=2) for t in towns],axis=0).astype(np.uint8)
+        # Casilla de boost: solo el anillo del marco (el icono cambia y la barra pasa de verde a amarillo con el tiempo).
+        ring=np.ones(self.vision.templates['BOOST_SLOT'].shape[:2],np.uint8);ring[13:-13,13:-13]=0
+        self.vision.home_masks['BOOST_SLOT']=ring
         self.deadline=time.monotonic()+10*60
+
+    def boosts_active(self,frame):
+        return self.locate(frame,'slot',(425,955,1100,1080)) is not None
 
     def locate(self,frame,key,roi):
         return self.vision.locate(frame,'BOOST_'+key.upper(),roi)
@@ -199,25 +205,37 @@ class BoostsRunner(DungeonRunner):
         self.press((90,1010),'flag',(320,960,425,1060))
         self.wait(self.on('filter',(1070,180,1605,295)),10,'perfil')
         self.press((1338,238),'filter',(1070,180,1605,295))
-        self.wait(self.on('consumables',(980,535,1405,625)),10,'filtro')
-        self.press((1186,578),'consumables',(980,535,1405,625))
+        consumables=lambda f:next((k for k in ('consumables','consumables_selected') if self.locate(f,k,(980,535,1405,625)) is not None),None)
+        key=consumables(self.wait(consumables,10,'filtro'))  # el juego recuerda el filtro: puede verse ya seleccionado
+        self.press((1186,578),key,(980,535,1405,625))
         for kind in kinds:
             if not self.consume(kind):raise SafetyStop('Minor comprado ausente del inventario')
         self.press(PROFILE_CLOSE,'profile_close',(1590,55,1710,170))
         self.wait('HOME');self.missing=[]
 
+    def leave_profile(self):
+        """Al reanudar: cerrar el filtro y el perfil que hayan quedado abiertos (ensure_home no los conoce)."""
+        for _ in range(3):
+            frame=self.capture()
+            if any(self.locate(frame,k,(980,535,1405,625)) is not None for k in ('consumables','consumables_selected')):
+                self.check();self.io.click((1500,290));time.sleep(1);continue
+            if self.locate(frame,'filter',(1070,180,1605,295)) is not None and self.locate(frame,'profile_close',(1590,55,1710,170)) is not None:
+                self.press(PROFILE_CLOSE,'profile_close',(1590,55,1710,170));time.sleep(1);continue
+            return
+
     def run(self):
         self.missing=[]
-        self.ensure_home()
+        self.leave_profile();self.ensure_home()
         frame=self.wait(self.on('flag',(320,960,425,1060)),10,'Home con botón F')
-        if self.locate(frame,'active',(425,1038,1100,1075)) is not None:
+        if self.boosts_active(frame):
             self.log.emit('BOOSTS_STATUS',message='ya activos')
             return []
         self.press((90,1010),'flag',(320,960,425,1060))
         self.wait(self.on('filter',(1070,180,1605,295)),10,'perfil')
         self.press((1338,238),'filter',(1070,180,1605,295))
-        self.wait(self.on('consumables',(980,535,1405,625)),10,'filtro')
-        self.press((1186,578),'consumables',(980,535,1405,625))
+        consumables=lambda f:next((k for k in ('consumables','consumables_selected') if self.locate(f,k,(980,535,1405,625)) is not None),None)
+        key=consumables(self.wait(consumables,10,'filtro'))  # el juego recuerda el filtro: puede verse ya seleccionado
+        self.press((1186,578),key,(980,535,1405,625))
         missing=[BOOSTS[kind] for kind in BOOSTS if not self.consume(kind)]
         self.press(PROFILE_CLOSE,'profile_close',(1590,55,1710,170))
         self.wait('HOME')

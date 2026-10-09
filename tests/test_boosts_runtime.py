@@ -337,3 +337,16 @@ class BoostShopIconTests(unittest.TestCase):
             self.assertEqual(runner.locate(frames[name],'shop',(1700,60,1880,180)),(1715,78),name)
         for name in ('inventory_filter','gauntlet_window','shop_featured'):
             self.assertIsNone(runner.locate(frames[name],'shop',(1700,60,1880,180)),name)
+
+
+class BoostDetectionTests(unittest.TestCase):
+    def test_active_boosts_are_found_by_their_frame_whatever_the_bar_colour(self):
+        from unittest.mock import Mock
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frames={k:data[k] for k in data.files}
+        runner=BoostsRunner(Mock(),Mock(),DungeonVision(),Mock(),Mock())
+        for name,active in (('home_four_boosts',True),('home_boosts_yellow',True),('home_no_boosts',False),
+                            ('home_gvg_gauntlet',False),('home_gauntlet_steam',False)):
+            self.assertEqual(runner.boosts_active(frames[name]),active,name)
+        roi=(980,535,1405,625)
+        self.assertIsNotNone(runner.locate(frames['inventory_filter_selected'],'consumables_selected',roi))
+        self.assertIsNotNone(runner.locate(frames['inventory_filter'],'consumables',roi))
