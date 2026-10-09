@@ -12,6 +12,27 @@ from .gamescope import require_calibrated_client
 from .processes import Mutex,close_children
 from .telemetry import ROOT
 from .protocol import atomic_json
+from .retention import prune_runs
+
+
+class Heartbeat:
+    def __init__(self):
+        self.last=time.monotonic();self.stage=0;self.deadline=None
+
+    def progress(self):
+        if not self.stage:self.last=time.monotonic()
+
+    def check(self,worker,now=None):
+        now=time.monotonic() if now is None else now
+        if self.stage>=3:return True
+        if now < (self.deadline if self.stage else self.last+45*60):return bool(self.stage)
+        try:
+            if os.name=='nt' and self.stage:
+                worker.terminate() if self.stage==1 else worker.kill()
+            else:worker.send_signal((signal.SIGINT,signal.SIGTERM,getattr(signal,'SIGKILL',signal.SIGTERM))[self.stage])
+        except OSError:pass
+        self.stage+=1;self.deadline=now+30
+        return True
 
 MULTI_STATUS=ROOT/'runs/accounts/multi_status.json'
 
@@ -73,6 +94,7 @@ def start_trial(sessions,read_only=False):
 
 
 def run_trial(sessions,read_only=False):
+    prune_runs(ROOT)
     envs=validate_trial(sessions,read_only)
     lock=Mutex('MULTI_SUPERVISOR');workers=[];pending={};results={}
     try:
@@ -125,6 +147,7 @@ def start_farm(sessions):
 def run_farm(sessions):
     """Las cuentas recibidas a la vez: una parada de una cuenta no detiene a las demás.
     STOP (SIGINT al supervisor) detiene todos los motores propios."""
+    prune_runs(ROOT)
     envs=validate_farm(sessions)
     lock=Mutex('MULTI_SUPERVISOR');workers={};results={}
     status={'supervisor_pid':os.getpid(),'started':time.time(),'accounts':{
@@ -143,8 +166,10 @@ def run_farm(sessions):
             workers[account]=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all'],cwd=str(ROOT),env=env,
                                               stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
                                               text=True,start_new_session=True)
+        heartbeats={a:Heartbeat() for a in workers}
         def relay(account,worker):  # "== Modo" y "Modo: resultado" de cada cuenta, con su nombre delante
             for line in worker.stdout:
+                heartbeats[account].progress()
                 line=line.rstrip()
                 if line.startswith('== '):update(account,step=line[3:].split(' (')[0],detail=line[3:])
                 elif ': ' in line:
@@ -159,12 +184,15 @@ def run_farm(sessions):
         while pending:
             for account,worker in list(pending.items()):
                 code=worker.poll()
-                if code is None:continue
+                if code is None:
+                    if heartbeats[account].check(worker):update(account,state='PARADO',detail='sin progreso')
+                    continue
                 results[account]=code;del pending[account]
                 threads[list(workers).index(account)].join(timeout=2)
-                update(account,state='TERMINADO' if code==0 else 'PARADO',
+                update(account,state='PARADO' if heartbeats[account].stage else ('TERMINADO' if code==0 else 'PARADO'),
                        detail=status['accounts'][account]['detail'] or ('TERMINADO' if code==0 else f'Código {code}'))
-                print(f'{account_names()[account]}: '+('TERMINADO' if code==0 else f'PARADO (código {code})'),flush=True)
+                print(f'{account_names()[account]}: '+('PARADO (sin progreso)' if heartbeats[account].stage else
+                      ('TERMINADO' if code==0 else f'PARADO (código {code})')),flush=True)
             if pending:time.sleep(.1)
         for thread in threads:thread.join(timeout=2)
         return results

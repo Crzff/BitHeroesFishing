@@ -6,12 +6,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from fishing_core import farm_all
+from fishing_core import farm_all, gamescope  # Importar antes de los endpoints ficticios de cada prueba.
 from fishing_core.control_flow import SafetyStop
 from fishing_core.processes import Mutex
 
 
 def setUpModule():
+    from fishing_core import retention
+    retention_patcher=patch.object(retention,'prune_runs')
+    retention_patcher.start();unittest.addModuleCleanup(retention_patcher.stop)
     patcher=patch.object(farm_all.loot,'ENABLED',False)
     patcher.start();unittest.addModuleCleanup(patcher.stop)
 

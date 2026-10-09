@@ -87,6 +87,8 @@ def steps(config):
 
 
 def main(argv):
+    from .retention import prune_runs
+    prune_runs(ROOT)
     from .gamescope import is_gone,relaunch_game,require_calibrated_client
     from .processes import Mutex
     read_only='--stop-check' in argv

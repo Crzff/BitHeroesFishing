@@ -13,6 +13,11 @@ from unittest.mock import Mock,patch
 from fishing_core import farm_multi
 
 
+def setUpModule():
+    patcher=patch.object(farm_multi,'prune_runs')
+    patcher.start();unittest.addModuleCleanup(patcher.stop)
+
+
 def sessions():
     return {account:{'FARM_GAMESCOPE_DISPLAY':f':{12+i}','FARM_GAMESCOPE_SERIAL':str(4500+i),
                      **({'FARM_BRAVE_PID':str(1234+i),'FARM_BRAVE_CDP_PORT':str(45678+i),
@@ -87,6 +92,22 @@ class MultiFarmTests(unittest.TestCase):
                 patch.object(farm_multi.subprocess,'Popen',side_effect=[Mock(stdout=[],poll=Mock(return_value=0)) for _ in range(3)]), \
                 patch.object(farm_multi,'close_children'),patch.object(farm_multi,'atomic_json',side_effect=OSError),patch('builtins.print'):
             self.assertEqual(farm_multi.run_farm(sessions()),dict.fromkeys(sessions(),0))
+
+    def test_silent_worker_escalates_and_keeps_stopped_status_even_on_zero_exit(self):
+        worker=Mock(stdout=[]);worker.poll.side_effect=[None,None,None,0,0]
+        with patch.object(farm_multi,'require_calibrated_client'),patch.object(farm_multi,'Mutex'), \
+                patch.object(farm_multi.subprocess,'Popen',return_value=worker), \
+                patch.object(farm_multi,'close_children'),patch.object(farm_multi.time,'sleep'), \
+                patch.object(farm_multi.time,'monotonic',side_effect=[0,2700,2730,2760]),patch('builtins.print'):
+            self.assertEqual(farm_multi.run_farm({'steam':sessions()['steam']}),{'steam':0})
+        if os.name=='nt':
+            worker.send_signal.assert_called_once_with(signal.SIGINT)
+            worker.terminate.assert_called_once();worker.kill.assert_called_once()
+        else:
+            self.assertEqual([c.args[0] for c in worker.send_signal.call_args_list],
+                             [signal.SIGINT,signal.SIGTERM,signal.SIGKILL])
+        row=json.loads(self.status_path.read_text())['accounts']['steam']
+        self.assertEqual((row['state'],row['detail']),('PARADO','sin progreso'))
 
     def test_workers_keep_own_account_and_failure_does_not_stop_survivors(self):
         children=[Mock(stdout=['== Quest\n']) for _ in range(3)];data=sessions()

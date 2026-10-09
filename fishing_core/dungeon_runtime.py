@@ -118,6 +118,10 @@ class DungeonRunner:
         if parent and os.getppid()!=int(parent):raise SafetyStop('El panel terminó; no se continúa sin supervisor')
         if time.monotonic()>=self.deadline:raise SafetyStop(f'Límite de sesión: {SESSION_SECONDS//60} minutos')
 
+    def diagnostic_screenshots(self):
+        from .farm_config import load
+        return load().get('diagnostic_screenshots') is True
+
     def capture(self):
         self.check();shot=self.cap.grab({'left':0,'top':0,'width':1920,'height':1080})
         return np.frombuffer(shot.bgra,np.uint8).reshape(1080,1920,4)[:,:,:3].copy()
@@ -154,7 +158,7 @@ class DungeonRunner:
         screen=self.vision.screen(frame) if frame is not None else 'SIN_LECTURA'
         familiar=self.offer_name(frame) if screen=='FAMILIAR_OFFER' else None
         snapshot=None
-        if frame is not None:
+        if frame is not None and self.diagnostic_screenshots():
             clean=np.zeros_like(frame)
             boxes=[(645,90,1280,215),(1000,930,1420,1055)]
             if screen=='HOME':boxes += [(15,15,165,190),(1760,910,1920,1080)]
@@ -165,7 +169,7 @@ class DungeonRunner:
             for x,y,x1,y1 in boxes:clean[y:y1,x:x1]=frame[y:y1,x:x1]
             path=self.channel.directory/f'wait-timeout-{time.perf_counter_ns()}.png'
             try:
-                if cv2.imwrite(str(path),clean):snapshot=path.name
+                if cv2.imwrite(str(path),clean[100:]):snapshot=path.name
             except (cv2.error,OSError):pass  # La falta de evidencia nunca permite continuar.
         self.log.emit('DUNGEON_WAIT_TIMEOUT',expected=expected,screen=screen,familiar=familiar,
                       snapshot=snapshot,timeout_seconds=timeout)
@@ -600,7 +604,7 @@ class DungeonRunner:
             if screen=='MERCHANT':
                 self.decline_merchant();unknown_since=None;continue
             if screen=='FAMILIAR_OFFER':
-                cv2.imwrite(str(self.channel.directory/'familiar-offer.png'),frame[110:900,350:1600])
+                if self.diagnostic_screenshots():cv2.imwrite(str(self.channel.directory/'familiar-offer.png'),frame[110:900,350:1600])
                 if declined>=20:raise SafetyStop('Demasiadas ofertas de familiar; no se continúa')
                 if self.targets and self.offer_name(frame) is None:
                     # La oferta entra animada: esperar el nombre legible; uno desconocido sigue pausando.
@@ -636,7 +640,7 @@ class DungeonRunner:
                 return None if won else False
             if screen=='VICTORY':
                 frame=self.wait('VICTORY');self.record_loot()
-                cv2.imwrite(str(self.channel.directory/f'result-{cycle}.png'),frame[110:930,1070:1600])
+                if self.diagnostic_screenshots():cv2.imwrite(str(self.channel.directory/f'result-{cycle}.png'),frame[110:930,1070:1600])
                 atomic_json(self.channel.directory/f'result-{cycle}.json',
                             {'attempt_id':attempt,'outcome':'VICTORY','loot':None,'gold_gain':None,'xp_gain':None,
                              'closure_confirmed':False})
@@ -701,7 +705,7 @@ class DungeonRunner:
             elif screen not in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','LOADING'):
                 unknown_since=unknown_since or time.monotonic()
                 if time.monotonic()-unknown_since>8:
-                    cv2.imwrite(str(self.channel.directory/'unknown.png'),frame[100:915,320:1600])
+                    if self.diagnostic_screenshots():cv2.imwrite(str(self.channel.directory/'unknown.png'),frame[100:915,320:1600])
                     raise SafetyStop('Pantalla/oferta/derrota no reconocida: pausa sin Persuade ni gasto')
             if screen in ('AUTO_ON','AUTO_ON_BATTLE','BATTLE_VICTORY','STORY_ZORUL','STORY','LOADING'):unknown_since=None
             time.sleep(.12)

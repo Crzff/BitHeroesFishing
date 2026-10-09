@@ -26,6 +26,7 @@ from .dungeon_catalog import CATALOG, FAMILIARS, dungeon
 from .dungeon_runtime import NODES
 from .raid_runtime import RAID_TIER, RAIDS
 from .telemetry import ROOT
+from .retention import RotatingLog
 from .accounts import NAMES as ACCOUNT_NAMES,runs_root,state_root,load_accounts,add_account,remove_account
 from .browser_launcher import launch_browser,write_session
 
@@ -597,7 +598,7 @@ class FarmApp(tk.Tk):
         trial=getattr(self,'sessions',None) is not None
         steps=('Runas captura','Quest','Runas Item Find','PvP','World Boss','Raid','Expedition','Trials',*ACCOUNT_NAMES.values());results=[]
         path=runs_root(ROOT)/('farm_multi.log' if trial else 'farm_all.log');path.parent.mkdir(parents=True,exist_ok=True)
-        log=open(path,'a',encoding='utf-8')  # causa de cada parada, para revisarla después
+        log=RotatingLog(path)  # causa de cada parada, para revisarla después
         log.write(f'\n--- {time.strftime("%Y-%m-%d %H:%M:%S")} inicio pid {process.pid}\n');log.flush()
         multi=getattr(self,'multi',None) is not None and not trial
         for line in process.stdout:

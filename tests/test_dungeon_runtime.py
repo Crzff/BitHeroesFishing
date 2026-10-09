@@ -381,6 +381,8 @@ class DungeonRuntimeTests(unittest.TestCase):
             self.assertEqual(event.kwargs['screen'],'FAMILIAR_OFFER')
             self.assertEqual(event.kwargs['familiar'],'Sitra')
             snapshot=cv2.imread(str(path/event.kwargs['snapshot']))
+            self.assertEqual(snapshot.shape[0],980)
+            snapshot=cv2.copyMakeBorder(snapshot,100,0,0,0,cv2.BORDER_CONSTANT,value=0)
             self.assertEqual(runner.vision.familiar_name(snapshot),'Sitra')
             self.assertFalse(snapshot[800:900,200:300].any())
             self.assertEqual(len(list(path.glob('wait-timeout-*.png'))),1)
@@ -396,6 +398,18 @@ class DungeonRuntimeTests(unittest.TestCase):
                 runner.capture.assert_called_once();runner.log.emit.assert_not_called()
                 self.assertEqual(list(Path(tmp).iterdir()),[])
                 io.click.assert_not_called()
+
+    def test_disabled_diagnostic_still_stops_without_writing_png(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,_=self.runner(Path(tmp))
+            runner.capture=Mock(return_value=np.zeros((1080,1920,3),np.uint8))
+            with patch('fishing_core.farm_config.load',return_value={'diagnostic_screenshots':False}), \
+                    patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=[0,1,3]), \
+                    patch('fishing_core.dungeon_runtime.time.sleep'), \
+                    patch('fishing_core.dungeon_runtime.cv2.imwrite') as write:
+                with self.assertRaises(SafetyStop):DungeonRunner.wait(runner,'HOME',timeout=2)
+            write.assert_not_called();io.click.assert_not_called()
+            self.assertIsNone(runner.log.emit.call_args.kwargs['snapshot'])
 
     def test_wait_remains_stopped_without_a_frame_or_when_evidence_cannot_be_written(self):
         import cv2

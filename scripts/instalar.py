@@ -9,6 +9,12 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def install_command(python):
+    lock=ROOT/'requirements.lock'
+    return [str(python),'-m','pip','install',*(['--require-hashes'] if lock.is_file() else []),
+            '-r',str(lock if lock.is_file() else ROOT/'requirements.txt')]
+
+
 def main():
     if os.name != "nt" or sys.version_info[:2] != (3, 13) or struct.calcsize("P") != 8:
         print("Se necesita Windows y Python 3.13 de 64 bits, con Tcl/Tk y pip.")
@@ -26,7 +32,7 @@ def main():
                 print(".venv existe pero esta incompleto. No se sobrescribe; revisalo o usa una carpeta nueva.")
                 return 1
             subprocess.run([sys.executable, "-m", "venv", str(environment)], check=True)
-        subprocess.run([str(python), "-m", "pip", "install", "-r", str(ROOT / "requirements.txt")],
+        subprocess.run(install_command(python),
                        cwd=ROOT, check=True)
         subprocess.run([str(python), "-m", "pip", "check"], cwd=ROOT, check=True)
     except (OSError, subprocess.CalledProcessError) as exc:

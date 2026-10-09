@@ -18,6 +18,7 @@ from importlib import metadata
 
 from . import VERSION
 from .accounts import account_id, runs_root, state_root, private_directory, private_file
+from .retention import RotatingLog
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_FIELDS = ["schema","run_id","cycle_id","attempt_id","track_id","utc","perf_ns",
@@ -113,9 +114,9 @@ class Telemetry:
 
     def _write(self):
         try:
-            with private_file(self.path) as events, private_file(self.legacy_log
-            ) as legacy, private_file(self.directory / f"{self.role.lower()}_samples_R1.csv",
-                "w",newline=""
+            with RotatingLog(self.path) as events, RotatingLog(self.legacy_log
+            ) as legacy, RotatingLog(self.directory / f"{self.role.lower()}_samples_R1.csv",
+                newline=""
             ) as samples:
                 csv_writer=csv.DictWriter(samples,fieldnames=SAMPLE_FIELDS,extrasaction="ignore")
                 csv_writer.writeheader()
