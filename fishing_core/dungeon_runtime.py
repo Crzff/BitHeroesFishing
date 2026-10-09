@@ -624,14 +624,17 @@ class DungeonRunner:
                     if sent or self.vision.screen(self.capture())=='FAMILIAR_OFFER':raise
                     self.log.emit('FAMILIAR_OFFER_GONE',message='La oferta se cerró sola antes de decidir; se sigue');unknown_since=None;continue
                 declined+=1;unknown_since=None;continue
-            if screen=='WB_DEFEAT' and getattr(self,'defeat_continues',False):
-                # Expedition/Trials: perder es normal. Cerrar con TOWN y seguir gastando.
-                frame=self.wait('WB_DEFEAT');x,y=self.vision.locate(frame,'RESULT_TOWN',(700,915,1500,1080))
+            if screen in ('WB_DEFEAT','WB_VICTORY') and getattr(self,'defeat_continues',False):
+                # Expedition/Trials: perder es normal. Gauntlet también gana con este estilo. Cerrar con TOWN y seguir.
+                won=screen=='WB_VICTORY';frame=self.wait(screen)
+                if won:self.record_loot()
+                x,y=self.vision.locate(frame,'RESULT_TOWN',(700,915,1500,1080))
                 h,w=self.vision.templates['RESULT_TOWN'].shape[:2]
-                self.click('WB_DEFEAT',(x+w//2,y+h//2),'RESULT_TOWN',(700,915,1500,1080));self.go_home()
-                self.budget.finish_run(attempt,'DEFEAT',closure_confirmed=True)
-                self.log.emit('DUNGEON_COMPLETE',message=f'Run {cycle}: derrota (normal en este modo)',budget=self.budget.payload())
-                return False
+                self.click(screen,(x+w//2,y+h//2),'RESULT_TOWN',(700,915,1500,1080));self.go_home()
+                self.budget.finish_run(attempt,'VICTORY' if won else 'DEFEAT',closure_confirmed=True)
+                self.log.emit('DUNGEON_COMPLETE',message=f'Run {cycle}: '+('victoria' if won else 'derrota (normal en este modo)'),
+                              budget=self.budget.payload())
+                return None if won else False
             if screen=='VICTORY':
                 frame=self.wait('VICTORY');self.record_loot()
                 cv2.imwrite(str(self.channel.directory/f'result-{cycle}.png'),frame[110:930,1070:1600])

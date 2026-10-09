@@ -220,7 +220,8 @@ class DungeonVision:
         """Ventanas del World Boss; cada una exige título y botón propios."""
         if self.locate(frame,'RESULT_TOWN',(700,915,1500,1080)):
             if self.locate(frame,'WB_DEFEAT',(760,75,1160,230)):return 'WB_DEFEAT'
-            if 'WB_VICTORY' in self.templates and self.locate(frame,'WB_VICTORY',(760,75,1160,230)):return 'WB_VICTORY'
+            # Gauntlet (Steam): mismo banner sobre otro fondo, 0,94; TOWN ya se exige arriba.
+            if 'WB_VICTORY' in self.templates and self.locate(frame,'WB_VICTORY',(760,75,1160,230),.92,max_diff=12):return 'WB_VICTORY'
         if self.locate(frame,'WB_START',(695,905,1140,1065)):  # START solo existe en la sala (cualquier jefe)
             return 'WB_LOBBY'
         if self.locate(frame,'WB_SUMMON_TITLE',(790,185,1190,325)) and self.locate(frame,'WB_SUMMON_BUTTON',(975,760,1290,925)):

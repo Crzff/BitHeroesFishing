@@ -107,7 +107,8 @@ class TrialsRunner(DungeonRunner):
             top=max(n for _,n in levels);bottom=min(n for _,n in levels)
             if bottom<=target<=top:return None  # debería verse: no está en la lista
             gap=bottom-target if target<bottom else target-top  # niveles que faltan
-            steps=1 if per is None else max(1,min(40,int(gap/per)))
+            # En vivo (Gauntlet, FMANI) 1 paso no mueve la lista y 5 mueven 4 filas: sondear con 5.
+            steps=max(2,min(5,gap)) if per is None else max(2,min(40,int(gap/per)))
             if target>top:steps=-steps
             self.wheel(steps);after=self.vision.trials_levels(self.capture())
             if not after:return None
@@ -160,6 +161,9 @@ class TrialsRunner(DungeonRunner):
             raise SafetyStop('Trial ya reservado; no repetir PLAY')
         atomic_json(self.channel.directory/f'trials-{cycle}.intent.json',{'attempt_id':attempt,'tokens':balance,'effect_confirmed':False})
         self.press(self.event_screen(),PLAY);self.press('TEAM',ACCEPT)
+        # KORTZZ (T4) no llena el equipo: el juego pregunta; pelear igual, como en PvP/World Boss.
+        frame=self.wait(lambda f:self.vision.screen(f)!='TEAM',10,'equipo aceptado')
+        if self.vision.screen(frame)=='WB_NOT_FULL':self.click('WB_NOT_FULL',(816,750),'DECLINE_YES',(670,695,955,805))
         self.log.emit('TRIALS_STARTED',attempt_id=attempt,tokens_before=balance,cost=self.cost)
         return attempt
 

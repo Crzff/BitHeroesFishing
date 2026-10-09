@@ -13,14 +13,14 @@ from fishing_core.dungeon_vision import DungeonVision
 from fishing_core.trials_runtime import TrialsRunner
 
 with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
-    FRAMES={k:data[k] for k in data.files if k.startswith(('trials_','pvp_team','gauntlet_','home_gvg'))}
+    FRAMES={k:data[k] for k in data.files if k.startswith(('trials_','pvp_team','gauntlet_','home_gvg','boss_not_full'))}
 VISION=DungeonVision()
 
 
 class FakeGame:
     """El coste se simula aparte: las capturas solo muestran 5 y el menú."""
     def __init__(self):
-        self.state='trials_home';self.cost=5;self.plays=[]
+        self.state='trials_home';self.cost=5;self.plays=[];self.not_full=False
 
     def click(self,xy):
         xy=tuple(xy)
@@ -28,7 +28,8 @@ class FakeGame:
         elif self.state=='trials_window' and xy==(1370,416):self.state='trials_cost_menu'
         elif self.state=='trials_cost_menu' and xy[0]==930:self.cost=(xy[1]-316)//128+1;self.state='trials_window'
         elif self.state=='trials_window' and xy==(1280,580):self.plays.append(self.cost);self.state='pvp_team'
-        elif self.state=='pvp_team' and xy==(1215,982):self.state='battle'
+        elif self.state=='pvp_team' and xy==(1215,982):self.state='boss_not_full' if self.not_full else 'battle'
+        elif self.state=='boss_not_full' and xy==(816,750):self.state='battle'
         elif self.state=='trials_window' and xy==(1490,236):self.state='trials_home'
         else:raise AssertionError((self.state,xy))
 
@@ -57,6 +58,36 @@ class TrialsRuntimeTests(unittest.TestCase):
         game=FakeGame();runner=self.run_trials(game,[7,2,0])
         self.assertEqual(game.plays,[5,2]);self.assertEqual(game.state,'trials_home')
         self.assertEqual(runner.budget.energy_reserved,7);self.assertEqual(runner.budget.gold_reserved,0)
+
+    def test_gauntlet_victory_banner_closes_the_run_with_town(self):
+        tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);path=Path(tmp.name)
+        state={'screen':'gauntlet_victory'};clicks=[]
+        def click(xy):
+            clicks.append(tuple(xy));assert state['screen']=='gauntlet_victory';state['screen']='gauntlet_window'
+        io=Mock();io.click.side_effect=click
+        runner=TrialsRunner(io,Mock(),VISION,SimpleNamespace(directory=path,run_id='t',stop_path=path/'s.json'),Mock(),1)
+        runner.capture=lambda:FRAMES[state['screen']];runner.record_loot=Mock()
+        runner.budget.reserve_entry('t:1',resource='TOKENS',balance=5,cost=5)
+        fake=SimpleNamespace(monotonic=lambda:0.0,sleep=lambda s:None,perf_counter_ns=lambda:0)
+        with patch('fishing_core.dungeon_runtime.time',fake),patch('fishing_core.trials_runtime.time',fake):
+            runner.observe('t:1',1)
+        self.assertEqual(state['screen'],'gauntlet_window');self.assertEqual(len(clicks),1);runner.record_loot.assert_called_once()
+        self.assertEqual(runner.budget.payload()['completed_runs'],1)
+
+    def test_incomplete_team_warning_is_accepted(self):
+        game=FakeGame();game.not_full=True;self.run_trials(game,[5,0])
+        self.assertEqual(game.plays,[5]);self.assertEqual(game.state,'trials_home')
+
+    def test_level_list_where_one_wheel_step_does_not_move_is_still_crossed(self):
+        # En vivo (Gauntlet, FMANI 440-751): n pasos de rueda mueven n-1 filas; 1 paso no mueve.
+        for target in (499,749,441):
+            runner=TrialsRunner.__new__(TrialsRunner);top=[751]
+            runner.capture=lambda:None
+            runner.vision=SimpleNamespace(trials_levels=lambda f:[(317+128*i,top[0]-i) for i in range(5)])
+            def wheel(n):top[0]=max(444,min(751,top[0]-(abs(n)-1)*(1 if n>0 else -1)))
+            runner.wheel=wheel
+            with patch('fishing_core.trials_runtime.time',SimpleNamespace(sleep=lambda s:None)):
+                self.assertIsNotNone(runner.scroll_to_level(target),target)
 
     def menu_runner(self,target):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);path=Path(tmp.name)
