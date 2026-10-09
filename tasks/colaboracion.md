@@ -25,3 +25,4 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
 - t3 (Codex): huecos de runa vacíos (INSERT) se saltan; 493 OK.
 - t4 (Codex, timeout 124 pero diff completo): Mercader → DECLINE; 495 OK.
 - t5 (Codex, timeout 124 con diff completo): SETTINGS ampliado, IDLE_PROMPT, EVENT_WINDOW; 500 OK.
+- Claude: CDP de Brave fallaba al cargar escenas (Unity bloquea el iframe >1,5 s); timeouts 8 s/30 s. En vivo: KORTZZ completa dungeon + RERUN, FMANI rechaza familiares; ajustes aplicados en las 3 cuentas.
