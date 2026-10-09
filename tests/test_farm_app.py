@@ -152,7 +152,10 @@ class FarmAppTrialTests(unittest.TestCase):
             for x,y,x1,y1,action in app.zones:
                 self.assertTrue(0<=x<x1<=farm_app.W and 0<=y<y1<=farm_app.H)
             x,y,x1,y1,_=app.zones[-1]
+            app.pending_clicks=[];app.pressed_zones=set();app.click_job=None;app.present=Mock();app.after=Mock()
+            app.flush_clicks=MethodType(farm_app.FarmApp.flush_clicks,app)
             farm_app.FarmApp.on_click(app,SimpleNamespace(x=(x+x1)//2,y=(y+y1)//2))
+            farm_app.FarmApp.flush_clicks(app)
             app.toggle_run.assert_called_once_with();app.quit_app.assert_not_called()
 
     def test_trial_start_uses_supervisor_without_saving_or_launching_legacy_modes(self):
@@ -373,7 +376,9 @@ class FarmAppClickTests(unittest.TestCase):
         """Pulsa el centro de la primera zona cuya acción cumple predicate."""
         from types import SimpleNamespace
         for x0,y0,x1,y1,action in self.app.zones:
-            if predicate(action):self.app.on_click(SimpleNamespace(x=(x0+x1)//2,y=(y0+y1)//2));return
+            if predicate(action):
+                self.app.on_click(SimpleNamespace(x=(x0+x1)//2,y=(y0+y1)//2))
+                self.app.after_cancel(self.app.click_job);self.app.flush_clicks();return
         self.fail('zona no encontrada')
 
     def by_default(self,name,value=None):
@@ -425,5 +430,65 @@ class FarmAppClickTests(unittest.TestCase):
     def test_every_screen_renders(self):
         for screen in ('main','quest','boss','raid','trials','pvp','expedition','loot'):
             self.app.screen=screen;self.app.render();self.assertTrue(self.app.zones)
+
+class FarmAppAnimationTests(unittest.TestCase):
+    def make_app(self):
+        from types import SimpleNamespace,MethodType
+        from unittest.mock import Mock
+        from fishing_core.farm_app import FarmApp
+        app=SimpleNamespace(pending_clicks=[],pending_wheel=[],click_job=None,wheel_job=None,
+                            pressed_zones=set(),hover_zone=None,zones=[],wheel_zone=(0,0,100,100),
+                            tier_scroll=0,raid_scroll=0,after=Mock(return_value='job'),render=Mock(),present=Mock())
+        for name in ('on_click','flush_clicks','on_wheel','flush_wheel','scroll_tiers','scroll_raids','on_hover'):
+            setattr(app,name,MethodType(getattr(FarmApp,name),app))
+        return app
+
+    def test_fifty_wheel_events_schedule_one_render_and_keep_all_steps(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from fishing_core.farm_app import FarmApp
+        for kind in ('tiers','raids','trials'):
+            app=self.make_app()
+            if kind=='trials':
+                from types import MethodType
+                app.config_data={'trials':{'difficulty':700}};app.save=Mock()
+                app.wheel_action=MethodType(FarmApp.step_level,app)
+            else:app.wheel_action=app.scroll_tiers if kind=='tiers' else app.scroll_raids
+            for _ in range(50):app.on_wheel(SimpleNamespace(x=10,y=10),1)
+            app.after.assert_called_once_with(16,app.flush_wheel);app.render.assert_not_called()
+            app.flush_wheel();self.assertLessEqual(app.render.call_count,2)
+            self.assertEqual(app.config_data['trials']['difficulty'] if kind=='trials' else
+                             app.tier_scroll if kind=='tiers' else app.raid_scroll,750 if kind=='trials' else 50)
+            self.assertIsNone(app.wheel_job)
+
+    def test_click_burst_sinks_once_then_runs_every_action_and_renders_once(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        app=self.make_app();action=Mock();app.zones=[(0,0,30,30,action)]
+        for _ in range(50):app.on_click(SimpleNamespace(x=10,y=10))
+        action.assert_not_called();app.present.assert_called_once_with()
+        self.assertEqual(app.pressed_zones,{(0,0,30,30)})
+        app.after.assert_called_once_with(90,app.flush_clicks)
+        app.flush_clicks();self.assertEqual(action.call_count,50)
+        app.render.assert_called_once_with();self.assertFalse(app.pressed_zones)
+
+    def test_hover_only_presents_when_zone_changes(self):
+        from types import SimpleNamespace
+        app=self.make_app();app.zones=[(0,0,30,30,lambda:None)]
+        for _ in range(50):app.on_hover(SimpleNamespace(x=10,y=10))
+        app.present.assert_called_once_with();app.render.assert_not_called()
+        app.on_hover(None);self.assertEqual(app.present.call_count,2)
+
+    def test_present_darkens_and_moves_pressed_zone_four_pixels(self):
+        from unittest.mock import Mock,patch
+        from PIL import Image
+        from fishing_core import farm_app
+        app=self.make_app();app.img=Image.new('RGBA',(50,50),(25,40,58,255));app.canvas=Mock()
+        app.img.paste((200,100,60,255),(10,10,20,20));app.zones=[(10,10,20,20,lambda:None)]
+        app.pressed_zones={(10,10,20,20)}
+        with patch.object(farm_app.ImageTk,'PhotoImage',side_effect=lambda img:img.copy()):
+            farm_app.FarmApp.present(app)
+        self.assertEqual(app.photo.getpixel((10,10)),(25,40,58,255))
+        self.assertEqual(app.photo.getpixel((10,14)),(164,82,49,255))
 
 if __name__=='__main__':unittest.main()

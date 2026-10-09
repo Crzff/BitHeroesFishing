@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT=Path(__file__).resolve().parent.parent
 FONT=ROOT/'assets/fonts/Silkscreen-Bold.ttf'
 ICONS=ROOT/'assets/ui'
+WEEKLY={'expedition':'GVG','trials':'GAUNTLET'}
 
 # Paleta tomada de la ventana SETTINGS del juego.
 OUTLINE=(16,20,28)
@@ -176,13 +177,16 @@ def loot_button(w=150,h=150):
     """Botón LOOT con el cofre del juego."""
     base,light,dark=COLORS['orange'];img=Image.new('RGBA',(w,h),(0,0,0,0))
     bands(img,(0,0,w-1,h-1),OUTLINE,[light],[base],[dark],[base],base,px=5)
-    chest=Image.open(ICONS/'res/chest.png').convert('RGBA');chest=chest.resize((w-40,round(chest.height*(w-40)/chest.width)),Image.NEAREST)
+    chest=Image.open(ICONS/'res/chest.png').convert('RGBA');chest=chest.crop(chest.getbbox())
+    chest=chest.resize((w-40,round(chest.height*(w-40)/chest.width)),Image.NEAREST)
     img.alpha_composite(chest,(round(w/2-visual_center(chest)),10));t=text('LOOT',28);img.alpha_composite(t,((w-t.width)//2,h-t.height-12))
     return img
 
 
 @lru_cache(maxsize=None)
 def icon(name,height=110):
+    weekly=WEEKLY.get(name,'').lower()
+    if weekly and (ICONS/f'{weekly}.png').exists():name=weekly
     img=Image.open(ICONS/f'{name}.png').convert('RGBA');img=img.crop(img.getbbox())  # centrado real
     scale=height/img.height
     return img.resize((round(img.width*scale),height),Image.NEAREST)

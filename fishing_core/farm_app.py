@@ -16,7 +16,7 @@ import time
 import tkinter as tk
 from pathlib import Path
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageEnhance
 
 from . import farm_config, loot, pixel_ui as ui
 from .boss_runtime import BOSSES
@@ -33,7 +33,9 @@ ACCOUNT_TABS=(('steam','STEAM'),('personal','FMANI'),('perfil-1','KORTZZ'))
 
 W,H=1180,1030
 NAMES={'quest':'QUEST','pvp':'PVP','boss':'WORLD BOSS','raid':'RAID','expedition':'EXPEDITION','trials':'TRIALS'}
-INFO={'expedition':['EVENTO SEMANAL: IDOL DIMENSION','5 BADGES, BAJA HASTA 1','NUNCA COMPRA BADGES','UNA DERROTA NO DETIENE']}
+WEEKLY=ui.WEEKLY
+NAMES.update(WEEKLY)
+INFO={'expedition':[f"EVENTO SEMANAL: {WEEKLY['expedition']}",'5 BADGES, BAJA HASTA 1','NUNCA COMPRA BADGES','UNA DERROTA NO DETIENE']}
 CALIBRATED=set(NODES)
 ZONES=sorted({row['zone'] for row in CATALOG})
 DIFFICULTY_COLORS=(('NORMAL','blue'),('HARD','green'),('HEROIC','orange'))
@@ -71,6 +73,9 @@ class FarmApp(tk.Tk):
         self.title('Bit Heroes Farm Bot');self.resizable(False,False);self.configure(bg='#19283a')
         self.canvas=tk.Canvas(self,width=W,height=H,highlightthickness=0,bg='#19283a');self.canvas.pack()
         self.canvas.bind('<Button-1>',self.on_click);self.tier_scroll=0;self.wheel_zone=None
+        self.pending_clicks=[];self.pending_wheel=[];self.click_job=None;self.wheel_job=None
+        self.hover_zone=None;self.pressed_zones=set()
+        self.canvas.bind('<Motion>',self.on_hover);self.canvas.bind('<Leave>',lambda e:self.on_hover(None))
         for event,step in (('<Button-4>',-1),('<Button-5>',1)):self.canvas.bind(event,lambda e,s=step:self.on_wheel(e,s))
         self.canvas.bind('<MouseWheel>',lambda e:self.on_wheel(e,-1 if e.delta>0 else 1))
         self.sessions=sessions;self.read_only=read_only;self.config_data=farm_config.load();self.screen='main';self.process=None
@@ -135,7 +140,24 @@ class FarmApp(tk.Tk):
         self.img=Image.new('RGBA',(W,H),(25,40,58,255));self.zones=[];self.wheel_zone=None
         screens=("main","quest","boss","raid","trials","pvp","loot")
         getattr(self,f'draw_{self.screen if self.screen in screens else "info"}')()
-        self.photo=ImageTk.PhotoImage(self.img);self.canvas.delete('all');self.canvas.create_image(0,0,anchor='nw',image=self.photo)
+        self.present()
+
+    def present(self):
+        """Animar las zonas sobre el dibujo ya calculado, sin reconstruir el panel."""
+        img=self.img.copy()
+        for x0,y0,x1,y1,_ in self.zones:
+            box=(int(x0),int(y0),int(x1),int(y1))
+            pressed=box in self.pressed_zones
+            if pressed or box==self.hover_zone:
+                tile=self.img.crop(box);tile=ImageEnhance.Brightness(tile).enhance(.82 if pressed else 1.10)
+                if pressed:img.paste((25,40,58,255),box)
+                img.alpha_composite(tile,(box[0],box[1]+(4 if pressed else 0)))
+        self.photo=ImageTk.PhotoImage(img);self.canvas.delete('all');self.canvas.create_image(0,0,anchor='nw',image=self.photo)
+
+    def on_hover(self,event):
+        box=next((tuple(map(int,z[:4])) for z in reversed(self.zones)
+                  if event and z[0]<=event.x<z[2] and z[1]<=event.y<z[3]),None)
+        if box!=self.hover_zone:self.hover_zone=box;self.present()
 
     def window(self,title,back=True,style='settings',art=None,dim=0):
         """Marco real del juego; devuelve la caja útil (x0,y0,x1,y1) dentro de su panel."""
@@ -286,7 +308,7 @@ class FarmApp(tk.Tk):
                      rx+(i%2)*((x1-rx+8)//2),y0+452+(i//2)*54,lambda v=value:self.set_raid_gold(v))
 
     def draw_trials(self):
-        x0,y0,x1,y1=self.window('TRIALS');level=int(self.config_data['trials']['difficulty']);current=trials_range(level)
+        x0,y0,x1,y1=self.window(NAMES['trials']);level=int(self.config_data['trials']['difficulty']);current=trials_range(level)
         self.label('DIFICULTAD · AZUL = OBJETOS DE SET',x0,y0,18,ui.GOLD);cw=(x1-x0-20)//2
         for i,span in enumerate(TRIALS_RANGES):
             tier,low,high,color=span;x=x0+(i//11)*(cw+20);y=y0+32+(i%11)*48
@@ -295,6 +317,7 @@ class FarmApp(tk.Tk):
         by=y0+32+11*48+14;self.label(f'NIVEL {level}',x0,by+12,26,TEXT_COLORS[current[3]])
         for i,(text,delta) in enumerate((('-10',-10),('-1',-1),('+1',1),('+10',10))):
             self.put(ui.button(text,120,56,'blue',22),x1-4*134+14+i*134,by,lambda d=delta:self.step_level(d))
+        self.wheel_zone=(x0,by,x1,by+56);self.wheel_action=self.step_level
         self.label('5 TOKENS, BAJA HASTA 1 · NUNCA COMPRA · DERROTA NO DETIENE',x0,y1-18,13,ui.DIM)
 
     def draw_pvp(self):
@@ -311,7 +334,7 @@ class FarmApp(tk.Tk):
 
     def draw_info(self):
         mode=self.screen;x0,y0,x1,y1=self.window(NAMES[mode]);cx=(x0+x1)//2
-        icon=ui.icon(mode,150);self.put(icon,cx-icon.width//2,y0+20)
+        icon=ui.icon(mode,150);self.put(icon,round(cx-ui.visual_center(icon)),y0+20)
         for i,line in enumerate(INFO[mode]):self.label(line,cx,y0+220+i*46,20,center=True)
 
     def draw_loot(self):
@@ -354,7 +377,17 @@ class FarmApp(tk.Tk):
     # --- acciones ---------------------------------------------------------------
     def on_click(self,event):
         for x0,y0,x1,y1,action in reversed(self.zones):
-            if x0<=event.x<x1 and y0<=event.y<y1:action();self.render();return
+            if x0<=event.x<x1 and y0<=event.y<y1:
+                self.pending_clicks.append(action);box=tuple(map(int,(x0,y0,x1,y1)))
+                if box not in self.pressed_zones:self.pressed_zones.add(box);self.present()
+                if self.click_job is None:self.click_job=self.after(90,self.flush_clicks)
+                return
+
+    def flush_clicks(self):
+        actions=self.pending_clicks;self.pending_clicks=[];self.click_job=None
+        self.pressed_zones.clear();self.hover_zone=None
+        for action in actions:action()
+        self.render()
 
     def config_path(self):
         return state_root(ROOT,{'FARM_ACCOUNT':self.account})/'farm_config.json' if self.multi else None
@@ -422,7 +455,14 @@ class FarmApp(tk.Tk):
 
     def on_wheel(self,event,step):
         z=self.wheel_zone
-        if z and z[0]<=event.x<z[2] and z[1]<=event.y<z[3]:getattr(self,'wheel_action',self.scroll_tiers)(step);self.render()
+        if z and z[0]<=event.x<z[2] and z[1]<=event.y<z[3]:
+            self.pending_wheel.append((getattr(self,'wheel_action',self.scroll_tiers),step))
+            if self.wheel_job is None:self.wheel_job=self.after(16,self.flush_wheel)
+
+    def flush_wheel(self):
+        steps=self.pending_wheel;self.pending_wheel=[];self.wheel_job=None
+        for action,step in steps:action(step)
+        self.render()
 
     def set_tier(self,tier):self.config_data['boss']['tier']=tier;self.save()
     def set_boss_difficulty(self,level):self.config_data['boss']['difficulty']=level.title();self.save()
