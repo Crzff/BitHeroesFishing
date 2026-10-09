@@ -122,7 +122,12 @@ def require_closed_profile(profile,proc=Path('/proc')):
     for p in proc.iterdir():
         if not p.name.isdecimal():continue
         try:
-            if p.stat().st_uid!=os.getuid() or (p/'exe').readlink().name.removesuffix(' (deleted)') not in ('brave','brave-browser'):continue
+            if p.stat().st_uid!=os.getuid():continue
+            try:exe=(p/'exe').readlink().name.removesuffix(' (deleted)')
+            except PermissionError:  # p. ej. systemd --user: exe ilegible; comm siempre se lee
+                if not any(n in (p/'comm').read_text() for n in ('brave','chrom')):continue
+                raise
+            if exe not in ('brave','brave-browser'):continue
             with (p/'cmdline').open('rb') as stream:raw=stream.read(65537)
             if len(raw)>65536 or not raw.endswith(b'\0'):raise ValueError
             argv=[os.fsdecode(a) for a in raw[:-1].split(b'\0')]
