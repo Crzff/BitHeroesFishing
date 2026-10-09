@@ -35,6 +35,10 @@ class BoostsRunner(DungeonRunner):
                 template=cv2.imread(str(Path(__file__).resolve().parent.parent/f'assets/boost_{key}.png'))
                 if template is None:raise SafetyStop(f'Plantilla {name} no disponible')
                 self.vision.templates[name]=template
+        # El cofre y el cartel FREE de la tienda se animan: comparar solo píxeles comunes a las variantes reales.
+        shop=self.vision.templates['BOOST_SHOP'];towns=[cv2.imread(str(Path(__file__).resolve().parent.parent/f'assets/boost_shop_town{i}.png')) for i in (1,2)]
+        if all(t is not None and t.shape==shop.shape for t in towns):
+            self.vision.home_masks['BOOST_SHOP']=np.all([np.all(shop==t,axis=2) for t in towns],axis=0).astype(np.uint8)
         self.deadline=time.monotonic()+10*60
 
     def locate(self,frame,key,roi):

@@ -314,3 +314,16 @@ class BoostsShopTests(unittest.TestCase):
         with self.assertRaises(SafetyStop):runner.buy_missing(missing)
         self.assertEqual(game.clicks[-1],(814,748));self.assertEqual(game.bought,['item_find'])
         self.assertFalse(any(event=='BOOST_BOUGHT' for event,_ in game.events))
+
+
+class BoostShopIconTests(unittest.TestCase):
+    def test_animated_shop_icon_is_found_on_every_home_and_nowhere_else(self):
+        from unittest.mock import Mock
+        from fishing_core.dungeon_vision import DungeonVision
+        from fishing_core.boosts_runtime import BoostsRunner
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frames={k:data[k] for k in data.files}
+        runner=BoostsRunner(Mock(),Mock(),DungeonVision(),Mock(),Mock())
+        for name in ('home_no_boosts','home_four_boosts','home_gvg_gauntlet','home_gauntlet_steam'):
+            self.assertEqual(runner.locate(frames[name],'shop',(1700,60,1880,180)),(1715,78),name)
+        for name in ('inventory_filter','gauntlet_window','shop_featured'):
+            self.assertIsNone(runner.locate(frames[name],'shop',(1700,60,1880,180)),name)
