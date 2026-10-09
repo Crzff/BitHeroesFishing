@@ -5,11 +5,15 @@ import signal
 import subprocess
 import sys
 import time
+import threading
 
 from .accounts import NAMES,account_id,brave_target,gamescope_target
 from .gamescope import require_calibrated_client
 from .processes import Mutex,close_children
 from .telemetry import ROOT
+from .protocol import atomic_json
+
+MULTI_STATUS=ROOT/'runs/accounts/multi_status.json'
 
 DISPLAY_KEYS={'FARM_GAMESCOPE_DISPLAY','FARM_GAMESCOPE_SERIAL'}
 BRAVE_KEYS={'FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT','FARM_BRAVE_TARGET_ID'}
@@ -119,15 +123,31 @@ def run_farm(sessions):
     STOP (SIGINT al supervisor) detiene los tres motores propios."""
     envs=validate_farm(sessions)
     lock=Mutex('MULTI_SUPERVISOR');workers={};results={}
+    status={'supervisor_pid':os.getpid(),'started':time.time(),'accounts':{
+        a:{'name':NAMES[a],'step':'Iniciando','state':'EN MARCHA','detail':'','updated':time.time()} for a in envs}}
+    status_lock=threading.Lock()
+    def update(account=None,**values):
+        with status_lock:
+            if account and 'state' not in values and status['accounts'][account]['state']!='EN MARCHA':return
+            if account:status['accounts'][account].update(values,updated=time.time())
+            try:
+                MULTI_STATUS.parent.mkdir(parents=True,exist_ok=True);atomic_json(MULTI_STATUS,status)
+            except Exception:pass  # La telemetría nunca debe detener los workers.
     try:
+        update()
         for account,env in envs.items():
             workers[account]=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all'],cwd=str(ROOT),env=env,
                                               stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
                                               text=True,start_new_session=True)
-        import threading
         def relay(account,worker):  # "== Modo" y "Modo: resultado" de cada cuenta, con su nombre delante
             for line in worker.stdout:
                 line=line.rstrip()
+                if line.startswith('== '):update(account,step=line[3:].split(' (')[0],detail=line[3:])
+                elif ': ' in line:
+                    detail=line.split(': ',1)[1]
+                    try:detail=json.loads(detail).get('reason',detail)  # paradas del motor: JSON con 'reason'
+                    except (ValueError,AttributeError):pass
+                    update(account,detail=str(detail))
                 if line:print(f'[{NAMES[account]}] {line}',flush=True)
         threads=[threading.Thread(target=relay,args=item,daemon=True) for item in workers.items()]
         for thread in threads:thread.start()
@@ -137,11 +157,16 @@ def run_farm(sessions):
                 code=worker.poll()
                 if code is None:continue
                 results[account]=code;del pending[account]
+                threads[list(workers).index(account)].join(timeout=2)
+                update(account,state='TERMINADO' if code==0 else 'PARADO',
+                       detail=status['accounts'][account]['detail'] or ('TERMINADO' if code==0 else f'Código {code}'))
                 print(f'{NAMES[account]}: '+('TERMINADO' if code==0 else f'PARADO (código {code})'),flush=True)
             if pending:time.sleep(.1)
         for thread in threads:thread.join(timeout=2)
         return results
     finally:
+        for account in envs:
+            if status['accounts'][account]['state']=='EN MARCHA':update(account,state='PARADO',detail='STOP')
         try:
             for worker in workers.values():
                 if worker.poll() is None:

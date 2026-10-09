@@ -223,6 +223,7 @@ class FarmAppMultiTests(unittest.TestCase):
         path=self.root/'sessions.json';path.write_text(json.dumps(self.data))
         def account_root(root,env=None):return self.root/(env or {}).get('FARM_ACCOUNT','default')
         for target,name,value in ((farm_app,'MULTI_SESSIONS',path),(farm_app,'state_root',account_root),
+                                  (farm_app,'MULTI_STATUS',self.root/'multi_status.json'),
                                   (farm_app,'runs_root',account_root),(farm_config,'PATH',self.root/'default.json')):
             patcher=patch.object(target,name,value);patcher.start();self.addCleanup(patcher.stop)
         for account in self.data:
@@ -234,8 +235,36 @@ class FarmAppMultiTests(unittest.TestCase):
                                   (farm_app.FarmApp,'resizable',Mock()),(farm_app.FarmApp,'configure',Mock()),
                                   (farm_app.FarmApp,'protocol',Mock()),(farm_app.FarmApp,'render',Mock())):
             patcher=patch.object(target,name,value);patcher.start();self.addCleanup(patcher.stop)
+        patcher=patch.object(farm_app.FarmApp,'after',Mock());patcher.start();self.addCleanup(patcher.stop)
         self.app=farm_app.FarmApp()
         self.assertEqual(self.app.multi,self.data);self.assertEqual(self.app.account,'steam')
+
+    def test_live_supervisor_stop_and_three_account_lines(self):
+        import json
+        from unittest.mock import Mock,patch
+        rows={a:{'step':'Raid','state':'EN MARCHA','detail':''} for a in self.data}
+        rows['perfil-1'].update(step='Quest',state='PARADO',detail='x'*80)
+        self.farm_app.MULTI_STATUS.write_text(json.dumps({'supervisor_pid':123,'accounts':rows}))
+        with patch.object(self.farm_app.os,'kill') as kill,patch.object(Path,'read_bytes',return_value=b'python\0-m\0fishing_core.farm_multi\0--farm\0'), \
+                patch.object(self.app,'label') as label,patch.object(self.farm_app.ui,'auto_button',return_value=Mock()) as button, \
+                patch.object(self.app,'put'),patch.object(self.app,'window',return_value=(0,0,1100,850)):
+            self.app.refresh_multi_status();self.assertTrue(self.app.running())
+            self.app.draw_main();self.assertTrue(button.call_args.args[0])
+            texts=[c.args[0] for c in label.call_args_list]
+            for text in ('STEAM · RAID · EN MARCHA','FMANI · RAID · EN MARCHA','KORTZZ · QUEST · PARADO: '+'x'*60):self.assertIn(text,texts)
+            self.app.toggle_run();kill.assert_called_with(123,self.farm_app.signal.SIGINT)
+        self.app.after.assert_called_with(2000,self.app.refresh_multi_status)
+
+    def test_dead_or_wrong_supervisor_and_corrupt_status_allow_start(self):
+        import json
+        from unittest.mock import patch
+        self.farm_app.MULTI_STATUS.write_text(json.dumps({'supervisor_pid':123,'accounts':{}}))
+        with patch.object(self.farm_app.os,'kill',side_effect=ProcessLookupError):
+            self.app.refresh_multi_status();self.assertFalse(self.app.running())
+        with patch.object(self.farm_app.os,'kill'),patch.object(Path,'read_bytes',return_value=b'other\0--farm\0'):
+            self.app.refresh_multi_status();self.assertFalse(self.app.running())
+        for text in ('{roto','[]','{"supervisor_pid":123,"accounts":{"steam":null}}'):
+            self.farm_app.MULTI_STATUS.write_text(text);self.app.refresh_multi_status();self.assertFalse(self.app.running())
 
     def test_choose_account_loads_its_config_and_isolates_save(self):
         paths={account:self.root/account/'farm_config.json' for account in self.data}

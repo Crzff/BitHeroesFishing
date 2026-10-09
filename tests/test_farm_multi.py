@@ -1,5 +1,6 @@
 """Supervisor multicuenta: dobles offline, sin clientes, captura ni input."""
 import copy
+import json
 import os
 import signal
 import subprocess
@@ -20,6 +21,33 @@ def sessions():
 
 
 class MultiFarmTests(unittest.TestCase):
+    def setUp(self):
+        tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
+        self.status_path=Path(tmp.name)/'multi_status.json'
+        patcher=patch.object(farm_multi,'MULTI_STATUS',self.status_path);patcher.start();self.addCleanup(patcher.stop)
+
+    def test_status_steps_results_and_terminal_codes(self):
+        children=[Mock(stdout=['== Quest (reintento)\n','Quest: motivo\n'],poll=Mock(return_value=code)) for code in (0,1,0)]
+        snapshots=[];atomic=farm_multi.atomic_json
+        def write(path,data):
+            snapshots.append(copy.deepcopy(data));atomic(path,data)
+        with patch.object(farm_multi,'require_calibrated_client'),patch.object(farm_multi,'Mutex'), \
+                patch.object(farm_multi.subprocess,'Popen',side_effect=children),patch.object(farm_multi,'close_children'), \
+                patch.object(farm_multi,'atomic_json',side_effect=write),patch('builtins.print'):
+            farm_multi.run_farm(sessions())
+        data=json.loads(self.status_path.read_text());self.assertEqual(data['supervisor_pid'],os.getpid())
+        self.assertTrue(all(r['step']=='Iniciando' and r['state']=='EN MARCHA' for r in snapshots[0]['accounts'].values()))
+        for account,code in zip(sessions(),(0,1,0)):
+            row=data['accounts'][account]
+            self.assertEqual((row['step'],row['detail'],row['state']),('Quest','motivo','TERMINADO' if code==0 else 'PARADO'))
+        self.assertTrue(any(r['detail']=='Quest (reintento)' for s in snapshots for r in s['accounts'].values()))
+
+    def test_status_write_error_does_not_stop_farm(self):
+        with patch.object(farm_multi,'require_calibrated_client'),patch.object(farm_multi,'Mutex'), \
+                patch.object(farm_multi.subprocess,'Popen',side_effect=[Mock(stdout=[],poll=Mock(return_value=0)) for _ in range(3)]), \
+                patch.object(farm_multi,'close_children'),patch.object(farm_multi,'atomic_json',side_effect=OSError),patch('builtins.print'):
+            self.assertEqual(farm_multi.run_farm(sessions()),dict.fromkeys(sessions(),0))
+
     def test_workers_keep_own_account_and_failure_does_not_stop_survivors(self):
         children=[Mock(stdout=['== Quest\n']) for _ in range(3)];data=sessions()
         children[0].poll.side_effect=[None,None,0,0]
@@ -56,6 +84,9 @@ class MultiFarmTests(unittest.TestCase):
                     patch.object(farm_multi,'Mutex') as mutex,patch.object(farm_multi.subprocess,'Popen',side_effect=children), \
                     patch.object(farm_multi.time,'sleep',side_effect=error),patch.object(farm_multi,'close_children') as close:
                 with self.assertRaises(type(error)):farm_multi.run_farm(sessions())
+                rows=json.loads(self.status_path.read_text())['accounts']
+                self.assertEqual(rows['personal']['state'],'TERMINADO')
+                for account in ('perfil-1','steam'):self.assertEqual((rows[account]['state'],rows[account]['detail']),('PARADO','STOP'))
                 children[0].send_signal.assert_not_called()
                 for child in children[1:]:child.send_signal.assert_called_once_with(signal.SIGINT)
                 close.assert_called_once_with(children);mutex.return_value.close.assert_called_once()

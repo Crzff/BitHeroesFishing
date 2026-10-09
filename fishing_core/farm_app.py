@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import tkinter as tk
+from pathlib import Path
 
 from PIL import Image, ImageTk
 
@@ -26,6 +27,7 @@ from .telemetry import ROOT
 from .accounts import NAMES as ACCOUNT_NAMES,runs_root,state_root
 
 MULTI_SESSIONS=ROOT/'runs/accounts/sessions.json'  # endpoints de los tres clientes (los escribe quien los abre)
+MULTI_STATUS=ROOT/'runs/accounts/multi_status.json'
 ACCOUNT_TABS=(('steam','STEAM'),('personal','FMANI'),('perfil-1','KORTZZ'))
 
 W,H=1180,920
@@ -83,7 +85,33 @@ class FarmApp(tk.Tk):
             self.status='PRUEBA LIMITADA · 3 CUENTAS · SIN ORO NI GEMAS'
             if read_only:self.status='COMPROBAR STOP · SIN INPUT NI GASTO'
             self.bind('<space>',lambda e:(self.toggle_run(),self.render()))
-        self.protocol('WM_DELETE_WINDOW',self.quit_app);self.render()
+        self.supervisor_pid=None;self.account_status={}
+        self.protocol('WM_DELETE_WINDOW',self.quit_app);self.refresh_multi_status()
+
+    def read_multi_status(self):
+        self.supervisor_pid=None
+        try:
+            data=json.loads(MULTI_STATUS.read_text());pid=data['supervisor_pid'];accounts=data['accounts']
+            if type(pid) is not int or pid<=0 or type(accounts) is not dict:return
+            if any(type(row) is not dict or any(type(row.get(k)) is not str for k in ('step','state','detail'))
+                   for row in accounts.values()):return
+            self.account_status=accounts
+            if sys.platform=='linux':
+                os.kill(pid,0);args=Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0')
+                if b'fishing_core.farm_multi' in args and b'--farm' in args:self.supervisor_pid=pid
+        except (OSError,ValueError,KeyError,TypeError,RecursionError):pass
+
+    def refresh_multi_status(self):
+        self.read_multi_status();self.render();self.after(2000,self.refresh_multi_status)
+
+    def running(self):return self.process is not None or bool(getattr(self,'supervisor_pid',None))
+
+    def draw_account_status(self,x,y):
+        for i,(account,name) in enumerate(ACCOUNT_TABS):
+            row=self.account_status.get(account,{});state=row.get('state','PARADO')
+            text=f"{name} · {row.get('step','Iniciando').upper()} · {state}"
+            if state=='PARADO' and row.get('detail'):text+=': '+row['detail'][:60]
+            self.label(text,x,y+i*24,14,TEXT_COLORS['green'] if state=='EN MARCHA' else TEXT_COLORS['red'] if state=='PARADO' else ui.DIM)
 
     # --- dibujo -----------------------------------------------------------------
     def put(self,img,x,y,action=None):
@@ -127,7 +155,7 @@ class FarmApp(tk.Tk):
     def draw_main(self):
         if getattr(self,'sessions',None) is not None:return self.draw_trial()
         x0,y0,x1,y1=self.window('FARM BOT',back=False)
-        running=self.process is not None;cw=(x1-x0-40)//3;ch=236
+        running=self.running();cw=(x1-x0-40)//3;ch=236
         for i,mode in enumerate(farm_config.MODES):
             x=x0+(i%3)*(cw+20);y=y0+(i//3)*(ch+20);on=self.config_data['modes'][mode]
             self.put(ui.row(cw,ch),x,y)
@@ -147,7 +175,8 @@ class FarmApp(tk.Tk):
         else:
             self.put(ui.checkbox(self.config_data['background'],44),x0,y+56,None if running else self.toggle_background)
             self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',x0+58,y+64,18)
-        self.label(self.status[:52],x0,y+124,16,ui.GOLD if running else ui.DIM)
+        if self.account_status:self.draw_account_status(x0,y+112)
+        else:self.label(self.status[:52],x0,y+124,16,ui.GOLD if running else ui.DIM)
         self.put(ui.loot_button(150,y1-y),x1-150-170,y,self.open_loot)
         self.put(ui.auto_button(running,150,y1-y),x1-150,y,self.toggle_run)
 
@@ -382,6 +411,11 @@ class FarmApp(tk.Tk):
         self.config_data['trials']['difficulty']=max(low,min(high,level+delta));self.save()
 
     def toggle_run(self):
+        if getattr(self,'account_status',None) is not None:self.read_multi_status()
+        if getattr(self,'supervisor_pid',None):
+            try:os.kill(self.supervisor_pid,signal.SIGINT)
+            except OSError:pass
+            self.status='DETENIENDO...';return
         if self.process is not None:
             if sys.platform=='linux':
                 from .global_stop import stop_workers
@@ -419,9 +453,6 @@ class FarmApp(tk.Tk):
         for line in process.stdout:
             line=line.strip();log.write(f'{time.strftime("%H:%M:%S")} {line}\n');log.flush()
             if multi:
-                if line.startswith('[') and '] == ' in line:
-                    who,step=line[1:].split('] == ',1);self.after(0,self.set_status,f'{who.upper()}: {step.split(" (")[0].upper()}')
-                elif line.split(':')[0] in ACCOUNT_NAMES.values():results.append(line.replace('TERMINADO','OK'))
                 continue
             if line.startswith('== '):
                 paused='en pausa' in line

@@ -96,6 +96,7 @@ def start_dungeon(game,plan,read_only=False):
 
 
 class DungeonRunner:
+    OBSERVE_SECONDS=180  # sin cierre en este tiempo: parada (una raid tarda más, ver RaidRunner)
     @property
     def targets(self):
         """Familiares objetivo: lista nueva o el campo único anterior."""
@@ -591,7 +592,7 @@ class DungeonRunner:
         previous=list(self.channel.directory.glob(f'decline-{cycle}-*.intent.json'))
         if any(json.loads(path.read_text()).get('effect_confirmed') is not True for path in previous):
             raise SafetyStop('Rechazo previo sin confirmar; no se continúa')
-        unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180;battle_autos=0;map_autos=0;map_off_since=None;battle_off_since=None
+        unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+self.OBSERVE_SECONDS;battle_autos=0;map_autos=0;map_off_since=None;battle_off_since=None
         while time.monotonic()<deadline:
             frame=self.capture();screen=self.vision.screen(frame)
             if screen=='IDLE_PROMPT':
@@ -701,7 +702,7 @@ class DungeonRunner:
                     raise SafetyStop('Pantalla/oferta/derrota no reconocida: pausa sin Persuade ni gasto')
             if screen in ('AUTO_ON','AUTO_ON_BATTLE','BATTLE_VICTORY','STORY_ZORUL','STORY','LOADING'):unknown_since=None
             time.sleep(.12)
-        raise SafetyStop('Dungeon sin cierre confirmado en 3 minutos; no se repite')
+        raise SafetyStop(f'Dungeon sin cierre confirmado en {self.OBSERVE_SECONDS//60} minutos; no se repite')
 
     def run(self):
         self.go_home();self.verify_settings()  # Ajustes nativos: una vez por sesión.

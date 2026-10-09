@@ -32,6 +32,7 @@ SHARDS_ROI=(880,100,1050,145)
 
 class RaidRunner(DungeonRunner):
     defeat_continues=True
+    OBSERVE_SECONDS=600  # en vivo una raid de Steam superó los 3 min de una dungeon
 
     persuade_all=True  # crzf: en Raid todos los familiares son buenos; se persuade cualquiera con oro
     entry_resource='SHARDS'  # RERUN reserva shards, no energía
