@@ -10,7 +10,7 @@ con un backend que también sirva en Windows; después seguridad; al final insta
    sin gamescope, XTest ni mover el ratón del usuario. Misma interfaz que GamescopeIO/
    GamescopeCapture y mismas guardas (identidad, geometría 1920×1080, foco del canvas, F8).
    Sirve igual en Linux y Windows. Navegadores Chromium: Chrome, Chromium, Brave, Edge.
-2. **Lanzador de clientes de navegador sin gamescope**: perfil propio por cuenta,
+2. ✅ código (sin validar en Windows; en Linux/niri se mantiene gamescope como anfitrión) **Lanzador de clientes de navegador sin gamescope**: perfil propio por cuenta,
    ventana 1920×1080 sin bloqueo de render en segundo plano, puerto CDP local; escribe la
    sesión sola (sin `sessions.json` a mano).
 3. **Cuentas configurables en la app**: lista de cuentas (nombre, tipo Steam/navegador,

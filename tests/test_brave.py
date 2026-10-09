@@ -72,6 +72,17 @@ class BraveIdentityTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):browser_identity(1234,45678,'perfil-1',root)
             with self.assertRaises(RuntimeError):browser_identity(1234,45679,'personal',root)
 
+    def test_supported_chromium_identity_and_open_profile_keep_guards(self):
+        from fishing_core.brave import browser_identity,require_closed_profile
+        for name in ('google-chrome','chrome','chromium','microsoft-edge'):
+            with self.subTest(browser=name),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);p=self.fixture(root);exe=root/name;exe.touch()
+                (p/'exe').unlink();(p/'exe').symlink_to(exe)
+                self.assertEqual(browser_identity(1234,45678,'personal',root),(str(exe),'9001'))
+                with self.assertRaises(RuntimeError):browser_identity(1234,45679,'personal',root)
+                with self.assertRaisesRegex(RuntimeError,'abierto'):
+                    require_closed_profile(ROOT/'runs/accounts/personal/brave-data',root)
+
     def test_foreign_owner_exposed_port_and_duplicated_profile_flags_are_rejected_without_secret_output(self):
         from fishing_core.brave import browser_identity
         with tempfile.TemporaryDirectory() as tmp:

@@ -14,6 +14,46 @@ import threading
 from .telemetry import ROOT
 from .accounts import account_id,brave_target,gamescope_target
 
+CHROMIUM_NAMES=('brave','brave-browser','google-chrome','google-chrome-stable','chrome','chromium','chromium-browser','microsoft-edge','microsoft-edge-stable','msedge','brave.exe','chrome.exe','chromium.exe','msedge.exe')
+
+
+def _windows_processes():
+    # Solo metadatos; no se consultan archivos de perfiles. Fallo cerrado.
+    script="$ErrorActionPreference='Stop'; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('brave.exe','chrome.exe','chromium.exe','msedge.exe') } | Select-Object ProcessId,ExecutablePath,CommandLine,CreationDate)"
+    out=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],capture_output=True,text=True,timeout=10)
+    if out.returncode or len(out.stdout)>1048576:raise ValueError
+    rows=json.loads(out.stdout or '[]')
+    if not isinstance(rows,list):raise ValueError
+    return rows
+
+
+def _windows_argv(command):
+    import ctypes
+    count=ctypes.c_int()
+    parse=ctypes.windll.shell32.CommandLineToArgvW
+    parse.restype=ctypes.POINTER(ctypes.c_wchar_p)
+    parse.argtypes=[ctypes.c_wchar_p,ctypes.POINTER(ctypes.c_int)]
+    args=parse(command,ctypes.byref(count))
+    if not args:raise ValueError
+    try:return [args[i] for i in range(count.value)]
+    finally:
+        free=ctypes.windll.kernel32.LocalFree
+        free.argtypes=[ctypes.c_void_p];free(ctypes.cast(args,ctypes.c_void_p))
+
+
+def _windows_identity(pid,port,account):
+    rows=[r for r in _windows_processes() if r['ProcessId']==pid]
+    if len(rows)!=1:raise ValueError
+    row=rows[0];exe=Path(row['ExecutablePath']);argv=_windows_argv(row['CommandLine'])
+    if exe.name.lower() not in CHROMIUM_NAMES or not row['CreationDate'] or \
+            _flag(argv,'--user-data-dir')!=str(ROOT/'runs/accounts'/account/'brave-data') or \
+            _flag(argv,'--remote-debugging-port')!=str(port):raise ValueError
+    script=f"$ErrorActionPreference='Stop'; ConvertTo-Json -Compress -InputObject @(Get-NetTCPConnection -State Listen | Where-Object {{ $_.OwningProcess -eq {pid} -and $_.LocalPort -eq {port} }} | Select-Object LocalAddress)"
+    out=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],capture_output=True,text=True,timeout=10)
+    if out.returncode or len(out.stdout)>4096 or json.loads(out.stdout or '[]')!=[{'LocalAddress':'127.0.0.1'}]:raise ValueError
+    return str(exe),row['CreationDate']
+
+
 _PREPARE_STAGES={'connection':'conexión CDP','blank':'ventana vacía','play':'Play',
     'fullscreen':'Fullscreen','canvas':'canvas','snapshot':'geometría web final'}
 
@@ -31,10 +71,11 @@ def browser_identity(pid,port,account,proc=Path('/proc')):
     try:
         if type(pid) is not int or not 0<pid<2**31 or type(port) is not int or not 0<port<65536 or \
                 account not in ('personal','perfil-1'):raise ValueError
+        if os.name=='nt':return _windows_identity(pid,port,account)
         p=proc/str(pid)
         if p.stat().st_uid!=os.getuid():raise ValueError
         exe=(p/'exe').resolve(strict=True)
-        if exe.name not in ('brave','brave-browser'):raise ValueError
+        if exe.name not in CHROMIUM_NAMES:raise ValueError
         stamp=(p/'stat').read_text().rsplit(') ',1)[1].split()[19]
         if not stamp.isdecimal() or int(stamp)<=0:raise ValueError
         with (p/'cmdline').open('rb') as stream:raw=stream.read(65537)
@@ -55,7 +96,7 @@ def browser_identity(pid,port,account,proc=Path('/proc')):
             if len(fields)>9 and fields[1]==f'0100007F:{port:04X}' and fields[3]=='0A' and fields[9] in sockets:
                 return str(exe),stamp
         raise ValueError
-    except (OSError,ValueError,IndexError):
+    except (OSError,ValueError,IndexError,TypeError,KeyError,subprocess.SubprocessError):
         raise RuntimeError('No se confirma el proceso, perfil o puerto CDP propio de Brave') from None
 
 
@@ -84,18 +125,32 @@ def prepare_brave(pid,port):
         account=account_id();node=shutil.which('node')
         if account not in ('personal','perfil-1') or node is None or type(pid) is not int or not 0<pid<2**31 or \
                 type(port) is not int or not 0<port<65536:raise ValueError
-        pidfd=os.pidfd_open(pid);identity=browser_identity(pid,port,account)
-        if select.select([pidfd],[],[],0)[0]:raise ValueError
+        if os.name!='nt':pidfd=os.pidfd_open(pid)
+        identity=browser_identity(pid,port,account)
+        if pidfd is not None and select.select([pidfd],[],[],0)[0]:raise ValueError
         process=subprocess.Popen([node,str(Path(__file__).with_name('brave_cdp.mjs')),str(port),'--prepare'],
             cwd=str(ROOT),env={'PATH':os.defpath,'LANG':'C.UTF-8'},stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,bufsize=0,start_new_session=True)
+        replies=queue.Queue()
+        if os.name=='nt':
+            def read_preparation():
+                try:
+                    while True:
+                        chunk=process.stdout.read(1);replies.put(chunk)
+                        if not chunk:return
+                except OSError:replies.put(b'')
+            threading.Thread(target=read_preparation,daemon=True).start()
         end=time.monotonic()+90;buffer=b''
         while b'\n' not in buffer:
             remaining=end-time.monotonic()
             if remaining<=0:raise ValueError
-            ready=select.select([pidfd,process.stdout],[],[],remaining)[0]
-            if pidfd in ready or not ready:raise ValueError
-            chunk=os.read(process.stdout.fileno(),1025)
+            if os.name=='nt':
+                try:chunk=replies.get(timeout=remaining)
+                except queue.Empty:raise ValueError from None
+            else:
+                ready=select.select([pidfd,process.stdout],[],[],remaining)[0]
+                if pidfd in ready or not ready:raise ValueError
+                chunk=os.read(process.stdout.fileno(),1025)
             if not chunk or len(buffer)+len(chunk)>1024:raise ValueError
             buffer+=chunk
         line,tail=buffer.split(b'\n',1);reply=json.loads(line)
@@ -107,7 +162,7 @@ def prepare_brave(pid,port):
         if tail or not isinstance(reply,dict) or set(reply)!={'id','ok','target'} or type(reply['id']) is not int or \
                 reply['id']!=0 or reply['ok'] is not True or not isinstance(reply['target'],str) or \
                 not re.fullmatch(r'[0-9a-fA-F]{32}',reply['target']) or account_id()!=account or \
-                select.select([pidfd],[],[],0)[0] or browser_identity(pid,port,account)!=identity:raise ValueError
+                (pidfd is not None and select.select([pidfd],[],[],0)[0]) or browser_identity(pid,port,account)!=identity:raise ValueError
         process.stdin.close();process.wait(timeout=4)
         if process.returncode!=0:raise ValueError
         return reply['target']
@@ -121,15 +176,24 @@ def prepare_brave(pid,port):
 
 def require_closed_profile(profile,proc=Path('/proc')):
     """Solo metadatos de procesos: nunca leer archivos del perfil ni cerrar un cliente existente."""
+    if os.name=='nt':
+        try:
+            for row in _windows_processes():
+                argv=_windows_argv(row['CommandLine'])
+                if str(profile) in '\0'.join(argv):
+                    raise RuntimeError('El perfil ya está abierto; no se inicia otro cliente')
+            return
+        except (OSError,ValueError,TypeError,KeyError,subprocess.SubprocessError):
+            raise RuntimeError('No se confirma cerrado el perfil del navegador') from None
     for p in proc.iterdir():
         if not p.name.isdecimal():continue
         try:
             if p.stat().st_uid!=os.getuid():continue
             try:exe=(p/'exe').readlink().name.removesuffix(' (deleted)')
             except PermissionError:  # p. ej. systemd --user: exe ilegible; comm siempre se lee
-                if not any(n in (p/'comm').read_text() for n in ('brave','chrom')):continue
+                if not any(n in (p/'comm').read_text() for n in ('brave','chrom','edge')):continue
                 raise
-            if exe not in ('brave','brave-browser'):continue
+            if exe not in CHROMIUM_NAMES:continue
             with (p/'cmdline').open('rb') as stream:raw=stream.read(65537)
             if len(raw)>65536 or not raw.endswith(b'\0'):raise ValueError
             argv=[os.fsdecode(a) for a in raw[:-1].split(b'\0')]

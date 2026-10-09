@@ -12,7 +12,8 @@ def account_id(env=None):
     account=env.get('FARM_ACCOUNT')
     if account is not None and account not in NAMES:
         raise ValueError('FARM_ACCOUNT debe ser personal, perfil-1 o steam')
-    if account is not None and os.name=='nt':raise ValueError('Multicuenta requiere Linux/gamescope')
+    if account is not None and os.name=='nt' and env.get('FARM_BACKEND')!='cdp':
+        raise ValueError('Multicuenta Windows requiere CDP')
     return account
 
 
@@ -66,7 +67,6 @@ def brave_target(env=None):
 
 def prepare_profiles(root):
     """Solo directorios de datos nuevos. No leer ni copiar el navegador personal."""
-    if os.name=='nt':raise ValueError('Perfiles multicuenta todavía no certificados en Windows')
     root=Path(root).resolve();profiles={}
     for account in ('personal','perfil-1'):
         path=root
@@ -74,7 +74,7 @@ def prepare_profiles(root):
             path=path/part
             if path.is_symlink():raise ValueError('No se preparan perfiles a través de enlaces simbólicos')
             path.mkdir(mode=0o700,exist_ok=True)
-            if part in (account,'brave-data') and (path.stat().st_uid!=os.getuid() or path.stat().st_mode&0o077):
+            if os.name!='nt' and part in (account,'brave-data') and (path.stat().st_uid!=os.getuid() or path.stat().st_mode&0o077):
                 raise ValueError('El directorio del perfil debe ser privado y pertenecer al usuario')
         profiles[account]=path
     return profiles
