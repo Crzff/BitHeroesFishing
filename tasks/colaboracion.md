@@ -28,3 +28,4 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
 - Claude: CDP de Brave fallaba al cargar escenas (Unity bloquea el iframe >1,5 s); timeouts 8 s/30 s. En vivo: KORTZZ completa dungeon + RERUN, FMANI rechaza familiares; ajustes aplicados en las 3 cuentas.
 - t7 (Codex): Gauntlet en hueco Trials, REDUCED EFFECTS/BATTLE TEXT; 508 OK. GvG pendiente (auto mode bloqueó aceptar la confirmación de gremio en la calibración).
 - t8a/t8b (Codex) boosts: en vivo FMANI ya activos, Steam consumió 4, KORTZZ consumió Speed y la compra paró por icono de tienda animado (arreglado con máscara).
+- t12a/t12b (Codex) backend CDP: validado en vivo, ciclo completo de KORTZZ sin gamescope. Calibración rueda: mouseMoved previo + deltaY 100/paso.

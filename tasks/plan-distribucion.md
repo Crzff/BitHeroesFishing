@@ -5,7 +5,7 @@ con un backend que también sirva en Windows; después seguridad; al final insta
 
 ## Fase 1 — Base multiplataforma
 
-1. **Backend CDP para cuentas de navegador** (`FARM_BACKEND=cdp`): imagen con
+1. ✅ (2026-10-09: ciclo completo de KORTZZ en vivo con FARM_BACKEND=cdp) **Backend CDP para cuentas de navegador** (`FARM_BACKEND=cdp`): imagen con
    `Page.captureScreenshot` e input con `Input.dispatchMouseEvent` del propio navegador,
    sin gamescope, XTest ni mover el ratón del usuario. Misma interfaz que GamescopeIO/
    GamescopeCapture y mismas guardas (identidad, geometría 1920×1080, foco del canvas, F8).
