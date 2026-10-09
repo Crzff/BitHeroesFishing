@@ -17,6 +17,60 @@ from fishing_core.telemetry import ROOT, Telemetry
 
 
 class AccountTests(unittest.TestCase):
+    def test_registry_defaults_do_not_write_and_are_independent(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)):
+            self.assertEqual(accounts.load_accounts(),accounts.DEFAULT_ACCOUNTS)
+            self.assertEqual(accounts.account_names(),{'steam':'Steam','personal':'FMANI','perfil-1':'KORTZZ'})
+            records=accounts.load_accounts();records[0]['name']='Otro'
+            self.assertEqual(accounts.steam_account(),'steam')
+            self.assertEqual(accounts.browser_accounts(),['personal','perfil-1'])
+            self.assertFalse((Path(tmp)/'runs').exists())
+
+    def test_registry_add_remove_collision_and_private_atomic_file(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)):
+            self.assertEqual(accounts.add_account('Amigo','browser'),'amigo')
+            self.assertEqual(accounts.add_account('Amigo','browser'),'amigo-2')
+            self.assertEqual(accounts.account_id({'FARM_ACCOUNT':'amigo','FARM_BACKEND':'cdp'}),'amigo')
+            profile=accounts.prepare_profiles(tmp)['amigo'];marker=profile/'sentinel';marker.write_text('conservar')
+            accounts.remove_account('amigo')
+            self.assertEqual(marker.read_text(),'conservar')
+            with self.assertRaises(ValueError):accounts.account_id({'FARM_ACCOUNT':'amigo'})
+            path=Path(tmp)/'runs/accounts/accounts.json'
+            self.assertEqual(path.stat().st_mode&0o777,0o600)
+            self.assertEqual(list(path.parent.glob('.accounts-*')),[])
+
+    def test_registry_rejects_invalid_records_without_changing_file(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)):
+            accounts.save_accounts(accounts.DEFAULT_ACCOUNTS)
+            record={'id':'amigo','name':'Amigo','type':'browser'}
+            invalid=[None,{},[record,record],accounts.DEFAULT_ACCOUNTS+[dict(record,type='steam')],
+                     [dict(record,id=f'a{i}') for i in range(9)]]
+            for field,values in {'id':['','../a','A','a_','a'*33,1],
+                                 'name':['','a'*25,'a\n',1], 'type':['other',None,[]]}.items():
+                invalid.extend([[dict(record,**{field:value})] for value in values])
+            for records in invalid:
+                with self.subTest(records=records),self.assertRaises(ValueError):accounts.save_accounts(records)
+            self.assertEqual(accounts.load_accounts(),accounts.DEFAULT_ACCOUNTS)
+            with self.assertRaises(ValueError):accounts.add_account('Steam nueva','steam')
+            with self.assertRaises(ValueError):accounts.remove_account('desconocida')
+
+    def test_new_browser_account_is_accepted_by_cdp_supervisor(self):
+        from fishing_core import farm_multi
+        with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)):
+            accounts.add_account('Amigo','browser')
+            session={'FARM_BACKEND':'cdp','FARM_BRAVE_PID':'1234','FARM_BRAVE_CDP_PORT':'45678','FARM_BRAVE_TARGET_ID':'A'*32}
+            env=farm_multi.trial_environments({'amigo':session},farm=True)['amigo']
+            self.assertEqual(accounts.brave_target(env),(1234,45678,'A'*32))
+            self.assertEqual(env['FARM_ACCOUNT'],'amigo')
+
+    def test_failed_atomic_registry_write_preserves_previous_records(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)):
+            accounts.save_accounts(accounts.DEFAULT_ACCOUNTS)
+            with patch.object(accounts.os,'replace',side_effect=OSError('fallo')):
+                with self.assertRaises(OSError):accounts.add_account('Amigo','browser')
+            self.assertEqual(accounts.load_accounts(),accounts.DEFAULT_ACCOUNTS)
+            self.assertEqual(list((Path(tmp)/'runs/accounts').glob('.accounts-*')),[])
+
     def test_cdp_import_path_requires_browser_but_no_display_or_serial(self):
         env={'FARM_ACCOUNT':'personal','FARM_BACKEND':'cdp','FARM_BRAVE_PID':'1234',
              'FARM_BRAVE_CDP_PORT':'45678','FARM_BRAVE_TARGET_ID':'A'*32}
@@ -44,7 +98,7 @@ print(json.dumps([str(p) for p in (farm_config.PATH,loot.PATH,loot.ALBUM,loot.KI
     farm_all.PROGRESS,session_directory('same-run'),accounts.state_root(ROOT)/'CONTROL_LOG.txt',gamescope.SHM)]))
 """
         paths=[]
-        for account in accounts.NAMES:
+        for account in accounts.account_names():
             env={**os.environ,'FARM_ACCOUNT':account,'FARM_BACKEND':'gamescope',
                  'FARM_GAMESCOPE_DISPLAY':':12','FARM_GAMESCOPE_SERIAL':'4500'}
             out=subprocess.run([sys.executable,'-B','-c',code],cwd=ROOT,env=env,capture_output=True,text=True,check=True)
@@ -55,11 +109,11 @@ print(json.dumps([str(p) for p in (farm_config.PATH,loot.PATH,loot.ALBUM,loot.KI
     def test_same_run_id_has_independent_ipc_and_logs(self):
         with tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp:
             root=Path(tmp);channels=[];logs=[]
-            for account in accounts.NAMES:
+            for account in accounts.account_names():
                 with patch.dict(os.environ,{'FARM_ACCOUNT':account}):
                     channel=Channel('same-run',root);channel.stop('TEST',account);channels.append(channel)
                     log=Telemetry('TEST','same-run',root);log.close();logs.append(log)
-            self.assertEqual([json.loads(c.stop_path.read_text())['reason'] for c in channels],list(accounts.NAMES))
+            self.assertEqual([json.loads(c.stop_path.read_text())['reason'] for c in channels],list(accounts.account_names()))
             self.assertEqual(len({c.directory for c in channels}),3)
             self.assertEqual([log.directory for log in logs],[c.directory for c in channels])
             self.assertEqual(len({log.legacy_log for log in logs}),3)
@@ -79,7 +133,7 @@ lock.close()
         workers=[];role='TEST_'+uuid4().hex
         with tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp:
             try:
-                for account in accounts.NAMES:
+                for account in accounts.account_names():
                     env={**os.environ,'FARM_ACCOUNT':account,'XDG_RUNTIME_DIR':tmp}
                     worker=subprocess.Popen([sys.executable,'-B','-c',code,role],cwd=ROOT,env=env,
                                             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
@@ -160,7 +214,7 @@ lock.close()
 
     def test_account_never_falls_back_to_desktop_window_api(self):
         from fishing_core.game_window import window_api
-        for account in accounts.NAMES:
+        for account in accounts.account_names():
             with patch.dict(os.environ,{'FARM_ACCOUNT':account}),patch('fishing_core.linux.LinuxAPI') as desktop:
                 with self.assertRaises(RuntimeError):window_api()
                 desktop.assert_not_called()

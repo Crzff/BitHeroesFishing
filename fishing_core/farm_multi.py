@@ -7,7 +7,7 @@ import sys
 import time
 import threading
 
-from .accounts import NAMES,account_id,brave_target,gamescope_target
+from .accounts import account_names,account_id,brave_target,gamescope_target,steam_account
 from .gamescope import require_calibrated_client
 from .processes import Mutex,close_children
 from .telemetry import ROOT
@@ -21,14 +21,14 @@ BRAVE_KEYS={'FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT','FARM_BRAVE_TARGET_ID'}
 
 def trial_environments(sessions,farm=False):
     """Datos explícitos por cuenta; no mutar os.environ ni heredar otra identidad."""
-    if type(sessions) is not dict or not sessions or not set(sessions)<=set(NAMES) or (not farm and set(sessions)!=set(NAMES)):
-        raise ValueError('El farmeo requiere al menos una cuenta conocida' if farm else 'La prueba requiere exactamente Personal, Perfil 1 y Steam')
+    if type(sessions) is not dict or not sessions or not set(sessions)<=set(account_names()) or (not farm and set(sessions)!=set(account_names())):
+        raise ValueError('El farmeo requiere al menos una cuenta conocida' if farm else 'La prueba requiere todas las cuentas del registro')
     base={k:v for k,v in os.environ.items() if k not in DISPLAY_KEYS|BRAVE_KEYS|
           {'FARM_ACCOUNT','FARM_LAUNCHER_PID','FARM_SUPERVISOR_PID','FISHING_GAME_WINDOW','FISHING_RUN_ID'}}
     envs={};seen={key:set() for key in DISPLAY_KEYS|BRAVE_KEYS}
     for account in sessions:
-        record=sessions[account];keys=DISPLAY_KEYS if account=='steam' else DISPLAY_KEYS|BRAVE_KEYS
-        cdp=farm and account!='steam' and type(record) is dict and record.get('FARM_BACKEND')=='cdp'
+        record=sessions[account];keys=DISPLAY_KEYS if account==steam_account() else DISPLAY_KEYS|BRAVE_KEYS
+        cdp=farm and account!=steam_account() and type(record) is dict and record.get('FARM_BACKEND')=='cdp'
         if cdp:keys=BRAVE_KEYS|{'FARM_BACKEND'}
         if type(record) is not dict or set(record)!=keys or any(type(v) is not str for v in record.values()):
             raise ValueError('Endpoints incompletos o campos no permitidos en la prueba')
@@ -85,8 +85,8 @@ def run_trial(sessions,read_only=False):
                 code=worker.poll()
                 if code is None:continue
                 results[account]=code;del pending[account]
-                print(f'{NAMES[account]}: '+('OK (prueba limitada)' if code==0 else f'PARADO (código {code})'),flush=True)
-                if code:raise RuntimeError(f'Falló la prueba de {NAMES[account]}; se detienen las demás cuentas')
+                print(f'{account_names()[account]}: '+('OK (prueba limitada)' if code==0 else f'PARADO (código {code})'),flush=True)
+                if code:raise RuntimeError(f'Falló la prueba de {account_names()[account]}; se detienen las demás cuentas')
             if pending:time.sleep(.05)
         return results
     finally:
@@ -128,7 +128,7 @@ def run_farm(sessions):
     envs=validate_farm(sessions)
     lock=Mutex('MULTI_SUPERVISOR');workers={};results={}
     status={'supervisor_pid':os.getpid(),'started':time.time(),'accounts':{
-        a:{'name':NAMES[a],'step':'Iniciando','state':'EN MARCHA','detail':'','updated':time.time()} for a in envs}}
+        a:{'name':account_names()[a],'step':'Iniciando','state':'EN MARCHA','detail':'','updated':time.time()} for a in envs}}
     status_lock=threading.Lock()
     def update(account=None,**values):
         with status_lock:
@@ -152,7 +152,7 @@ def run_farm(sessions):
                     try:detail=json.loads(detail).get('reason',detail)  # paradas del motor: JSON con 'reason'
                     except (ValueError,AttributeError):pass
                     update(account,detail=str(detail))
-                if line:print(f'[{NAMES[account]}] {line}',flush=True)
+                if line:print(f'[{account_names()[account]}] {line}',flush=True)
         threads=[threading.Thread(target=relay,args=item,daemon=True) for item in workers.items()]
         for thread in threads:thread.start()
         pending=dict(workers)
@@ -164,7 +164,7 @@ def run_farm(sessions):
                 threads[list(workers).index(account)].join(timeout=2)
                 update(account,state='TERMINADO' if code==0 else 'PARADO',
                        detail=status['accounts'][account]['detail'] or ('TERMINADO' if code==0 else f'Código {code}'))
-                print(f'{NAMES[account]}: '+('TERMINADO' if code==0 else f'PARADO (código {code})'),flush=True)
+                print(f'{account_names()[account]}: '+('TERMINADO' if code==0 else f'PARADO (código {code})'),flush=True)
             if pending:time.sleep(.1)
         for thread in threads:thread.join(timeout=2)
         return results

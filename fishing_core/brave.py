@@ -12,7 +12,7 @@ import queue
 import threading
 
 from .telemetry import ROOT
-from .accounts import account_id,brave_target,gamescope_target
+from .accounts import account_id,brave_target,gamescope_target,browser_accounts
 
 CHROMIUM_NAMES=('brave','brave-browser','google-chrome','google-chrome-stable','chrome','chromium','chromium-browser','microsoft-edge','microsoft-edge-stable','msedge','brave.exe','chrome.exe','chromium.exe','msedge.exe')
 
@@ -70,7 +70,7 @@ def browser_identity(pid,port,account,proc=Path('/proc')):
     """Solo metadatos del proceso aprobado; no cookies, storage ni archivos del perfil."""
     try:
         if type(pid) is not int or not 0<pid<2**31 or type(port) is not int or not 0<port<65536 or \
-                account not in ('personal','perfil-1'):raise ValueError
+                account not in browser_accounts():raise ValueError
         if os.name=='nt':return _windows_identity(pid,port,account)
         p=proc/str(pid)
         if p.stat().st_uid!=os.getuid():raise ValueError
@@ -123,7 +123,7 @@ def prepare_brave(pid,port):
     failure='No se confirmó la preparación del Brave propio; no se habilita farmeo'
     try:
         account=account_id();node=shutil.which('node')
-        if account not in ('personal','perfil-1') or node is None or type(pid) is not int or not 0<pid<2**31 or \
+        if account not in browser_accounts() or node is None or type(pid) is not int or not 0<pid<2**31 or \
                 type(port) is not int or not 0<port<65536:raise ValueError
         if os.name!='nt':pidfd=os.pidfd_open(pid)
         identity=browser_identity(pid,port,account)
@@ -232,7 +232,7 @@ def launch_brave(executable=None):
     from .accounts import prepare_profiles
     from .processes import Mutex
     account=account_id()
-    if account not in ('personal','perfil-1') or os.environ.get('FARM_BACKEND')!='gamescope':
+    if account not in browser_accounts() or os.environ.get('FARM_BACKEND')!='gamescope':
         raise ValueError('Lanzamiento requiere una cuenta Brave explícita y gamescope')
     binary=Path(executable or shutil.which('brave') or '').resolve(strict=True)
     if binary.name not in ('brave','brave-browser') or not binary.is_file():raise ValueError('Ejecutable Brave no confirmado')
@@ -362,7 +362,7 @@ class BraveGuard:
     def __init__(self,display,window):
         self.pidfd=None;self.bridge=None;self.display=display;self.window=window
         self.settings=(account_id(),gamescope_target(),brave_target())
-        if self.settings[0] not in ('personal','perfil-1') or self.settings[1] is None:
+        if self.settings[0] not in browser_accounts() or self.settings[1] is None:
             raise RuntimeError('Brave requiere una cuenta y pantalla explícitas')
         self.pid,self.port,self.target=self.settings[2]
         try:

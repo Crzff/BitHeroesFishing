@@ -107,9 +107,9 @@ class MultiFarmTests(unittest.TestCase):
             self.assertEqual(farm_multi.run_farm(data),{'perfil-1':1,'steam':0,'personal':0})
             self.assertEqual(popen.call_count,3)
             announcements=[call.args[0] for call in output.call_args_list if not call.args[0].startswith('[')]
-            self.assertEqual(announcements,[f'{farm_multi.NAMES[a]}: {status}' for a,status in
+            self.assertEqual(announcements,[f'{farm_multi.account_names()[a]}: {status}' for a,status in
                              (('perfil-1','PARADO (código 1)'),('steam','TERMINADO'),('personal','TERMINADO'))])
-            for account in data:self.assertIn(f'[{farm_multi.NAMES[account]}] == Quest',[call.args[0] for call in output.call_args_list])
+            for account in data:self.assertIn(f'[{farm_multi.account_names()[account]}] == Quest',[call.args[0] for call in output.call_args_list])
             self.assertEqual(sleep.call_args_list,[unittest.mock.call(.1),unittest.mock.call(.1)])
             close.assert_called_once_with(children);mutex.assert_called_once_with('MULTI_SUPERVISOR')
             mutex.return_value.close.assert_called_once()

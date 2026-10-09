@@ -16,7 +16,7 @@ import time
 from . import farm_config, loot
 from .telemetry import ROOT
 from .control_flow import SafetyStop
-from .accounts import account_id, runs_root
+from .accounts import account_id, browser_accounts, runs_root
 
 
 def quest_plan(config,single=False):
@@ -198,7 +198,7 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                 if 'Límite de sesión' in message and sessions<20:
                     # Cada proceso de modo dura como mucho 1 h; con muchos recursos se abre otra sesión.
                     sessions+=1;print(f'== {name} (sesión {sessions+1})',flush=True);continue
-                if account_id() in ('personal','perfil-1') and ('Cambió la identidad' in message or 'terminó' in message or retried):
+                if account_id() in browser_accounts() and ('Cambió la identidad' in message or 'terminó' in message or retried):
                     # Identidad/proceso cambiados: nunca otra guarda. Los endpoints están fijados por el supervisor,
                     # así que el único reintento genérico solo vuelve a aceptar el mismo Brave (fallos CDP momentáneos).
                     results.append((name,message));return

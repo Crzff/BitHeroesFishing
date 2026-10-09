@@ -53,6 +53,17 @@ class BraveBridgeProtocolTests(unittest.TestCase):
 
 @unittest.skipIf(os.name=='nt','Identidad de proceso Linux')
 class BraveIdentityTests(unittest.TestCase):
+    def test_registered_browser_keeps_profile_and_port_guards(self):
+        from fishing_core import accounts
+        from fishing_core.brave import browser_identity
+        with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)):
+            accounts.add_account('Amigo','browser')
+            root=Path(tmp)/'proc';self.fixture(root,account='amigo')
+            self.assertEqual(browser_identity(1234,45678,'amigo',root),(str(root/'brave'),'9001'))
+            with self.assertRaises(RuntimeError):browser_identity(1234,45679,'amigo',root)
+            accounts.remove_account('amigo')
+            with self.assertRaises(RuntimeError):browser_identity(1234,45678,'amigo',root)
+
     def fixture(self,path,account='personal',port=45678):
         p=path/'1234';(p/'fd').mkdir(parents=True);(p/'net').mkdir()
         exe=path/'brave';exe.touch();(p/'exe').symlink_to(exe)

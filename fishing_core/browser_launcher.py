@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import time
 
-from .accounts import brave_target,prepare_profiles
+from .accounts import brave_target,prepare_profiles,browser_accounts
 from .brave import CHROMIUM_NAMES,browser_identity,prepare_brave,require_closed_profile
 from .telemetry import ROOT
 
@@ -54,7 +54,7 @@ def _exclusive(path):
 
 
 def launch_browser(account,executable=None,visible=False):
-    if account not in ('personal','perfil-1'):raise ValueError('Se requiere una cuenta de navegador')
+    if account not in browser_accounts():raise ValueError('Se requiere una cuenta de navegador')
     binary=detect_browser(executable);profile=prepare_profiles(ROOT)[account]
     process=None
     with _exclusive(profile.parent/'browser-launch.lock'):
@@ -99,7 +99,7 @@ def launch_browser(account,executable=None,visible=False):
 
 
 def write_session(account,session):
-    if account not in ('personal','perfil-1') or set(session)!={'FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT',
+    if account not in browser_accounts() or set(session)!={'FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT',
             'FARM_BRAVE_TARGET_ID','FARM_BACKEND'} or session['FARM_BACKEND']!='cdp':
         raise ValueError('Sesión CDP inválida')
     brave_target({**session,'FARM_ACCOUNT':account})
@@ -122,7 +122,7 @@ def write_session(account,session):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('account',choices=('personal','perfil-1'))
+    parser.add_argument('account',choices=browser_accounts())
     parser.add_argument('--visible',action='store_true')
     parser.add_argument('--browser')
     args=parser.parse_args(argv)

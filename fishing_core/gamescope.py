@@ -23,7 +23,7 @@ import time
 import numpy as np
 
 from .control_flow import SafetyStop
-from .accounts import account_id, gamescope_target, shm_path
+from .accounts import account_id, gamescope_target, shm_path, browser_accounts, steam_account
 
 W,H=1920,1080
 FRAME=W*H*3
@@ -84,7 +84,7 @@ def find_display(title=GAME_TITLE):
 
 
 def window_of(d,title=GAME_TITLE):
-    account=account_id();brave=account in ('personal','perfil-1')
+    account=account_id();brave=account in browser_accounts()
     if brave:
         from .accounts import brave_target
         from .telemetry import ROOT
@@ -163,7 +163,7 @@ def legacy_steam_frames(proc=None):
     """Verificar el flujo antiguo contra proceso propio, memoria privada y serial explícito."""
     from pathlib import Path
     from .telemetry import ROOT
-    if account_id()!='steam':return False
+    if account_id() is None or account_id()!=steam_account():return False
     serial=gamescope_target()[1];proc=Path('/proc') if proc is None else Path(proc);fd=None
     try:
         frame=Path(LEGACY_SHM);meta=frame.stat()
@@ -200,7 +200,7 @@ def legacy_steam_frames(proc=None):
 
 def steam_frame_source():
     """Compartir solo el flujo antiguo verificado; restos o dos fuentes detienen sin duplicar."""
-    if account_id()!='steam':return None
+    if account_id() is None or account_id()!=steam_account():return None
     if legacy_steam_frames():
         if server_alive():raise RuntimeError('Fuente Steam ambigua: hay dos capturas; no se elige una')
         return LEGACY_SHM
@@ -217,7 +217,7 @@ class FrameServer:
         from .processes import Mutex
         self.mutex=Mutex('FRAME_SERVER');self.fd=self.map=self.frames=None
         try:
-            if account_id()=='steam' and any(os.path.lexists(path) for path in (LEGACY_SHM,LEGACY_SHM+'.pid')):
+            if account_id() is not None and account_id()==steam_account() and any(os.path.lexists(path) for path in (LEGACY_SHM,LEGACY_SHM+'.pid')):
                 raise RuntimeError('Flujo Steam antiguo no confirmado; no se abre otra captura')
             serial=pipewire_serial()
             self.fd=os.open(SHM,os.O_CREAT|os.O_RDWR|os.O_CLOEXEC|os.O_NOFOLLOW,0o600)
@@ -302,7 +302,7 @@ class GamescopeGuard:
         try:
             self.display=find_display();self.window=window_of(self.display)
             self.desktop=LinuxAPI()  # solo para F8 (estado del teclado del usuario)
-            if account_id() in ('personal','perfil-1'):
+            if account_id() in browser_accounts():
                 from .brave import BraveGuard
                 self.web=BraveGuard(self.display,self.window)
         except BaseException:
@@ -552,7 +552,7 @@ def require_calibrated_client(env=None,read_only=False):
     if read_only:
         from .accounts import brave_target
         brave_target(env)
-    if not read_only and account_id(env) not in (None,'steam'):
+    if not read_only and account_id(env) not in (None,steam_account()):
         # crzf autorizó el farmeo online de las tres cuentas (2026-10-08). Las guardas de Brave
         # (PID/perfil/puerto, foco, geometría y punto sobre el canvas) siguen comprobándose en cada input.
         from .accounts import brave_target

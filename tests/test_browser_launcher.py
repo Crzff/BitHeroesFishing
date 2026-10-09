@@ -91,6 +91,15 @@ class BrowserLauncherTests(unittest.TestCase):
             session['FARM_BRAVE_PID']='2345';launcher.write_session('personal',session)
             self.assertEqual(json.loads(path.read_text()),{**other,'personal':session})
 
+    def test_new_registered_browser_writes_its_own_session(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(accounts,'ROOT',Path(tmp)),patch.object(launcher,'ROOT',Path(tmp)):
+            accounts.add_account('Amigo','browser')
+            session={'FARM_BRAVE_PID':'1234','FARM_BRAVE_CDP_PORT':'45678','FARM_BRAVE_TARGET_ID':'A'*32,'FARM_BACKEND':'cdp'}
+            launcher.write_session('amigo',session)
+            self.assertEqual(json.loads((Path(tmp)/'runs/accounts/sessions.json').read_text()),{'amigo':session})
+            self.assertTrue((Path(tmp)/'runs/accounts/amigo/brave-data').is_dir())
+            with self.assertRaises(ValueError):launcher.launch_browser('desconocida')
+
     def test_failed_replace_preserves_file_and_cleans_temporary(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(launcher,'ROOT',Path(tmp)):
             accounts.prepare_profiles(Path(tmp));path=Path(tmp)/'runs/accounts/sessions.json';path.write_text('{}')
