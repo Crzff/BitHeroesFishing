@@ -13,11 +13,11 @@ con un backend que también sirva en Windows; después seguridad; al final insta
 2. ✅ código (sin validar en Windows; en Linux/niri se mantiene gamescope como anfitrión) **Lanzador de clientes de navegador sin gamescope**: perfil propio por cuenta,
    ventana 1920×1080 sin bloqueo de render en segundo plano, puerto CDP local; escribe la
    sesión sola (sin `sessions.json` a mano).
-3. **Cuentas configurables en la app**: lista de cuentas (nombre, tipo Steam/navegador,
+3. ✅ **Cuentas configurables en la app**: lista de cuentas (nombre, tipo Steam/navegador,
    navegador), «+ Añadir cuenta», pestañas y FARMEAR generadas desde la lista.
-4. **Primer inicio de sesión guiado**: ventana visible una vez para que el jugador entre
+4. ✅ (código; sin validar con navegador real) **Primer inicio de sesión guiado**: ventana visible una vez para que el jugador entre
    en su cuenta; el bot nunca lee ni guarda contraseñas o cookies.
-5. **Valores por defecto prudentes** para cuentas nuevas: sin objetivos, oro 0, máxima
+5. ✅ **Valores por defecto prudentes** para cuentas nuevas: sin objetivos, oro 0, máxima
    dificultad disponible.
 
 ## Fase 2 — Seguridad
