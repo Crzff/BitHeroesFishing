@@ -96,7 +96,7 @@ def start_dungeon(game,plan,read_only=False):
 
 
 class DungeonRunner:
-    OBSERVE_SECONDS=180  # sin cierre en este tiempo: parada (una raid tarda más, ver RaidRunner)
+    OBSERVE_SECONDS=360  # sin cierre: parada. En vivo KORTZZ (T4, muchas ofertas) superó 3 min; raid: RaidRunner
     @property
     def targets(self):
         """Familiares objetivo: lista nueva o el campo único anterior."""
