@@ -17,6 +17,12 @@ from fishing_core.telemetry import ROOT, Telemetry
 
 
 class AccountTests(unittest.TestCase):
+    def test_cdp_import_path_requires_browser_but_no_display_or_serial(self):
+        env={'FARM_ACCOUNT':'personal','FARM_BACKEND':'cdp','FARM_BRAVE_PID':'1234',
+             'FARM_BRAVE_CDP_PORT':'45678','FARM_BRAVE_TARGET_ID':'A'*32}
+        self.assertTrue(accounts.shm_path(env).endswith('-personal-cdp'))
+        with self.assertRaises(ValueError):accounts.shm_path({**env,'FARM_ACCOUNT':'steam'})
+
     def test_legacy_paths_are_unchanged_and_account_ids_are_allowlisted(self):
         with patch.dict(os.environ,{},clear=True):
             self.assertIsNone(accounts.account_id())

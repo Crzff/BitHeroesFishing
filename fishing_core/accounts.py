@@ -35,6 +35,9 @@ def shm_path(env=None):
     account=account_id(env)
     base='/dev/shm/bitheroes-gamescope-frame'
     if account is None:return base
+    if (os.environ if env is None else env).get('FARM_BACKEND')=='cdp':
+        if brave_target(env) is None:raise ValueError('CDP requiere una cuenta de navegador')
+        return f'{base}-{os.getuid()}-{account}-cdp'
     display,serial=gamescope_target(env)
     return f'{base}-{os.getuid()}-{account}-X{display[1:].replace(".","_")}-{serial}'
 

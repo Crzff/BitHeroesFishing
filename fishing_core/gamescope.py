@@ -542,7 +542,11 @@ def relaunch_game(timeout=300):
 
 
 def require_calibrated_client(env=None,read_only=False):
-    gamescope_target(env)
+    source=os.environ if env is None else env
+    if source.get('FARM_BACKEND')=='cdp':
+        from .accounts import brave_target
+        if brave_target(env) is None:raise ValueError('CDP requiere una cuenta de navegador')
+    else:gamescope_target(env)
     if type(read_only) is not bool or (read_only and account_id(env) is None):
         raise ValueError('Observación requiere una cuenta gamescope explícita')
     if read_only:
@@ -561,8 +565,14 @@ def require_calibrated_client(env=None,read_only=False):
 
 
 def backend(read_only=False):
-    """(IO, Capture) según FARM_BACKEND: 'gamescope' o el escritorio niri por defecto."""
+    """(IO, Capture) según FARM_BACKEND: CDP, gamescope o escritorio niri."""
     require_calibrated_client(read_only=read_only)
+    if os.environ.get('FARM_BACKEND')=='cdp':
+        from .cdp_backend import CdpIO,CdpCapture
+        if read_only:
+            from functools import partial
+            return partial(CdpIO,read_only=True),CdpCapture
+        return CdpIO,CdpCapture
     if read_only:
         from functools import partial
         return partial(GamescopeIO,read_only=True),GamescopeCapture

@@ -40,7 +40,7 @@ def quest(config,single=False,read_only=False):
     from .processes import close_children
     plan=quest_plan(config,single)
     supervisor=check_supervisor()
-    game=None if os.environ.get('FARM_BACKEND')=='gamescope' else focus_window('Steam')
+    game=None if os.environ.get('FARM_BACKEND') in ('gamescope','cdp') else focus_window('Steam')
     process,channel,mutex=start_dungeon(game,plan,read_only=True) if read_only else start_dungeon(game,plan)
     try:
         while True:
@@ -99,20 +99,23 @@ def main(argv):
         raise ValueError('Prueba de una dungeon requiere una cuenta explícita y ningún otro modo')
     lock=Mutex('FARM_ALL')
     try:
-        background=os.environ.get('FARM_BACKEND')=='gamescope'
+        background=os.environ.get('FARM_BACKEND') in ('gamescope','cdp')
         os.environ['FARM_LOOT']='1';loot.ENABLED=True  # contador de la app (también en los subprocesos)
         config=farm_config.load()
         if single:
             quest_plan(config,single=True)  # Rechazar rutas incompatibles antes de abrir la captura.
             check_supervisor()
             if read_only:
-                start_frame_server(read_only=True);quest(config,single=True,read_only=True)
-            else:start_frame_server();quest(config,single=True)
+                if os.environ.get('FARM_BACKEND')!='cdp':start_frame_server(read_only=True)
+                quest(config,single=True,read_only=True)
+            else:
+                if os.environ.get('FARM_BACKEND')!='cdp':start_frame_server()
+                quest(config,single=True)
             report([('Quest','OK (prueba limitada)')]);return
         if '--runes' in argv:config['runes']=True
         if '--no-quest' in argv:config['modes']['quest']=False
         # El servidor de imagen queda vivo al terminar: cerrar el flujo PipeWire coincidió con caídas de gamescope.
-        results=[];server={'proc':start_frame_server() if background else None}
+        results=[];server={'proc':start_frame_server() if os.environ.get('FARM_BACKEND')=='gamescope' else None}
         run_steps(config,results,background,is_gone,relaunch_game,server)
         report(results)
         if any(not result.startswith('OK') for _,result in results):raise SystemExit(1)

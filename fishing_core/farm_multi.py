@@ -28,11 +28,15 @@ def trial_environments(sessions,farm=False):
     envs={};seen={key:set() for key in DISPLAY_KEYS|BRAVE_KEYS}
     for account in sessions:
         record=sessions[account];keys=DISPLAY_KEYS if account=='steam' else DISPLAY_KEYS|BRAVE_KEYS
+        cdp=farm and account!='steam' and type(record) is dict and record.get('FARM_BACKEND')=='cdp'
+        if cdp:keys=BRAVE_KEYS|{'FARM_BACKEND'}
         if type(record) is not dict or set(record)!=keys or any(type(v) is not str for v in record.values()):
             raise ValueError('Endpoints incompletos o campos no permitidos en la prueba')
-        env={**base,**record,'FARM_ACCOUNT':account,'FARM_BACKEND':'gamescope','FARM_SUPERVISOR_PID':str(os.getpid())}
-        display,serial=gamescope_target(env);web=brave_target(env)
-        identity={'FARM_GAMESCOPE_DISPLAY':str(int(display[1:].split('.')[0])),'FARM_GAMESCOPE_SERIAL':serial}
+        env={**base,**record,'FARM_ACCOUNT':account,'FARM_BACKEND':'cdp' if cdp else 'gamescope','FARM_SUPERVISOR_PID':str(os.getpid())}
+        identity={};web=brave_target(env)
+        if not cdp:
+            display,serial=gamescope_target(env)
+            identity={'FARM_GAMESCOPE_DISPLAY':str(int(display[1:].split('.')[0])),'FARM_GAMESCOPE_SERIAL':serial}
         if web:identity.update(zip(('FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT','FARM_BRAVE_TARGET_ID'),(web[0],web[1],web[2].upper())))
         for key,value in identity.items():
             if value in seen[key]:raise ValueError('Dos cuentas comparten un endpoint; no se inicia la prueba')

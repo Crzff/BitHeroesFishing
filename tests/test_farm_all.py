@@ -12,6 +12,28 @@ from fishing_core.processes import Mutex
 
 
 class RunStepsTests(unittest.TestCase):
+    def test_cdp_never_starts_frame_server_in_farm_trial_or_observation(self):
+        from fishing_core import farm_config
+        for argv in ([],['--single-dungeon'],['--stop-check']):
+            with self.subTest(argv=argv),patch.dict(os.environ,{'FARM_BACKEND':'cdp','FARM_ACCOUNT':'personal'},clear=True), \
+                    patch('fishing_core.gamescope.require_calibrated_client'),patch('fishing_core.processes.Mutex'), \
+                    patch.object(farm_config,'load',return_value=farm_config.DEFAULT), \
+                    patch.object(farm_all,'quest_plan'),patch.object(farm_all,'quest'), \
+                    patch.object(farm_all,'start_frame_server') as server,patch.object(farm_all,'run_steps') as chain, \
+                    patch.object(farm_all,'report'):
+                farm_all.main(argv);server.assert_not_called()
+                if not argv:self.assertTrue(chain.call_args.args[2])
+
+    def test_cdp_quest_does_not_focus_steam(self):
+        process=Mock();process.wait.return_value=0
+        channel=Mock();channel.stop_path.exists.return_value=False
+        with patch.dict(os.environ,{'FARM_BACKEND':'cdp'},clear=True), \
+                patch.object(farm_all,'quest_plan',return_value={}),patch.object(farm_all,'check_supervisor',return_value=None), \
+                patch('fishing_core.game_window.focus_window') as focus, \
+                patch('fishing_core.dungeon_runtime.start_dungeon',return_value=(process,channel,Mock())) as start:
+            self.assertEqual(farm_all.quest({}),0)
+            focus.assert_not_called();start.assert_called_once_with(None,{})
+
     def run_chain(self,plan,progress,waits=True):
         results=[]
         with patch.object(farm_all,'steps',return_value=plan),patch.object(farm_all,'PROGRESS',progress), \

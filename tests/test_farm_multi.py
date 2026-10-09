@@ -21,6 +21,26 @@ def sessions():
 
 
 class MultiFarmTests(unittest.TestCase):
+    def test_cdp_sessions_propagate_worker_backend_and_reject_shared_endpoints(self):
+        data=sessions()
+        data['personal']={k:v for k,v in data['personal'].items() if k in farm_multi.BRAVE_KEYS}
+        data['personal']['FARM_BACKEND']='cdp'
+        with patch.dict(os.environ,{'FARM_GAMESCOPE_DISPLAY':':99','FARM_GAMESCOPE_SERIAL':'999'},clear=True), \
+                patch.object(farm_multi,'require_calibrated_client'),patch.object(farm_multi,'Mutex'), \
+                patch.object(farm_multi.subprocess,'Popen',side_effect=[Mock(stdout=[],poll=Mock(return_value=0)) for _ in data]) as spawn, \
+                patch.object(farm_multi,'close_children'),patch('builtins.print'):
+            farm_multi.run_farm(data)
+            env=spawn.call_args_list[0].kwargs['env']
+            self.assertEqual(env['FARM_BACKEND'],'cdp');self.assertEqual(env['FARM_MULTI_FARM'],'1')
+            self.assertFalse(farm_multi.DISPLAY_KEYS&set(env))
+            self.assertEqual(spawn.call_args_list[-1].kwargs['env']['FARM_BACKEND'],'gamescope')
+        for key in farm_multi.BRAVE_KEYS:
+            bad=copy.deepcopy(data);bad['perfil-1'][key]=bad['personal'][key]
+            with self.subTest(key=key),self.assertRaises(ValueError):farm_multi.trial_environments(bad,farm=True)
+        bad=copy.deepcopy(data);bad['steam']['FARM_BACKEND']='cdp'
+        with self.assertRaises(ValueError):farm_multi.trial_environments(bad,farm=True)
+        with self.assertRaises(ValueError):farm_multi.trial_environments(data)
+
     def setUp(self):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
         self.status_path=Path(tmp.name)/'multi_status.json'

@@ -291,6 +291,26 @@ class GamescopeTests(unittest.TestCase):
         with patch.dict('os.environ',{'FARM_BACKEND':''}):
             self.assertEqual(gamescope.backend()[0].__name__,'LinuxIO')
 
+    def test_cdp_backend_requires_browser_endpoints_supervisor_and_live_identity(self):
+        from fishing_core.cdp_backend import CdpIO,CdpCapture
+        env={'FARM_BACKEND':'cdp','FARM_ACCOUNT':'personal','FARM_BRAVE_PID':'1234',
+             'FARM_BRAVE_CDP_PORT':'45678','FARM_BRAVE_TARGET_ID':'A'*32,'FARM_MULTI_FARM':'1'}
+        with patch.dict(os.environ,env,clear=True),patch('fishing_core.brave.browser_identity') as identity:
+            self.assertEqual(gamescope.backend(),(CdpIO,CdpCapture))
+            identity.assert_called_once_with(1234,45678,'personal')
+            identity.side_effect=RuntimeError('identidad cambiada')
+            with self.assertRaises(RuntimeError):gamescope.backend()
+        for key in ('FARM_MULTI_FARM','FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT','FARM_BRAVE_TARGET_ID'):
+            bad={**env};del bad[key]
+            with self.subTest(key=key),patch.dict(os.environ,bad,clear=True),patch('fishing_core.brave.browser_identity') as identity:
+                with self.assertRaises(ValueError):gamescope.backend()
+                identity.assert_not_called()
+        for account in ('steam',None):
+            bad={**env};bad.pop('FARM_ACCOUNT')
+            if account:bad['FARM_ACCOUNT']=account
+            with self.subTest(account=account),patch.dict(os.environ,bad,clear=True):
+                with self.assertRaises(ValueError):gamescope.backend()
+
     def test_brave_input_opt_in_is_limited_and_requires_complete_live_identity(self):
         env={**self.account_env(),'FARM_ACCOUNT':'personal','FARM_BRAVE_PID':'1234',
              'FARM_BRAVE_CDP_PORT':'45678','FARM_BRAVE_TARGET_ID':'A'*32}
