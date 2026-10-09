@@ -12,7 +12,7 @@ from .control_flow import SafetyStop
 from .dungeon_catalog import FAMILIARS,dungeon,farm_plan,normalize
 from .dungeon_vision import DungeonVision,familiar_glyph,SETTINGS
 from . import loot
-from .farm_budget import FarmBudget
+from .farm_budget import FarmBudget, UNLIMITED_GOLD
 from .game_window import ENV_WINDOW,WindowGuard
 from .processes import Mutex,child_options,close_children,python_executable
 from .protocol import Channel,atomic_json
@@ -65,13 +65,12 @@ def validate_supported(plan):
     for name in targets:farm_plan(plan['dungeon_id'],plan['difficulty'],1,1,name)  # cada objetivo debe salir en esa ruta
     checked=farm_plan(plan['dungeon_id'],plan['difficulty'],plan['runs'],plan['energy_limit'],targets[0] if targets else '')
     checked['targets']=targets
-    gold=plan.get('max_gold',0)
-    if type(gold) is not int or not 0<=gold<=10_000_000:raise ValueError('Cuota de oro inválida (0-10.000.000)')
+    gold=UNLIMITED_GOLD if targets else 0
     checked['max_gold']=gold
     if checked['dungeon_id'] not in NODES:
         raise ValueError('Dungeon aún sin calibrar en el mapa; no se cambia tu objetivo.')
     if os.environ.get('FARM_SINGLE_DUNGEON')=='1' and (checked['runs']!=1 or checked['energy_limit']>10 or
-                                                      gold!=0 or targets or checked['difficulty']!='Normal'):
+                                                      plan.get('max_gold',0)!=0 or targets or checked['difficulty']!='Normal'):
         raise ValueError('Prueba limitada: solo 1 run Normal, 10 de energía, sin oro ni objetivos')
     return checked
 
@@ -108,7 +107,7 @@ class DungeonRunner:
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.plan=validate_supported(plan);self.cost=None;self.safety_checked=False
         self.deadline=time.monotonic()+SESSION_SECONDS;self.difficulty=self.plan['difficulty'];self.balance=None
-        # Oro solo para Persuade de objetivos, con cuota por sesión; nunca gemas (Bribe).
+        # Oro ilimitado solo para Persuade de objetivos; nunca gemas (Bribe).
         self.budget=FarmBudget(max_runs=plan['runs'],max_energy=plan['energy_limit'],max_seconds=SESSION_SECONDS,
                                max_gold=int(self.plan.get('max_gold',0)))
 

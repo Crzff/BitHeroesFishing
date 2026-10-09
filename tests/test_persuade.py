@@ -40,6 +40,7 @@ class PersuadeTests(unittest.TestCase):
         io=Mock();io.click.side_effect=game.click
         runner=DungeonRunner(io,Mock(),VISION,SimpleNamespace(directory=path,run_id='t',stop_path=path/'stop.json'),Mock(),plan)
         runner.capture=lambda:FRAMES[game.state]
+        if max_gold==0:runner.budget.max_gold=0  # presupuesto agotado: la salvaguarda de rechazar sigue existiendo
         runner.budget.reserve_entry('t:1',resource='ENERGY',balance=100,cost=30)
         clock=[0.0]
         def sleep(s):clock[0]+=s
@@ -80,10 +81,12 @@ class PersuadeTests(unittest.TestCase):
         with self.assertRaises(SafetyStop):self.run_offer(game,10_000)
         self.assertEqual(game.clicks,[(528,704)])
 
-    def test_gold_quota_must_be_a_bounded_integer(self):
-        for bad in (-1,'100',10_000_001,1.5):
-            with self.assertRaises(ValueError):
-                validate_supported({'dungeon_id':'Z5D3','difficulty':'Heroic','runs':1,'energy_limit':30,'max_gold':bad})
+    def test_gold_is_unlimited_only_when_a_familiar_is_farmed(self):
+        # crzf 2026-10-09: sin tope de oro al farmear familiar; sin objetivo, 0. Un max_gold antiguo se ignora.
+        from fishing_core.farm_budget import UNLIMITED_GOLD
+        base={'dungeon_id':'Z5D3','difficulty':'Heroic','runs':1,'energy_limit':30,'max_gold':50_000}
+        self.assertEqual(validate_supported({**base,'targets':['Tealk']})['max_gold'],UNLIMITED_GOLD)
+        self.assertEqual(validate_supported({**base,'targets':[]})['max_gold'],0)
 
 
     def test_raid_persuades_a_familiar_outside_the_catalogue_by_its_name_image(self):

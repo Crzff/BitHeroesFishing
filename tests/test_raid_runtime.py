@@ -32,6 +32,17 @@ class FakeGame:
 
 
 class RaidRuntimeTests(unittest.TestCase):
+    def test_raid_persuades_all_with_unlimited_gold_ignoring_legacy_limits(self):
+        from fishing_core.farm_budget import UNLIMITED_GOLD
+        for old_limit in (0,250_000,UNLIMITED_GOLD,'antiguo'):
+            runner=RaidRunner(Mock(),Mock(),Mock(),Mock(),Mock(),1,max_gold=old_limit)
+            self.assertTrue(runner.persuade_all)
+            self.assertEqual(runner.budget.max_gold,UNLIMITED_GOLD)
+            runner.capture=Mock(return_value='offer');runner.offer_name=Mock(return_value='Bob');runner.persuade=Mock()
+            runner.channel.run_id='test'
+            runner.finish_leftover_run('FAMILIAR_OFFER')
+            runner.persuade.assert_called_once_with('offer','test:resume','resume-1','Bob')
+
     def run_raid(self,game,shards,runs=5,difficulty='Heroic',reruns=0):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp);io=Mock();io.click.side_effect=game.click

@@ -41,7 +41,6 @@ INFO={'expedition':[f"EVENTO SEMANAL: {WEEKLY['expedition']}",'5 BADGES, BAJA HA
 CALIBRATED=set(NODES)
 ZONES=sorted({row['zone'] for row in CATALOG})
 DIFFICULTY_COLORS=(('NORMAL','blue'),('HARD','green'),('HEROIC','orange'))
-GOLD_STEPS=(0,10_000,50_000,100_000,250_000)
 # Menú de dificultad de Trials (2026-10-04): (tier, mínimo, máximo, color del juego).
 TRIALS_RANGES=((13,2300,2735,'set'),(13,1800,2299,'gold'),(12,1580,1799,'set'),(12,1240,1579,'gold'),
                (11,1080,1239,'set'),(11,675,1079,'gold'),(10,640,674,'set'),(10,500,639,'gold'),
@@ -344,11 +343,7 @@ class FarmApp(tk.Tk):
         bw=(x1-x0-40)//3
         for i,name in enumerate(familiars_of(q['dungeon'])[:9]):
             self.choice_row(x0+(i%3)*(bw+20),fy+56+(i//3)*58,bw,name.upper()[:14],name in q['targets'],lambda n=name:self.toggle_target(n))
-        gy=y1-90;self.label('ORO PARA PERSUADIR (POR SESION, NUNCA GEMAS)',x0,gy,16,ui.GOLD)
-        gw=(x1-x0-4*14)//5
-        for i,value in enumerate(GOLD_STEPS):
-            self.put(ui.button(short(value),gw,52,'orange' if q.get('max_gold',0)==value else 'gray',20),x0+i*(gw+14),gy+34,
-                     lambda v=value:self.set_gold(v))
+        self.label('ORO: ILIMITADO AL FARMEAR FAMILIAR · NUNCA GEMAS',x0,y1-90,16,ui.GOLD)
 
     def draw_boss(self):
         b=self.config_data['boss'];x0,y0,x1,y1=self.window('WORLD BOSS',art=ui.background(f"wb_{b['boss'].lower()}"),dim=.1)
@@ -382,11 +377,7 @@ class FarmApp(tk.Tk):
         self.buttons(DIFFICULTY_COLORS,r['difficulty'],rx,y0+34,x1-rx,60,self.set_raid_difficulty,on='purple')
         for i,line in enumerate(('1 SHARD POR RUN','HASTA AGOTARLOS','UNA DERROTA NO DETIENE','PERSUADE A CUALQUIER FAMILIAR')):
             self.label(line,rx,y0+260+i*36,15,ui.TEXT)
-        self.label('ORO PARA PERSUADIR (NUNCA GEMAS)',rx,y0+420,15,ui.GOLD)
-        gold=int(r.get('max_gold',250_000))
-        for i,value in enumerate(GOLD_STEPS):
-            self.put(ui.button(short(value),(x1-rx-8)//2,46,'purple' if gold==value else 'gray',18),
-                     rx+(i%2)*((x1-rx+8)//2),y0+452+(i//2)*54,lambda v=value:self.set_raid_gold(v))
+        self.label('ORO: ILIMITADO AL FARMEAR FAMILIAR · NUNCA GEMAS',x0,y0+420,15,ui.GOLD)
 
     def draw_trials(self):
         x0,y0,x1,y1=self.window(NAMES['trials']);level=int(self.config_data['trials']['difficulty']);current=trials_range(level)
@@ -523,7 +514,6 @@ class FarmApp(tk.Tk):
         self.save()
 
     def set_difficulty(self,level):self.config_data['quest']['difficulty']=level.title();self.save()
-    def set_gold(self,value):self.config_data['quest']['max_gold']=value;self.save()
 
     def toggle_target(self,name):
         targets=self.config_data['quest']['targets']
@@ -551,7 +541,6 @@ class FarmApp(tk.Tk):
     def set_tier(self,tier):self.config_data['boss']['tier']=tier;self.save()
     def set_boss_difficulty(self,level):self.config_data['boss']['difficulty']=level.title();self.save()
     def set_raid(self,key):self.config_data['raid']['raid']=key;self.save()
-    def set_raid_gold(self,value):self.config_data['raid']['max_gold']=value;self.save()
     def set_raid_difficulty(self,level):self.config_data['raid']['difficulty']=level.title();self.save()
     def set_trials_range(self,span):self.config_data['trials']['difficulty']=span[2];self.save()
 

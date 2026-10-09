@@ -19,6 +19,21 @@ def setUpModule():
 
 
 class FarmAppTests(unittest.TestCase):
+    def test_new_accounts_have_no_targets_and_old_gold_limits_are_ignored(self):
+        from unittest.mock import patch
+        from fishing_core.farm_budget import UNLIMITED_GOLD
+        for account in (None,'personal','perfil1','steam'):
+            with tempfile.TemporaryDirectory() as tmp,patch.dict('os.environ',{} if account is None else {'FARM_ACCOUNT':account},clear=True):
+                path=Path(tmp)/'cfg.json';config=farm_config.load(path)
+                self.assertEqual(config['quest']['targets'],[])
+                self.assertEqual(farm_all.quest_plan(config)['max_gold'],0)
+                config['quest'].update(targets=['Tealk'],max_gold='antiguo')
+                config['raid']['max_gold']={'ignorado':True}
+                farm_config.save(config,path);loaded=farm_config.load(path)
+                self.assertNotIn('max_gold',loaded['quest']);self.assertNotIn('max_gold',loaded['raid'])
+                self.assertEqual(farm_all.quest_plan(loaded)['max_gold'],UNLIMITED_GOLD)
+                self.assertEqual(farm_all.quest_plan(loaded,single=True)['max_gold'],0)
+
     def test_tealks_palace_lists_its_four_familiars_and_only_calibrated_routes_are_selectable(self):
         self.assertEqual(set(familiars_of('Z5D3')),{'Mummih','Brute','Sitra','Tealk'})
         self.assertEqual(len(CALIBRATED),31);self.assertLessEqual({'Z1D1','Z1D4','Z5D2','Z5D3','Z9D1'},CALIBRATED)
@@ -499,10 +514,15 @@ class FarmAppClickTests(unittest.TestCase):
         self.click_where(self.by_default('set_tier',13));self.click_where(lambda a:getattr(a,'__defaults__',None)==('HARD',))
         self.assertEqual(farm_config.load()['boss'],{'boss':'TITANS_ATTACK','tier':13,'difficulty':'Hard'})
 
-    def test_quest_targets_and_gold_quota(self):
+    def test_quest_targets_without_gold_buttons(self):
         self.app.screen='quest';self.app.render()
-        self.click_where(self.by_default('toggle_target','Mummih'));self.click_where(self.by_default('set_gold',100_000))
-        q=farm_config.load()['quest'];self.assertEqual((q['targets'],q['max_gold']),(['Tealk','Mummih'],100_000))
+        self.click_where(self.by_default('toggle_target','Mummih'))
+        q=farm_config.load()['quest'];self.assertEqual(q['targets'],['Mummih'])
+        self.assertNotIn('max_gold',q)
+        for screen in ('quest','raid'):
+            self.app.screen=screen;self.app.render()
+            self.assertRaises(AssertionError,self.click_where,self.by_default('set_gold',100_000))
+            self.assertRaises(AssertionError,self.click_where,self.by_default('set_raid_gold',100_000))
 
     def test_trials_range_and_level_stay_inside_the_range(self):
         self.app.screen='trials';self.app.render()

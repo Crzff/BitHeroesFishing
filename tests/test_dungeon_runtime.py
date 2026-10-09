@@ -16,6 +16,24 @@ from fishing_core.farm_budget import FarmBudget
 
 
 class DungeonRuntimeTests(unittest.TestCase):
+    def test_target_gets_unlimited_gold_and_only_gold_persuasion_clicks(self):
+        from fishing_core.farm_budget import UNLIMITED_GOLD
+        with tempfile.TemporaryDirectory() as tmp:
+            base,io,vision=self.runner(Path(tmp))
+            plan={**farm_plan('Z5D3','Heroic',1,30,'Tealk'),'max_gold':'antiguo'}
+            runner=DungeonRunner(io,Mock(),vision,base.channel,Mock(),plan)
+            self.assertEqual(runner.budget.max_gold,UNLIMITED_GOLD)
+            runner.budget.reserve_entry('test:1',resource='ENERGY',balance=30,cost=30)
+            runner.wait=Mock(return_value='offer');runner.capture=Mock(return_value='offer');runner.click=Mock()
+            runner.offer_name=Mock(return_value='Tealk');vision.offer_cost.return_value=20_000_000
+            vision.screen.side_effect=['FAMILIAR_OFFER','AUTO_ON_BATTLE']
+            with patch('fishing_core.dungeon_runtime.familiar_glyph',return_value=None):
+                runner.persuade('offer','test:1',1,'Tealk')
+            self.assertEqual([call.args[:2] for call in runner.click.call_args_list],
+                             [('FAMILIAR_OFFER',(528,704)),('PERSUADE_CONFIRM',(814,750))])
+            self.assertEqual(runner.budget.gold_reserved,20_000_000)
+            self.assertIsNone(runner.budget.pending_gold)
+
     def test_settings_real_frames_click_only_differing_parents_and_audio_ends(self):
         from fishing_core.dungeon_vision import DungeonVision,SETTINGS
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
@@ -528,6 +546,8 @@ class DungeonRuntimeTests(unittest.TestCase):
         for unsafe in (None,'gold','gems','duplicates','unknown','no_box'):
             with tempfile.TemporaryDirectory() as tmp:
                 runner,io,vision=self.runner(Path(tmp));runner.plan['target']='Tealk'
+                from fishing_core.farm_budget import UNLIMITED_GOLD
+                runner.budget.max_gold=UNLIMITED_GOLD
                 position=[0];ticked={unsafe};runner.close_menu=Mock()
                 runner.click=Mock(side_effect=lambda screen,xy,*a,**k:ticked.discard(unsafe) if screen=='SETTINGS' else None)
                 def scroll(screen,amount):
@@ -547,6 +567,7 @@ class DungeonRuntimeTests(unittest.TestCase):
                 else:
                     runner.verify_settings()
                     self.assertTrue(runner.safety_checked)
+                    self.assertNotIn('gold',ticked);self.assertNotIn('gems',ticked)
                     saved=json.loads((Path(tmp)/'native_settings.json').read_text())
                     self.assertEqual(saved['missing'],['notifications','animations','reduced_effects','battle_text','tips','merchants','treasures','music','sound'])
                     self.assertTrue(any(call.args==('DUNGEON_STATUS',) and 'Aviso:' in call.kwargs.get('message','')

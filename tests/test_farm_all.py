@@ -11,6 +11,11 @@ from fishing_core.control_flow import SafetyStop
 from fishing_core.processes import Mutex
 
 
+def setUpModule():
+    patcher=patch.object(farm_all.loot,'ENABLED',False)
+    patcher.start();unittest.addModuleCleanup(patcher.stop)
+
+
 class RunStepsTests(unittest.TestCase):
     def test_cdp_never_starts_frame_server_in_farm_trial_or_observation(self):
         from fishing_core import farm_config
@@ -234,7 +239,7 @@ class SingleDungeonTests(unittest.TestCase):
         self.assertEqual(config,before)
         legacy=farm_all.quest_plan(config)
         self.assertEqual((legacy['difficulty'],legacy['runs'],legacy['energy_limit'],legacy['max_gold'],legacy['targets']),
-                         ('Heroic',60,1000,50_000,['Tealk']))
+                         ('Heroic',60,1000,0,[]))
 
     def test_trial_refuses_special_or_uncalibrated_routes_without_substitution(self):
         from fishing_core import farm_config

@@ -24,7 +24,7 @@ def quest_plan(config,single=False):
     from .dungeon_runtime import validate_supported
     q=config['quest']
     return validate_supported({**farm_plan(q['dungeon'],'Normal' if single else q['difficulty'],1 if single else 60,10 if single else 1000),
-                               'targets':[] if single else q.get('targets') or [],'max_gold':0 if single else int(q.get('max_gold',0))})
+                               'targets':[] if single else q.get('targets') or []})
 
 
 def check_supervisor():
@@ -78,7 +78,7 @@ def steps(config):
         if runes:plan.append(('Runas captura',lambda:run_runes('CAPTURE')))
         plan.append(('Quest',lambda:quest(config)))
     rest=[('PvP','pvp',lambda:run_pvp(60,int(config['pvp']['opponent']))),('World Boss','boss',lambda:run_boss(60,config['boss']['difficulty'],config['boss']['boss'],int(config['boss']['tier']))),
-          ('Raid','raid',lambda:run_raid(60,config['raid']['raid'],config['raid']['difficulty'],int(config['raid'].get('max_gold',250_000)))),
+          ('Raid','raid',lambda:run_raid(60,config['raid']['raid'],config['raid']['difficulty'])),
           ('GvG' if WEEKLY_EXPEDITION=='GVG' else 'Expedition','expedition',lambda:run_gvg(60) if WEEKLY_EXPEDITION=='GVG' else run_expedition(60)),
           ('Trials','trials',lambda:run_trials(60,int(config['trials']['difficulty'])))]
     if runes and any(on[mode] for _,mode,_ in rest):plan.append(('Runas Item Find',lambda:run_runes('ITEM_FIND')))

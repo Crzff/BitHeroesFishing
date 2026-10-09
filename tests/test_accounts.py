@@ -208,9 +208,9 @@ lock.close()
             missing=Path(tmp)/'missing.json'
             with patch.dict(os.environ,{'FARM_ACCOUNT':'personal'}):
                 config=farm_config.load(missing)
-                self.assertEqual((config['quest']['max_gold'],config['raid']['max_gold']),(0,0))
-            self.assertEqual(farm_config.DEFAULT['quest']['max_gold'],50_000)
-            self.assertEqual(farm_config.DEFAULT['raid']['max_gold'],250_000)
+                # Cuentas nuevas: sin familiar objetivo y sin cuota de oro configurable (el oro lo decide el objetivo).
+                self.assertEqual(config['quest']['targets'],[])
+                self.assertNotIn('max_gold',config['quest']);self.assertNotIn('max_gold',config['raid'])
 
     def test_account_never_falls_back_to_desktop_window_api(self):
         from fishing_core.game_window import window_api

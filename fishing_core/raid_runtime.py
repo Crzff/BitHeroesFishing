@@ -1,6 +1,7 @@
 """Raid elegida por el jugador (crzf: Storm, su T13) en la dificultad elegida: gasta todos los shards.
 
 Una derrota no detiene: se cierra con TOWN y se sigue gastando (pedido por crzf).
+Persuade a cualquier familiar con oro ilimitado, también al reanudar; nunca gemas.
 """
 
 import os
@@ -8,7 +9,7 @@ import time
 
 from .control_flow import SafetyStop
 from .dungeon_runtime import DungeonRunner
-from .farm_budget import FarmBudget
+from .farm_budget import FarmBudget, UNLIMITED_GOLD
 from .protocol import atomic_json
 
 SHARD_COST=1
@@ -37,18 +38,18 @@ class RaidRunner(DungeonRunner):
     persuade_all=True  # crzf: en Raid todos los familiares son buenos; se persuade cualquiera con oro
     entry_resource='SHARDS'  # RERUN reserva shards, no energía
 
-    def __init__(self,io,capture,vision,channel,log,runs,raid='STORM',difficulty='Heroic',max_gold=0):
+    def __init__(self,io,capture,vision,channel,log,runs,raid='STORM',difficulty='Heroic',max_gold=UNLIMITED_GOLD):
         if raid not in RAIDS or difficulty not in DIFFICULTY_BUTTONS:raise ValueError('Raid o dificultad no disponible')
         self.io,self.cap,self.vision,self.channel,self.log=io,capture,vision,channel,log
         self.raid,self.raid_difficulty=raid,difficulty
         self.runs=runs;self.deadline=time.monotonic()+60*60
         self.plan={'dungeon_id':'RAID_STORM','difficulty':'Heroic','runs':runs,'energy_limit':runs,'target':''}
         self.cost=SHARD_COST;self.balance=None
-        if type(max_gold) is not int or not 0<=max_gold<=10_000_000:raise ValueError('Cuota de oro inválida (0-10.000.000)')
-        self.budget=FarmBudget(max_runs=runs,max_energy=runs*SHARD_COST,max_seconds=60*60,max_gold=max_gold,stop_on_defeat=False)
+        # max_gold antiguo se ignora: Raid farmea todos los familiares.
+        self.budget=FarmBudget(max_runs=runs,max_energy=runs*SHARD_COST,max_seconds=60*60,max_gold=UNLIMITED_GOLD,stop_on_defeat=False)
 
     def finish_leftover_run(self,screen):
-        """Raid a medias al reanudar: la oferta también se persuade (con la cuota de oro), no se rechaza."""
+        """Raid a medias al reanudar: la oferta también se persuade con oro ilimitado."""
         if screen!='FAMILIAR_OFFER':return super().finish_leftover_run(screen)
         self.leftovers=getattr(self,'leftovers',0)+1;frame=self.capture()
         self.persuade(frame,f'{self.channel.run_id}:resume',f'resume-{self.leftovers}',self.offer_name(frame))
@@ -109,7 +110,7 @@ class RaidRunner(DungeonRunner):
         self.log.emit('RAID_STATUS',message='Shards gastados · detenido',budget=self.budget.payload())
 
 
-def run_raid(runs,raid='STORM',difficulty='Heroic',max_gold=0):
+def run_raid(runs,raid='STORM',difficulty='Heroic',max_gold=UNLIMITED_GOLD):
     from .game_window import ENV_WINDOW,focus_window
     from .dungeon_vision import DungeonVision
     from .gamescope import backend

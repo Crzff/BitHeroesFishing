@@ -4,6 +4,17 @@ from fishing_core.farm_budget import FarmBudget
 
 
 class FarmBudgetTests(unittest.TestCase):
+    def test_unlimited_persuasion_still_rejects_gems_bribe_and_purchases(self):
+        from fishing_core.farm_budget import UNLIMITED_GOLD
+        self.enable_gold_budget(max_gold=UNLIMITED_GOLD,gold_reserve=0)
+        self.enter()
+        before=self.budget.payload()
+        for currency,purpose in (('GEMS','PERSUADE'),('GOLD','BRIBE'),('GOLD','BUY'),('GOLD','RESTOCK_SCARCE'),('GOLD','RESTOCK_COMMON')):
+            with self.subTest(currency=currency,purpose=purpose),self.assertRaises(ValueError):
+                self.gold('offer:1',currency=currency,purpose=purpose,target='Bob')
+        self.assertEqual(self.budget.payload(),before)
+        self.assertTrue(self.gold('offer:1',purpose='PERSUADE',target='Bob',balance=20_000_000,cost=20_000_000))
+
     def setUp(self):
         self.now = 100.0
         self.budget = FarmBudget(max_runs=2, max_energy=20, max_seconds=60,

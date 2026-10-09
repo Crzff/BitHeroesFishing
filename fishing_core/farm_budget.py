@@ -28,6 +28,7 @@ def _seconds(value):
 
 
 ENTRY_RESOURCES = ("ENERGY", "XEALS", "TOKENS", "SHARDS", "TICKETS", "BADGES")
+UNLIMITED_GOLD = 10**15  # Sin tope configurable al persuadir familiares.
 
 
 class FarmBudget:
@@ -129,6 +130,8 @@ class FarmBudget:
         _identifier(target)
         if currency != "GOLD" or purpose not in ("PERSUADE", "RESTOCK_COMMON"):
             raise ValueError("Moneda o proposito de gasto no permitidos")
+        if self.max_gold == UNLIMITED_GOLD and purpose != "PERSUADE":
+            raise ValueError("Oro ilimitado solo para persuadir familiares")
         _quantity(balance, "Saldo de oro")
         _quantity(cost, "Coste en oro", 1)
         intent = (purpose, target, cost)
