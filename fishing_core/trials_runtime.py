@@ -28,6 +28,7 @@ DIFF_DROPDOWN=(1416,826)
 
 
 class TrialsRunner(DungeonRunner):
+    OBSERVE_SECONDS=1200  # en vivo un combate de Gauntlet 499 (FMANI) superó 6 min
     defeat_continues=True
 
     def __init__(self,io,capture,vision,channel,log,runs,difficulty=499):
