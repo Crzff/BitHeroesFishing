@@ -13,7 +13,7 @@ from fishing_core.dungeon_vision import DungeonVision
 from fishing_core.pvp_runtime import PvpRunner
 
 with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
-    FRAMES={k:data[k] for k in data.files if k.startswith(('pvp_','boss_victory'))}
+    FRAMES={k:data[k] for k in data.files if k.startswith(('pvp_','boss_victory','boss_not_full'))}
 VISION=DungeonVision()
 
 
@@ -29,6 +29,7 @@ class FakeGame:
         if self.state in ('pvp_window','pvp_window_cost1') and xy==(1280,568):
             self.plays.append(1 if self.state.endswith('cost1') else 5);self.state='pvp_select';return
         if self.state=='pvp_team' and xy==(1215,982):self.state=next(self.results);return
+        if self.state=='boss_not_full' and xy==(816,750):self.state=next(self.results);return
         if self.state in ('boss_victory','pvp_defeat'):
             x,y=VISION.locate(FRAMES[self.state],'RESULT_TOWN',(700,915,1500,1080))
             h,w=VISION.templates['RESULT_TOWN'].shape[:2]
@@ -58,6 +59,11 @@ class PvpRuntimeTests(unittest.TestCase):
         self.assertEqual(game.plays,[5,5,1]);self.assertEqual(game.state,'pvp_home')
         self.assertEqual(runner.budget.energy_reserved,11)
         self.assertEqual(runner.budget.payload()['completed_runs'],3);self.assertEqual(runner.budget.gold_reserved,0)
+
+    def test_incomplete_team_warning_is_accepted_and_the_fight_goes_on(self):
+        game=FakeGame(['boss_not_full','boss_victory'])
+        self.run_pvp(game,[5,0])
+        self.assertEqual(game.plays,[5]);self.assertEqual(game.state,'pvp_home')
 
     def test_chosen_opponent_row_gets_the_fight(self):
         game=FakeGame(['boss_victory']);clicks=[]

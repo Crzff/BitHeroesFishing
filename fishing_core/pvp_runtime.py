@@ -78,7 +78,11 @@ class PvpRunner(DungeonRunner):
         self.press('PVP',PLAY);self.choose_opponent();self.press('TEAM',ACCEPT)
         self.log.emit('PVP_STARTED',attempt_id=attempt,tickets_before=balance)
         results=('WB_VICTORY','WB_DEFEAT')
-        frame=self.wait(lambda f:self.vision.screen(f) in ('AUTO_OFF_BATTLE','AUTO_ON_BATTLE')+results,30,'combate PvP')
+        battle=('AUTO_OFF_BATTLE','AUTO_ON_BATTLE')+results
+        frame=self.wait(lambda f:self.vision.screen(f) in battle+('WB_NOT_FULL',),30,'combate PvP')
+        if self.vision.screen(frame)=='WB_NOT_FULL':  # KORTZZ (T4) no llena el equipo: pelear igual, como en World Boss
+            self.click('WB_NOT_FULL',(816,750),'DECLINE_YES',(670,695,955,805))
+            frame=self.wait(lambda f:self.vision.screen(f) in battle,30,'combate PvP')
         if self.vision.screen(frame)=='AUTO_OFF_BATTLE':self.click('AUTO_OFF_BATTLE',AUTO)
         frame=self.wait(lambda f:self.vision.screen(f) in results,BATTLE_LIMIT,'resultado PvP')
         screen=self.vision.screen(frame);outcome='VICTORY' if screen=='WB_VICTORY' else 'DEFEAT'
