@@ -5,8 +5,9 @@ import json
 
 from .protocol import atomic_json
 from .telemetry import ROOT
+from .accounts import account_id, state_root
 
-PATH=ROOT/'farm_config.json'
+PATH=state_root(ROOT)/'farm_config.json'
 MODES=('quest','pvp','boss','raid','expedition','trials')  # orden de ejecución de crzf
 DEFAULT={'modes':{mode:True for mode in MODES},
          'quest':{'dungeon':'Z5D3','difficulty':'Heroic','targets':['Tealk'],'max_gold':50_000},
@@ -20,6 +21,8 @@ DEFAULT={'modes':{mode:True for mode in MODES},
 
 def load(path=None):
     path=path or PATH;config=copy.deepcopy(DEFAULT)
+    if account_id() is not None:
+        config['quest']['max_gold']=0;config['raid']['max_gold']=0
     try:
         saved=json.loads(path.read_text())
     except (OSError,ValueError):

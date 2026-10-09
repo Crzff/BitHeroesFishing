@@ -1,11 +1,12 @@
 """App del Farm Bot con el aspecto de las ventanas de Bit Heroes. Abrirla no envía input al juego.
 
 Se dibuja con PIL (pixel_ui) en un único Canvas; cada elemento registra una zona clicable.
-START lanza fishing_core.farm_all en un proceso aparte con farm_config.json; STOP le
-envía SIGINT (los modos lo tratan como F8). Mientras juega, el juego debe tener el foco:
-cambiar a esta ventana ya detiene el bot por seguridad.
+START lanza fishing_core.farm_all con farm_config.json. STOP solicita la parada
+conjunta de los motores propios en Linux, sin cerrar clientes; F8 se conserva.
+En modo escritorio, cambiar de ventana pausa el bot; gamescope permite usar el panel.
 """
 
+import json
 import os
 import signal
 import subprocess
@@ -22,6 +23,10 @@ from .dungeon_catalog import CATALOG, FAMILIARS, dungeon
 from .dungeon_runtime import NODES
 from .raid_runtime import RAID_TIER, RAIDS
 from .telemetry import ROOT
+from .accounts import NAMES as ACCOUNT_NAMES,runs_root,state_root
+
+MULTI_SESSIONS=ROOT/'runs/accounts/sessions.json'  # endpoints de los tres clientes (los escribe quien los abre)
+ACCOUNT_TABS=(('steam','STEAM'),('personal','FMANI'),('perfil-1','KORTZZ'))
 
 W,H=1180,920
 NAMES={'quest':'QUEST','pvp':'PVP','boss':'WORLD BOSS','raid':'RAID','expedition':'EXPEDITION','trials':'TRIALS'}
@@ -57,15 +62,27 @@ def short(n):
 
 
 class FarmApp(tk.Tk):
-    def __init__(self):
+    def __init__(self,sessions=None,read_only=False):
+        if read_only and sessions is None:raise ValueError('Observación requiere endpoints explícitos de las tres cuentas')
         super().__init__()
         self.title('Bit Heroes Farm Bot');self.resizable(False,False);self.configure(bg='#19283a')
         self.canvas=tk.Canvas(self,width=W,height=H,highlightthickness=0,bg='#19283a');self.canvas.pack()
         self.canvas.bind('<Button-1>',self.on_click);self.tier_scroll=0;self.wheel_zone=None
         for event,step in (('<Button-4>',-1),('<Button-5>',1)):self.canvas.bind(event,lambda e,s=step:self.on_wheel(e,s))
         self.canvas.bind('<MouseWheel>',lambda e:self.on_wheel(e,-1 if e.delta>0 else 1))
-        self.config_data=farm_config.load();self.screen='main';self.process=None
+        self.sessions=sessions;self.read_only=read_only;self.config_data=farm_config.load();self.screen='main';self.process=None
+        self.multi=None;self.account=None
+        if sessions is None and MULTI_SESSIONS.exists():  # farmeo de las tres cuentas a la vez
+            try:
+                from .farm_multi import trial_environments
+                self.multi=json.loads(MULTI_SESSIONS.read_text());trial_environments(self.multi)
+                self.account='steam';self.config_data=farm_config.load(self.config_path())
+            except (OSError,ValueError):self.multi=None
         self.status='LISTO · ELIGE MODOS Y PULSA START';self.zone=dungeon(self.config_data['quest']['dungeon'])['zone']
+        if sessions is not None:
+            self.status='PRUEBA LIMITADA · 3 CUENTAS · SIN ORO NI GEMAS'
+            if read_only:self.status='COMPROBAR STOP · SIN INPUT NI GASTO'
+            self.bind('<space>',lambda e:(self.toggle_run(),self.render()))
         self.protocol('WM_DELETE_WINDOW',self.quit_app);self.render()
 
     # --- dibujo -----------------------------------------------------------------
@@ -108,6 +125,7 @@ class FarmApp(tk.Tk):
         return img.resize((max(1,round(img.width*scale)),max(1,round(img.height*scale))),Image.NEAREST)
 
     def draw_main(self):
+        if getattr(self,'sessions',None) is not None:return self.draw_trial()
         x0,y0,x1,y1=self.window('FARM BOT',back=False)
         running=self.process is not None;cw=(x1-x0-40)//3;ch=236
         for i,mode in enumerate(farm_config.MODES):
@@ -121,11 +139,29 @@ class FarmApp(tk.Tk):
         y=y0+2*(ch+20)+4
         self.put(ui.checkbox(self.config_data['runes'],44),x0,y,None if running else self.toggle_runes)
         self.label('CAMBIAR RUNAS (CAPTURA / ITEM FIND)',x0+58,y+8,18)
-        self.put(ui.checkbox(self.config_data['background'],44),x0,y+56,None if running else self.toggle_background)
-        self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',x0+58,y+64,18)
+        if self.multi:  # se configura una cuenta cada vez; START farmea las tres
+            self.label('CUENTA',x0,y+66,18,ui.GOLD)
+            for i,(account,label) in enumerate(ACCOUNT_TABS):
+                self.put(ui.button(label,140,46,'blue' if self.account==account else 'gray',18),x0+110+i*152,y+52,
+                         None if running else lambda a=account:self.choose_account(a))
+        else:
+            self.put(ui.checkbox(self.config_data['background'],44),x0,y+56,None if running else self.toggle_background)
+            self.label('SEGUNDO PLANO (JUEGO EN GAMESCOPE)',x0+58,y+64,18)
         self.label(self.status[:52],x0,y+124,16,ui.GOLD if running else ui.DIM)
         self.put(ui.loot_button(150,y1-y),x1-150-170,y,self.open_loot)
         self.put(ui.auto_button(running,150,y1-y),x1-150,y,self.toggle_run)
+
+    def draw_trial(self):
+        read_only=getattr(self,'read_only',False)
+        x0,y0,x1,y1=self.window('COMPROBAR STOP' if read_only else 'PRUEBA MULTICUENTA',back=False)
+        for i,name in enumerate(ACCOUNT_NAMES.values()):
+            y=y0+i*140;self.put(ui.row(x1-x0,120),x0,y)
+            self.label(name.upper(),x0+18,y+18,22,ui.GOLD)
+            self.label('OBSERVAR HOME · 0 INPUTS · 0 ENTRADAS' if read_only else '1 DUNGEON NORMAL · MAXIMO 10 ENERGIA',x0+18,y+60,18)
+        self.label('MOTORES REALES · INPUT BLOQUEADO' if read_only else 'SIN ORO, GEMAS, RUNAS NI REINTENTOS',x0,y0+450,18,ui.GOLD)
+        self.label('START/STOP: BOTON O ESPACIO · SOLO CLIENTES YA PREPARADOS',x0,y0+494,14,ui.DIM)
+        self.label(self.status[:64],x0,y1-150,16,ui.GOLD)
+        self.put(ui.auto_button(self.process is not None,150,100),x1-150,y1-110,self.toggle_run)
 
     def summary(self,mode):
         c=self.config_data
@@ -235,7 +271,8 @@ class FarmApp(tk.Tk):
         for i,line in enumerate(INFO[mode]):self.label(line,cx,y0+220+i*46,20,center=True)
 
     def draw_loot(self):
-        x0,y0,x1,y1=self.window('LOOT');totals=loot.load()
+        x0,y0,x1,y1=self.window('LOOT');root=self.loot_root();totals=loot.load(root/'loot_totals.json' if root else None)
+        album_dir=root/'loot_album' if root else loot.ALBUM
         self.put(self.resource('gold',44),x0,y0);self.label(f"ORO  {totals['gold']:,}",x0+64,y0+10,24,ui.GOLD)
         self.label(f"XP  {totals['xp']:,}",x0+420,y0+10,24,(140,232,110))
         # Solo míticos y de conjunto (crzf): objetos y materiales; a la derecha, los familiares.
@@ -258,7 +295,7 @@ class FarmApp(tk.Tk):
         album=sorted(((k,e) for k,e in totals['album'].items() if e['rarity'] in loot.TRACKED),key=lambda kv:(('ITEM','MATERIAL','CONSUMABLE').index(kv[1]['kind']),loot.ORDER.index(kv[1]['rarity']),-kv[1]['count']))
         ay=y0+108+2*62+40;self.label('ALBUM (MITICOS Y DE CONJUNTO)',x0,ay,16,ui.GOLD);size=58
         for i,(key,entry) in enumerate(album[:(x1-x0)//(size+8)]):
-            path=loot.ALBUM/f'{key}.png'
+            path=album_dir/f'{key}.png'
             if not path.exists():continue
             x=x0+i*(size+8);self.put(ui.loot_icon(path,entry['rarity'],RARITY_COLORS[entry['rarity']],size),x,ay+28)
             if entry['count']>1:self.label(str(entry['count']),x+4,ay+30,13)
@@ -275,12 +312,23 @@ class FarmApp(tk.Tk):
         for x0,y0,x1,y1,action in reversed(self.zones):
             if x0<=event.x<x1 and y0<=event.y<y1:action();self.render();return
 
+    def config_path(self):
+        return state_root(ROOT,{'FARM_ACCOUNT':self.account})/'farm_config.json' if self.multi else None
+
+    def loot_root(self):
+        return runs_root(ROOT,{'FARM_ACCOUNT':self.account}) if self.multi else None
+
+    def choose_account(self,account):
+        self.account=account;self.config_data=farm_config.load(self.config_path())
+        self.zone=dungeon(self.config_data['quest']['dungeon'])['zone']
+
     def save(self):
-        farm_config.save(self.config_data)
+        farm_config.save(self.config_data,self.config_path())
 
     def go_main(self):self.screen='main'
     def open_loot(self):self.screen='loot'
-    def reset_loot(self):loot.reset()
+    def reset_loot(self):
+        root=self.loot_root();loot.reset(root/'loot_totals.json' if root else None)
     def open_mode(self,mode):
         if self.process is None:self.screen=mode
         if mode=='boss':self.show_tier()
@@ -335,40 +383,74 @@ class FarmApp(tk.Tk):
 
     def toggle_run(self):
         if self.process is not None:
-            self.process.send_signal(signal.SIGINT);self.status='DETENIENDO...';return
+            if sys.platform=='linux':
+                from .global_stop import stop_workers
+                stop_workers()
+            else:self.process.send_signal(signal.SIGINT)
+            self.status='DETENIENDO...';return
+        if getattr(self,'sessions',None) is not None:
+            from .farm_multi import start_trial
+            try:self.process=start_trial(self.sessions,read_only=True) if getattr(self,'read_only',False) else start_trial(self.sessions)
+            except (ValueError,RuntimeError,OSError):self.status='PRUEBA BLOQUEADA · CLIENTES NO CERTIFICADOS';return
+            self.status='PRUEBA EN MARCHA · 3 CUENTAS · STOP EN EL PANEL'
+            threading.Thread(target=self.follow,args=(self.process,),daemon=True).start();return
+        if self.multi:
+            from .farm_multi import start_farm
+            self.save()
+            try:self.process=start_farm(self.multi)
+            except (ValueError,RuntimeError,OSError) as exc:self.status=('NO ARRANCA · '+str(exc))[:52].upper();return
+            self.status='EN MARCHA · 3 CUENTAS · STOP EN EL PANEL'
+            threading.Thread(target=self.follow,args=(self.process,),daemon=True).start();return
         if not any(self.config_data['modes'].values()):self.status='NINGUN MODO ACTIVO';return
         background=self.config_data['background'] or os.environ.get('FARM_BACKEND')=='gamescope'
         env={**os.environ,'FARM_BACKEND':'gamescope' if background else ''}
-        self.save();self.status='EN MARCHA EN SEGUNDO PLANO · F8 DETIENE' if background else 'EN MARCHA · F8 DETIENE · NO CAMBIES DE VENTANA'
+        self.save();self.status='EN MARCHA EN SEGUNDO PLANO · STOP EN EL PANEL' if background else 'EN MARCHA · STOP EN EL PANEL · JUEGO CON FOCO'
         self.process=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all'],cwd=str(ROOT),env=env,
                                       stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
         threading.Thread(target=self.follow,args=(self.process,),daemon=True).start()
 
     def follow(self,process):
-        steps=('Runas captura','Quest','Runas Item Find','PvP','World Boss','Raid','Expedition','Trials');results=[]
-        log=open(ROOT/'runs/farm_all.log','a',encoding='utf-8')  # causa de cada parada, para revisarla después
+        trial=getattr(self,'sessions',None) is not None
+        steps=('Runas captura','Quest','Runas Item Find','PvP','World Boss','Raid','Expedition','Trials',*ACCOUNT_NAMES.values());results=[]
+        path=runs_root(ROOT)/('farm_multi.log' if trial else 'farm_all.log');path.parent.mkdir(parents=True,exist_ok=True)
+        log=open(path,'a',encoding='utf-8')  # causa de cada parada, para revisarla después
         log.write(f'\n--- {time.strftime("%Y-%m-%d %H:%M:%S")} inicio pid {process.pid}\n');log.flush()
+        multi=getattr(self,'multi',None) is not None and not trial
         for line in process.stdout:
             line=line.strip();log.write(f'{time.strftime("%H:%M:%S")} {line}\n');log.flush()
+            if multi:
+                if line.startswith('[') and '] == ' in line:
+                    who,step=line[1:].split('] == ',1);self.after(0,self.set_status,f'{who.upper()}: {step.split(" (")[0].upper()}')
+                elif line.split(':')[0] in ACCOUNT_NAMES.values():results.append(line.replace('TERMINADO','OK'))
+                continue
             if line.startswith('== '):
                 paused='en pausa' in line
-                self.after(0,self.set_status,('EN PAUSA · VUELVE AL JUEGO: ' if paused else 'EN MARCHA · ')+line[3:].split(' (')[0].upper()+('' if paused else ' · F8 DETIENE'))
+                self.after(0,self.set_status,('EN PAUSA · VUELVE AL JUEGO: ' if paused else 'EN MARCHA · ')+line[3:].split(' (')[0].upper()+('' if paused else ' · STOP EN EL PANEL'))
             elif ': ' in line and line.split(':')[0] in steps:results.append(line)
         code=process.wait();log.write(f'{time.strftime("%H:%M:%S")} fin código {code}\n');log.close()
         failed=[r for r in results if not r.split(': ',1)[1].startswith('OK')]  # 'OK (ya hecho)' al reanudar
-        self.after(0,self.finish,'TERMINADO · TODO GASTADO' if not failed else 'PARADO · '+failed[-1][:46].upper())
+        if code and not failed:failed.append(f'Código de salida {code}')
+        self.after(0,self.finish,('PRUEBA COMPLETADA · LIMITES CONSERVADOS' if trial else 'TERMINADO · TODO GASTADO')
+                   if not failed else 'PARADO · '+failed[-1][:46].upper())
 
     def set_status(self,text):self.status=text;self.render()
     def finish(self,text):self.process=None;self.status=text;self.render()
 
     def quit_app(self):
-        if self.process is not None:self.process.send_signal(signal.SIGINT)
+        if self.process is not None:self.toggle_run()
         self.destroy()
 
 
-def main():
+def main(argv=None):
     if os.name=='nt':raise SystemExit('El Farm Bot multimodo aún no está certificado en Windows')
-    FarmApp().mainloop()
+    argv=sys.argv[1:] if argv is None else argv
+    if argv not in ([],['--trial'],['--stop-check']):raise SystemExit('Argumentos no válidos')
+    sessions=None
+    if argv:
+        from .farm_multi import read_sessions,trial_environments
+        sessions=read_sessions();trial_environments(sessions)
+    if argv==['--stop-check']:FarmApp(sessions=sessions,read_only=True).mainloop()
+    else:FarmApp(sessions=sessions).mainloop()
 
 
 if __name__=='__main__':

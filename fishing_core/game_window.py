@@ -192,6 +192,8 @@ class WindowsAPI:
 
 
 def window_api():
+    from .accounts import account_id
+    if account_id() is not None:raise RuntimeError('Multicuenta no permite seleccionar una ventana del escritorio')
     if os.name=="nt":
         return WindowsAPI()
     from .linux import LinuxAPI

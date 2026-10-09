@@ -6,10 +6,11 @@ import os
 
 from .protocol import atomic_json
 from .telemetry import ROOT
+from .accounts import runs_root
 
-PATH=ROOT/'runs/loot_totals.json'
-ALBUM=ROOT/'runs/loot_album'
-KINDS=ROOT/'runs/loot_kinds.json'  # tipo leído en la descripción de cada icono (se consulta una vez)
+PATH=runs_root(ROOT)/'loot_totals.json'
+ALBUM=runs_root(ROOT)/'loot_album'
+KINDS=runs_root(ROOT)/'loot_kinds.json'  # tipo leído en la descripción de cada icono (se consulta una vez)
 ENABLED=os.environ.get('FARM_LOOT')=='1'  # solo farm_all lo activa: pruebas y runners sueltos no tocan los totales
 ORDER=('MYTHIC','SET','LEGENDARY','EPIC','RARE','COMMON')
 TRACKED=('MYTHIC','SET')  # rarezas que se cuentan (crzf 2026-10-06: el resto retrasaba el bot)

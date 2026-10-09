@@ -16,23 +16,46 @@ import time
 from . import farm_config, loot
 from .telemetry import ROOT
 from .control_flow import SafetyStop
+from .accounts import account_id, runs_root
 
 
-def quest(config):
+def quest_plan(config,single=False):
     from .dungeon_catalog import farm_plan
-    from .dungeon_runtime import start_dungeon,validate_supported
-    from .game_window import focus_window
+    from .dungeon_runtime import validate_supported
     q=config['quest']
-    plan=validate_supported({**farm_plan(q['dungeon'],q['difficulty'],60,1000),'targets':q.get('targets') or [],
-                             'max_gold':int(q.get('max_gold',0))})
+    return validate_supported({**farm_plan(q['dungeon'],'Normal' if single else q['difficulty'],1 if single else 60,10 if single else 1000),
+                               'targets':[] if single else q.get('targets') or [],'max_gold':0 if single else int(q.get('max_gold',0))})
+
+
+def check_supervisor():
+    supervisor=os.environ.get('FARM_SUPERVISOR_PID')
+    if supervisor and str(os.getppid())!=supervisor:
+        raise SafetyStop('El supervisor terminó; no se continúa la dungeon')
+    return supervisor
+
+
+def quest(config,single=False,read_only=False):
+    from .dungeon_runtime import start_dungeon
+    from .game_window import focus_window
+    from .processes import close_children
+    plan=quest_plan(config,single)
+    supervisor=check_supervisor()
     game=None if os.environ.get('FARM_BACKEND')=='gamescope' else focus_window('Steam')
-    process,channel,mutex=start_dungeon(game,plan)
+    process,channel,mutex=start_dungeon(game,plan,read_only=True) if read_only else start_dungeon(game,plan)
     try:
-        code=process.wait()
+        while True:
+            check_supervisor()
+            try:
+                code=process.wait(timeout=.2 if supervisor else None);break
+            except subprocess.TimeoutExpired:continue
+    except BaseException:
+        close_children((process,),channel)
+        raise
     finally:
         mutex.close()
     if channel.stop_path.exists():  # solo existe si la sesión se detuvo
         raise SafetyStop(channel.stop_path.read_text())
+    if code:raise SafetyStop(f'El motor de dungeon terminó con código {code}')
     return code
 
 
@@ -56,30 +79,54 @@ def steps(config):
 
 
 def main(argv):
-    from .gamescope import is_gone,relaunch_game
-    background=os.environ.get('FARM_BACKEND')=='gamescope'
-    os.environ['FARM_LOOT']='1';loot.ENABLED=True  # contador de la app (también en los subprocesos)
-    config=farm_config.load()
-    if '--runes' in argv:config['runes']=True
-    if '--no-quest' in argv:config['modes']['quest']=False
-    # El servidor de imagen queda vivo al terminar: cerrar el flujo PipeWire coincidió con caídas de gamescope.
-    results=[];server={'proc':start_frame_server() if background else None}
-    run_steps(config,results,background,is_gone,relaunch_game,server)
-    report(results)
+    from .gamescope import is_gone,relaunch_game,require_calibrated_client
+    from .processes import Mutex
+    read_only='--stop-check' in argv
+    if read_only and argv!=['--stop-check']:raise ValueError('Observación no acepta modos de farmeo')
+    require_calibrated_client(read_only=True) if read_only else require_calibrated_client()
+    single='--single-dungeon' in argv or read_only
+    if os.environ.get('FARM_SINGLE_DUNGEON')=='1' and argv!=['--single-dungeon']:
+        raise ValueError('Un worker de prueba limitada solo puede ejecutar --single-dungeon')
+    if single and (argv not in (['--single-dungeon'],['--stop-check']) or account_id() is None):
+        raise ValueError('Prueba de una dungeon requiere una cuenta explícita y ningún otro modo')
+    lock=Mutex('FARM_ALL')
+    try:
+        background=os.environ.get('FARM_BACKEND')=='gamescope'
+        os.environ['FARM_LOOT']='1';loot.ENABLED=True  # contador de la app (también en los subprocesos)
+        config=farm_config.load()
+        if single:
+            quest_plan(config,single=True)  # Rechazar rutas incompatibles antes de abrir la captura.
+            check_supervisor()
+            if read_only:
+                start_frame_server(read_only=True);quest(config,single=True,read_only=True)
+            else:start_frame_server();quest(config,single=True)
+            report([('Quest','OK (prueba limitada)')]);return
+        if '--runes' in argv:config['runes']=True
+        if '--no-quest' in argv:config['modes']['quest']=False
+        # El servidor de imagen queda vivo al terminar: cerrar el flujo PipeWire coincidió con caídas de gamescope.
+        results=[];server={'proc':start_frame_server() if background else None}
+        run_steps(config,results,background,is_gone,relaunch_game,server)
+        report(results)
+    finally:lock.close()
 
 
-def start_frame_server():
+def start_frame_server(read_only=False):
     """Un solo flujo de imagen para toda la sesión (abrir/cerrar flujos coincidió con caídas de gamescope)."""
     import subprocess
-    from .gamescope import server_alive
+    from .gamescope import server_alive,steam_frame_source
+    if steam_frame_source() is not None:return None
     if server_alive():return None  # ya hay uno: se reutiliza
     proc=subprocess.Popen([sys.executable,'-B','-m','fishing_core.gamescope','serve'],stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL,stdin=subprocess.DEVNULL,start_new_session=True)
     import time
     for _ in range(50):
-        if server_alive():break
+        if server_alive():return proc
+        if proc.poll() is not None:raise RuntimeError('El servidor de imagen no pudo iniciar')
         time.sleep(.1)
-    return proc
+    proc.terminate()
+    try:proc.wait(timeout=1)
+    except subprocess.TimeoutExpired:proc.kill();proc.wait(timeout=1)
+    raise RuntimeError('El servidor de imagen no confirmó el arranque')
 
 
 def stop_frame_server(server):
@@ -92,7 +139,7 @@ def stop_frame_server(server):
     server['proc']=None
 
 
-PROGRESS=ROOT/'runs/farm_progress.json'
+PROGRESS=runs_root(ROOT)/'farm_progress.json'
 # Paradas porque el usuario usó el ordenador (modo escritorio): pausa y se reanuda, no se pierde el ciclo.
 PAUSES=('perdio el foco','no confirma el cursor','Otra ventana tapa','cambio su identidad')
 RESUME_SECONDS=3*3600
@@ -139,10 +186,14 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                 if 'Límite de sesión' in message and sessions<20:
                     # Cada proceso de modo dura como mucho 1 h; con muchos recursos se abre otra sesión.
                     sessions+=1;print(f'== {name} (sesión {sessions+1})',flush=True);continue
+                if account_id() in ('personal','perfil-1') and ('identidad' in message or 'terminó' in message or retried):
+                    # Identidad/proceso cambiados: nunca otra guarda. Los endpoints están fijados por el supervisor,
+                    # así que el único reintento genérico solo vuelve a aceptar el mismo Brave (fallos CDP momentáneos).
+                    results.append((name,message));return
                 if 'DISCONNECTED' in message and not retried:
                     retried=True;print(f'== {name} (reconexión)',flush=True);continue
                 # Segundo plano: gamescope puede caerse (fallo del driver Vulkan). Relanzar el juego y repetir el modo.
-                if background and is_gone(message) and relaunches<3:
+                if background and account_id() is None and is_gone(message) and relaunches<3:
                     relaunches+=1;print(f'== {name} (relanzando el juego {relaunches}/3)',flush=True)
                     stop_frame_server(server)
                     if relaunch_game():

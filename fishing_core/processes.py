@@ -12,12 +12,14 @@ from .protocol import Channel
 from . import VERSION
 from .telemetry import ROOT, run_environment
 from .game_window import ENV_WINDOW, WindowGuard, focus_window, window_api
+from .accounts import mutex_role
 
 
 class Mutex:
     def __init__(self, role: str):
         if not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}",role):
             raise ValueError("Rol de proceso invalido")
+        role=mutex_role(role)
         if os.name!="nt":
             import fcntl
             from pathlib import Path

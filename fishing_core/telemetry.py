@@ -17,6 +17,7 @@ from uuid import uuid4
 from importlib import metadata
 
 from . import VERSION
+from .accounts import account_id, runs_root, state_root
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_FIELDS = ["schema","run_id","cycle_id","attempt_id","track_id","utc","perf_ns",
@@ -63,10 +64,10 @@ class Telemetry:
     def __init__(self, role: str, run_id: str, root: Path = ROOT):
         self.role = role
         self.run_id = run_id
-        self.directory = root / "runs" / run_id
+        self.directory = runs_root(root) / run_id
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / f"{role.lower()}_events.jsonl"
-        self.legacy_log = root / ("CATCH_LOG.txt" if role == "CATCH" else "CONTROL_LOG.txt")
+        self.legacy_log = state_root(root) / ("CATCH_LOG.txt" if role == "CATCH" else "CONTROL_LOG.txt")
         self.pending = queue.Queue(maxsize=8192)
         self.error = None
         self.dropped = 0
@@ -82,6 +83,7 @@ class Telemetry:
                 packages[name]=None
         manifest = {
             "schema": 1, "version": VERSION, "role": role, "run_id": run_id,
+            "account":account_id(),
             "pid": os.getpid(), "utc": datetime.now(timezone.utc).isoformat(),
             "source_sha256": source_hashes(root),
             "python":sys.version,"packages":packages,
@@ -97,6 +99,7 @@ class Telemetry:
         record = {
             "schema": 1, "version": VERSION, "role": self.role,
             "run_id": self.run_id, "pid": os.getpid(),
+            "account":account_id(),
             "utc": datetime.now(timezone.utc).isoformat(),
             "perf_ns": time.perf_counter_ns(), "event": event, **fields,
         }

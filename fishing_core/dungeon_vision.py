@@ -44,6 +44,8 @@ def edit_distance(a,b):
 MODE_SCREENS=(('DISCONNECTED',(('DISCONNECTED',(720,430,1200,640)),('RECONNECT',(770,665,1150,820)))),
               ('SEASON_REWARDS',(('SEASON_TITLE',(600,150,1320,310)),('SEASON_CLAIM',(740,885,1180,1040)))),
               ('ITEMS',(('ITEMS_TITLE',(600,150,1320,450)),('ITEMS_CLOSE',(1200,150,1500,450)))),
+              ('TRIALS_REWARDS',(('STARTUP_TRIALS_TITLE',(800,95,1200,210)),('ITEMS_CLOSE',(1600,100,1740,240)))),
+              ('FISHING_REWARDS',(('STARTUP_FISHING_TITLE',(760,230,1160,350)),('ITEMS_CLOSE',(1280,240,1420,370)))),
               ('NEWS',(('NEWS_TITLE',(740,90,1180,255)),('NEWS_CLOSE',(935,885,1310,1045)))),
               ('PVP',(('PVP_TITLE',(600,140,1320,295)),('PVP_PLAY',(1120,440,1445,695)))),
               ('PVP_SELECT',(('PVP_SELECT',(520,95,1400,250)),)),
@@ -97,7 +99,7 @@ class DungeonVision:
     def __init__(self,path=ASSETS):
         with np.load(path,allow_pickle=False) as data:
             self.templates={key:data[key] for key in data.files}
-        # ponytail: dos fondos observados; máscara alfa etiquetada si otro fondo falla.
+        # ponytail: fondos/variantes observados; máscara alfa etiquetada si otro fondo falla.
         # El fondo de la ciudad cambia: comparar solo los píxeles comunes a todas las variantes observadas.
         self.home_masks={key:np.all([np.all(self.templates[key]==self.templates[v],axis=2) for v in self.templates
                                      if v.startswith(key+'_TOWN')],axis=0).astype(np.uint8)

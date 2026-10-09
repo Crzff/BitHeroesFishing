@@ -2,6 +2,7 @@
   "schema": 1,
   "source": "Steam/niri local 2026-10-02",
   "source_sha256": {
+    "home_personal": "23c1022e5cb4781aefd196c01c15d5d3b5d16cecc104a7b80a31bec4e3b5da2d",
     "home": "372b7740380b471c9f0db7357aa47af24408c8a66e7dce2ac1d11c47c33d4267",
     "map": "aca5f5c6611507cb00498a54ce9035b46e6a975b4fb50dbee581ce7f7b616fc4",
     "difficulty": "90749287db9bb3c9617ea04c6d8c6d464fe534226a793d2474cd2d48838a16bc",
@@ -118,9 +119,23 @@
     "news": "9fabe31d962a99423111d74fe27bc9ebb267e974e0c08fcafb26303c9c599f09",
     "disconnected": "cd1d9e365a0900fd276cf983fb2b8e4782d153119788abead879466541c2b03f",
     "season_rewards": "6ac9fadabc5a6fe7d2b70ac78c08784f2cc71f298a1c9347d14fd34d19662edd",
-    "items_window": "8cab4d7f002bb578cc19c99dd18078224a938d458d3c68a5d91f2bd568509124"
+    "items_window": "8cab4d7f002bb578cc19c99dd18078224a938d458d3c68a5d91f2bd568509124",
+    "startup_trials_personal": "67e04c8ce9cfaceb71197aaf46587300197f9d4e1dbe0a2cf69c88bc03778da6",
+    "startup_trials_perfil_1": "61476101d71e25b43e61e8e97edfd0d8a4647fd94e522e9a4816a4cb1b017997",
+    "startup_trials_steam": "6a346a6f350d4146af27deb0364314cd017d09fba0142dc5002df2902c108b34",
+    "startup_fishing_personal": "83f4196bd1fc28bf7c06529b60564c974b44d3115266ca393590dccfd050a7e3",
+    "startup_fishing_steam": "4777969f6374e96565f242e5187a7faea1cf24b8046f527ff3d9106c032d1567"
   },
   "regions": {
+    "HOME_QUEST_TOWN_PERSONAL": [
+      "home_personal",
+      [
+        22,
+        24,
+        155,
+        174
+      ]
+    ],
     "HOME_QUEST": [
       "home",
       [
@@ -1886,6 +1901,24 @@
         500
       ],
       "aviso: te desconectaste de una dungeon, \u00bfcontinuar?"
+    ],
+    "STARTUP_TRIALS_TITLE": [
+      "startup_trials_personal",
+      [
+        880,
+        115,
+        1130,
+        179
+      ]
+    ],
+    "STARTUP_FISHING_TITLE": [
+      "startup_fishing_personal",
+      [
+        823,
+        263,
+        1105,
+        319
+      ]
     ]
   },
   "notes": [
@@ -1900,7 +1933,8 @@
     "PvP 2026-10-04: ventana PVP ARENA, coste 5, SELECT OPPONENT con 4 rivales; tickets en la barra superior roja (alterna con reloj).",
     "Runas menores 2026-10-05: tipo por el s\u00edmbolo (IoU), rareza por el tono del rombo; valores de la wiki (Dar/Quindi/Zyrk 5-25, Vryn 7.5-37.5).",
     "Dungeons 2026-10-05: t\u00edtulo por dungeon (zonas 1-9) y ventana especial; nodos en assets/dungeon_nodes.json.",
-    "LOOT RECAP 2026-10-05: rejilla 3x2 de 129 px en x 1093/1247/1401, y 627/781; borde = rareza."
+    "LOOT RECAP 2026-10-05: rejilla 3x2 de 129 px en x 1093/1247/1401, y 627/781; borde = rareza.",
+    "Ventanas gratuitas de arranque 2026-10-08: t\u00edtulo y ITEMS_CLOSE exactos; sin entrada ni compra."
   ],
   "familiar_name_sources": {
     "Mummih": "offer_mummih",

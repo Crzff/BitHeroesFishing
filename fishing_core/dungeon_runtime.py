@@ -32,6 +32,8 @@ SESSION_SECONDS=3600
 WINDOW_CLOSERS={'DISCONNECTED':((960,742),'RECONNECT',(770,665,1150,820)),
                 'SEASON_REWARDS':((960,962),'SEASON_CLAIM',(740,885,1180,1040)),
                 'ITEMS':(None,'ITEMS_CLOSE',(1200,150,1500,450)),
+                'TRIALS_REWARDS':(None,'ITEMS_CLOSE',(1600,100,1740,240)),
+                'FISHING_REWARDS':(None,'ITEMS_CLOSE',(1280,240,1420,370)),
                 # Resultado de una run que quedó abierta: TOWN no gasta nada (cambia de sitio: se localiza).
                 'VICTORY':(None,'TOWN',(700,900,1500,1080)),'WB_VICTORY':(None,'RESULT_TOWN',(700,915,1500,1080)),
                 'WB_DEFEAT':(None,'RESULT_TOWN',(700,915,1500,1080)),
@@ -66,10 +68,13 @@ def validate_supported(plan):
     checked['max_gold']=gold
     if checked['dungeon_id'] not in NODES:
         raise ValueError('Dungeon aún sin calibrar en el mapa; no se cambia tu objetivo.')
+    if os.environ.get('FARM_SINGLE_DUNGEON')=='1' and (checked['runs']!=1 or checked['energy_limit']>10 or
+                                                      gold!=0 or targets or checked['difficulty']!='Normal'):
+        raise ValueError('Prueba limitada: solo 1 run Normal, 10 de energía, sin oro ni objetivos')
     return checked
 
 
-def start_dungeon(game,plan):
+def start_dungeon(game,plan,read_only=False):
     plan=validate_supported(plan)
     if os.name=='nt':raise ValueError('Runner de dungeon todavía no certificado en Windows; Fishing se conserva')
     mutex=Mutex('LAUNCHER');process=channel=guard=None
@@ -77,7 +82,8 @@ def start_dungeon(game,plan):
         env=run_environment();env['FARM_LAUNCHER_PID']=str(os.getpid())
         if game is not None:guard=WindowGuard(game);guard.check();env[ENV_WINDOW]=game.serialize()
         channel=Channel(env['FISHING_RUN_ID']);atomic_json(channel.directory/'farm_plan.json',plan)
-        process=subprocess.Popen([python_executable(),'-B','-u',str(ROOT/'FARM_DUNGEON_PROCESS.py')],
+        args=[python_executable(),'-B','-u',str(ROOT/'FARM_DUNGEON_PROCESS.py')]+(['--stop-check'] if read_only else [])
+        process=subprocess.Popen(args,
                                  cwd=str(ROOT),env=env,**child_options())
         return process,channel,mutex
     except (Exception,KeyboardInterrupt):
@@ -113,6 +119,20 @@ class DungeonRunner:
     def capture(self):
         self.check();shot=self.cap.grab({'left':0,'top':0,'width':1920,'height':1080})
         return np.frombuffer(shot.bgra,np.uint8).reshape(1080,1920,4)[:,:,:3].copy()
+
+    def observe_until_stopped(self):
+        """Motor real inicializado, sin navegación ni entradas: solo HOME y STOP."""
+        if self.io.read_only is not True:raise SafetyStop('STOP de prueba requiere un backend sin input')
+        self.deadline=min(self.deadline,time.monotonic()+60);frames=0
+        while True:
+            frame=self.capture()
+            if self.vision.screen(frame)!='HOME':raise SafetyStop('STOP de prueba requiere HOME confirmado; no se envía input')
+            frames+=1
+            if frames==2:
+                ready={'pid':os.getpid(),'run_id':self.channel.run_id,'screen':'HOME','budget':self.budget.payload()}
+                atomic_json(self.channel.directory/'stop_check_ready.json',ready)
+                self.log.emit('STOP_CHECK_READY',**ready)
+            time.sleep(.1)
 
     def wait(self,predicate,timeout=10,expected=None):
         deadline=time.monotonic()+timeout;stable=0;frame=None;stories=0
@@ -368,6 +388,11 @@ class DungeonRunner:
     def select_route(self):
         identifier=self.plan['dungeon_id'];difficulty=self.difficulty;screen=self.entry_screen()
         self.click('HOME',(90,90),'HOME_QUEST',(15,15,165,190))
+        try:self.wait(lambda f:self.vision.screen(f) in MAP_SCREENS,5,'mapa de la Quest')
+        except SafetyStop:
+            # Recién cerrado SETTINGS el juego puede ignorar el primer clic (visto en Brave); abrir el mapa es gratis.
+            if self.vision.screen(self.capture())!='HOME':raise
+            self.click('HOME',(90,90),'HOME_QUEST',(15,15,165,190))
         zone=dungeon(identifier)['zone'];self.select_zone(zone)
         time.sleep(1)  # el mapa entra animado: un clic temprano cae en otro sitio
         self.click(f'MAP_Z{zone}',NODES[identifier])
@@ -628,8 +653,9 @@ class DungeonRunner:
                 signature=hash(frame[420:813,780:1590].tobytes())
                 if signature not in story_sent:
                     if len(story_sent)>=30:raise SafetyStop('Demasiados diálogos de historia')
-                    self.wait(screen);story_sent.add(signature)
-                    self.click(screen,(1665,646))
+                    try:self.wait(screen,4)
+                    except SafetyStop:time.sleep(.12);continue  # se fue sola (carga/transición): nada que pulsar
+                    story_sent.add(signature);self.click(screen,(1665,646))
             elif screen not in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','BATTLE_VICTORY','LOADING'):
                 unknown_since=unknown_since or time.monotonic()
                 if time.monotonic()-unknown_since>8:
@@ -660,16 +686,18 @@ class DungeonRunner:
         self.log.emit('DUNGEON_STATUS',message='Límite de runs alcanzado · detenido',budget=self.budget.payload())
 
 
-def run_dungeon():
+def run_dungeon(read_only=False):
     from .gamescope import backend
-    LinuxIO,LinuxCapture=backend()
+    LinuxIO,LinuxCapture=backend(read_only=True) if read_only else backend()
     channel=Channel(os.environ['FISHING_RUN_ID']);io=log=None;locks=[]
     try:
         plan=validate_supported(json.loads((channel.directory/'farm_plan.json').read_text()))
         for role in ('CONTROL','CATCH'):locks.append(Mutex(role))
         log=Telemetry('DUNGEON',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
-            DungeonRunner(io,capture,DungeonVision(),channel,log,plan).run()
+            runner=DungeonRunner(io,capture,DungeonVision(),channel,log,plan)
+            if read_only:runner.observe_until_stopped()
+            else:runner.run()
     except (Exception,KeyboardInterrupt) as exc:
         if log:log.emit('SAFETY_STOP',message=str(exc) or 'F8',reason=str(exc) or 'F8',human=True)
         channel.stop('DUNGEON',str(exc) or 'F8')

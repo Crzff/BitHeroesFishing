@@ -23,6 +23,19 @@ class DungeonVisionTests(unittest.TestCase):
                             ('result','VICTORY'),('offer','FAMILIAR_OFFER'),('loading','LOADING')]:
             self.assertEqual(self.vision.screen(self.frames[name]),screen,name)
 
+    def test_startup_reward_windows_require_their_title_and_exact_close_without_accepting_dark_overlays(self):
+        for name in ('startup_trials_personal','startup_trials_perfil_1','startup_trials_steam',
+                     'startup_fishing_personal','startup_fishing_steam'):
+            frame=self.frames[name];trials=name.startswith('startup_trials')
+            expected='TRIALS_REWARDS' if trials else 'FISHING_REWARDS'
+            self.assertEqual(self.vision.screen(frame),expected,name)
+            title=(880,115,1130,179) if trials else (823,263,1105,319)
+            close=(1600,100,1740,240) if trials else (1280,240,1420,370)
+            for x,y,x1,y1 in (title,close):
+                damaged=frame.copy();damaged[y:y1,x:x1]=0
+                self.assertNotEqual(self.vision.screen(damaged),expected,name)
+            self.assertNotEqual(self.vision.screen((frame.astype(np.float32)*.65).astype(np.uint8)),expected,name)
+
     def test_all_twenty_zone_titles_require_the_active_map_not_a_dark_overlay(self):
         for zone in range(1,21):
             frame=self.frames[f'zones_map_{zone}']
@@ -66,6 +79,18 @@ class DungeonVisionTests(unittest.TestCase):
             x,y,x1,y1=roi;missing=frame.copy();missing[y:y1,x:x1]=0
             self.assertEqual(self.vision.screen(missing),'UNKNOWN')
         self.assertEqual(self.vision.screen(frame//2),'UNKNOWN')
+
+    def test_personal_home_is_recognised_but_dark_missing_or_damaged_icons_are_not(self):
+        frame=self.frames['home_personal']
+        self.assertEqual(self.vision.screen(frame),'HOME')
+        self.assertEqual(self.vision.locate(frame,'HOME_QUEST',(15,15,165,190)),(22,24))
+        self.assertEqual(self.vision.locate(frame,'HOME_SETTINGS',(1760,910,1920,1080)),(1780,932))
+        self.assertEqual(self.vision.screen(frame//2),'UNKNOWN')
+        for box in ((15,15,165,190),(1760,910,1920,1080),(65,45,115,95)):
+            damaged=frame.copy();x,y,x1,y1=box;damaged[y:y1,x:x1]=0
+            self.assertEqual(self.vision.screen(damaged),'UNKNOWN',box)
+        gray=cv2.cvtColor(cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY),cv2.COLOR_GRAY2BGR)
+        self.assertEqual(self.vision.screen(gray),'UNKNOWN')
 
     def test_map_and_battle_auto_use_context_not_hover_brightness(self):
         darker=self.frames['auto_on'].copy()

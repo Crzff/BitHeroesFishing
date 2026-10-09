@@ -343,3 +343,674 @@ Una run de cada modo, supervisada y sin compras. Coordenadas a 1920×1080.
   que el combate esté estable antes de tocarlo.
 - Preferencias de crzf: Trials coste 5 bajando hasta 1; Raid del tier del jugador (T13 =
   Storm); PvP 5 tickets eligiendo rival; Netherworld T9 Heroic con REGROUP.
+
+## Retoques del panel y evaluación de Brave — 2026-10-07
+
+- Iconos de modos recuperados completos de referencias locales, con transparencia;
+  cofre sin fondo. Se conserva el centrado por masa visible de `pixel_ui.visual_center`.
+- Marcos Settings/Raid: esquinas y placa separadas del fondo/cuerpo, limpieza de
+  controles originales y margen de recorte para mantener la zona X dentro del PNG.
+  Corregido el generador `scripts/build_ui_frames.py`, con regresiones offline.
+- Ocho pantallas renderizadas con PIL, sin abrir Tk ni el juego; zonas clicables
+  dentro del panel y los seis iconos centrados con error máximo de 0,5 px.
+- **Brave multicuenta simultáneo: objetivo solicitado, todavía no implementado ni
+  probado.** Brave y gamescope están instalados. La ruta candidata reutiliza gamescope
+  con un perfil y servidor gráfico por cuenta; antes hay que separar display/nodo
+  PipeWire, memoria compartida, locks, configuración, progreso y botín por sesión.
+  También identificar Brave, adaptar la geometría web y evitar el relanzamiento
+  global de Steam. Conservar F8 y guardas; no basta abrir varios perfiles.
+
+## Multicuenta: aislamiento offline — 2026-10-07
+
+**Primera entrega, no farmeo Brave operativo.** Alcance confirmado: tres cuentas
+distintas a la vez (Personal, Perfil 1, Steam). El usuario autorizó dos perfiles
+Brave nuevos exclusivos del bot; los originales no se inspeccionaron ni copiaron.
+Asignación aclarada: **Personal = fmani**, **Perfil 1 = Kortzz**,
+**Steam = brandonr2600**. Los nombres del personaje y de Kongregate pueden diferir.
+
+- `fishing_core/accounts.py`: identidad allowlist `FARM_ACCOUNT=personal|perfil-1|steam`.
+  Un proceso por cuenta, con entorno fijo y heredado por sus hijos; nunca cambiar
+  la cuenta dentro de un mismo panel/proceso. Sin esa variable, rutas antiguas.
+- Preferencias, progreso, botín/álbum/tipos, IPC y registros propios bajo
+  `runs/accounts/<id>/`. Manifiestos/eventos identifican la cuenta lógica, no sus
+  credenciales. Las cuentas nuevas empiezan con cuota de oro cero; valores ya
+  guardados y configuración antigua intactos.
+- Locks por cuenta para todos los motores y para la cadena `FARM_ALL`. Steam
+  conserva los nombres antiguos de locks para impedir dos motores sobre esa
+  cuenta desde lanzadores diferentes. Lock exclusivo adicional de `FRAME_SERVER`.
+- Sesión identificada: `FARM_BACKEND=gamescope`, display X local explícito en
+  `FARM_GAMESCOPE_DISPLAY` y serial de vídeo en `FARM_GAMESCOPE_SERIAL`. No se elige
+  el primer nodo/pantalla ni se cambia al escritorio si faltan o desaparecen.
+  SHM propia por usuario/cuenta/display/serial; nunca reciclar la imagen de otro
+  endpoint. No hay fallback a otro flujo sin su servidor de imagen.
+- Geometría exacta 1920×1080, ventana única y misma identidad X durante la sesión.
+  Un servidor muerto no entrega fotogramas almacenados. F8 se conserva en el
+  escritorio; relanzamiento global de Steam deshabilitado para cuentas identificadas.
+- Directorios privados preparados (modo 0700, excluidos por `runs/`):
+  `runs/accounts/personal/brave-data` y `runs/accounts/perfil-1/brave-data`.
+  Al prepararlos estaban vacíos, antes de los logins manuales posteriores. Se
+  rechazan enlaces simbólicos y directorios de perfil públicos; no se sobrescribe
+  contenido ya existente. Fuente del aislamiento de datos:
+  [Chromium: User Data Directory](https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md).
+
+Pruebas: tres workers Python reales coexistieron offline y rechazaron duplicados
+(también Steam frente al modo antiguo). IPC/logs con el mismo run-id no se mezclan.
+Ventanas, nodos y frames restantes son sintéticos; regresiones comprobadas rojas
+antes del arreglo y mutación de la guarda de identidad detectada sin editar disco.
+Durante la primera prueba roja del relanzamiento heredado se intentó enumerar X;
+el test quedó corregido para aislar esa llamada. No se inició navegador/juego,
+no se capturaron imágenes ni se enviaron inputs.
+La primera suite completa heredó `DISPLAY` y sus seis tests Tk crearon y retiraron
+un panel sin `mainloop`, con clics simulados y configuración temporal. Para evitar
+incluso esa creación de ventanas, la verificación de esta entrega se repite sin
+`DISPLAY`, `WAYLAND_DISPLAY` ni `NIRI_SOCKET`; los tests Tk conservan su skip
+existente cuando no hay pantalla. No se lanzaron motores ni farmeo.
+
+**Pendiente en la primera entrega:** login manual y validación gráfica; resultados
+posteriores más abajo. Todavía falta integrar las guardas web en el runtime y
+integrar el supervisor/lanzamiento de las tres sesiones, parada conjunta y
+demostrar farmeo simultáneo real. `backend()` y `GamescopeGuard` rechazan Personal
+y Perfil 1 antes de conectar al servidor X: no eliminar ese bloqueo sin validar
+Brave. No hay launcher multicuenta listo ni promesa de funcionamiento basada en mocks.
+
+Evidencias y logs de esta entrega: `/tmp/opencode/bitheroes-multi-account/`.
+Suite offline:
+`env -u DISPLAY -u WAYLAND_DISPLAY -u NIRI_SOCKET .venv/bin/python -B -m unittest discover -s tests`.
+Regresión enfocada final: 33 tests de cuentas/gamescope/orquestador pasan; sintaxis
+de 13 archivos y `git diff --check` correctos. Primera suite: 371 tests, 368 pasan
+y 3 Windows omitidos (222,013 s). Suite headless terminada: **371 tests, 362 pasan
+y 9 omitidos** (6 Tk sin pantalla, 3 Windows), 212,813 s; log `tests-headless.log`
+en el directorio de evidencias. No hay commits ni publicación.
+
+### Primera prueba gráfica: perfil entonces etiquetado Personal
+
+**Corrección posterior:** este perfil autenticado contenía Kortzz y corresponde a
+Perfil 1, no a fmani. Las rutas y nombres de evidencias de esta prueba conservan
+su etiqueta histórica; no prueban la identidad de Personal/fmani.
+
+El usuario autorizó explícitamente continuar con Brave y el juego después de
+explicar la restricción offline. La excepción no elimina F8, aislamiento,
+límites de gasto ni la prohibición de leer/copiar los perfiles originales.
+
+- Brave 154.1.96.60 abierto con el directorio nuevo
+  `runs/accounts/personal/brave-data`, sin importar cuentas ni datos originales.
+  Inicio visible sobre Wayland para permitir login manual; todavía no gamescope.
+- Página del juego localizada en la portada oficial de Kongregate:
+  `https://www.kongregate.com/en/games/Juppiomenz/bit-heroes`.
+  Identidad Brave comprobada en el runtime (`navigator.brave`), no inferida del
+  nombre del proceso. La página exige iniciar sesión para jugar; no hay canvas
+  del juego antes del login.
+- Formulario de login abierto. El usuario escribe sus credenciales directamente
+  en Brave; no se leen campos, cookies, storage ni archivos de credenciales y no
+  se exporta estado de autenticación. No hay motores activos ni gasto de recursos.
+- Control CDP solo local y con un directorio de datos ajeno al navegador personal,
+  siguiendo [Chrome: remote debugging](https://developer.chrome.com/blog/remote-debugging-port).
+  La sesión de Agent Browser se liga a la pestaña del juego; para adjuntarse a una
+  instancia se usa `connect` explícito, evitando abrir un Chromium distinto por
+  omitir parámetros de conexión en llamadas posteriores.
+
+### Kortzz, entonces etiquetado Personal: captura y clic — 2026-10-07
+
+Login manual terminado y excepción gráfica reconfirmada. Solo se probaron el
+perfil nuevo, Settings y controles de ventana; ningún motor ni gasto de recursos.
+
+- Instancia inicial cerrada limpiamente antes de trasladar el mismo directorio
+  de datos a gamescope headless. El modo app dejó una barra de 56 px; se probó
+  kiosco y el botón Fullscreen de Kongregate, sin importar datos de otros perfiles.
+  Brave restauró una pestaña anterior además de la nueva: se cerró la restaurada
+  antes de pulsar Play en la restante. El launcher futuro debe rechazar duplicados
+  y fijar el target CDP, no elegir silenciosamente la primera pestaña.
+- Endpoints de la prueba final: display `:3`, serial PipeWire `3634`. Nodo ligado
+  al cliente PipeWire cuyo `application.process.id` coincide con el gamescope
+  lanzado; display escrito por su proceso hijo. Son datos efímeros, **no valores
+  para reutilizar en el lanzador**. Ventana única verificada por XID, PID, clase
+  `Brave-browser`, `_NET_WM_NAME` y geometría `[0,0,1920,1080]`.
+- Un único FrameServer de Personal produjo imagen real BGR 1920×1080. Home se
+  reconoce con `DungeonVision` y sus plantillas actuales, sin cambiar umbrales:
+  `HOME_QUEST` en `(22,24)` y `HOME_SETTINGS` en `(1780,932)`.
+- XTest dirigido solo a ese servidor abrió Settings; la visión existente confirmó
+  `SETTINGS` y el movimiento no cambió el cursor del escritorio. F8 se consultó
+  antes de los inputs; no se certificó todavía una parada conjunta con F8 físico.
+- **Bloqueo reproducido:** Escape salió del Fullscreen del navegador en vez de
+  devolver Home. La ventana X mantuvo 1920×1080 mientras el iframe cambió de tamaño:
+  la geometría X sola no garantiza la geometría del contenido. La prueba supervisada
+  `validate-personal-input.py` permanece roja; no se declara roundtrip aprobado.
+  Se restauró Fullscreen y se pulsó la X de Settings, contrastada con el recorte
+  real anterior. Home apareció en una lectura posterior, fuera del timeout de
+  12 s: tampoco se certifica esa alternativa como recuperación fiable.
+- Al detener el flujo de imagen, gamescope abortó en `destroy_buffer` de
+  `pipewire.cpp:54`. Luego se verificó que navegador, gamescope y FrameServer de
+  esta prueba habían terminado, CDP estaba cerrado y la SHM propia retirada.
+  Se desconectaron únicamente las tres sesiones Agent Browser creadas para Personal.
+
+Evidencias privadas en el directorio temporal citado arriba: imágenes
+`personal-gamescope-pipewire-loaded.png`, `personal-gamescope-pipewire-settings.png`
+y `personal-gamescope-after-close-check.png`; metadatos `personal-gamescope.json`
+(marcados detenidos) y log `personal-gamescope-kiosk.log`. No se adjuntan capturas
+del escritorio ni se consultan perfiles originales.
+
+**Incidente de privacidad:** una salida de diagnóstico mostró por error el título
+de un iframe, que contenía un enlace autenticado con un token. Se informó al
+usuario; el valor no se copia a notas, archivos del proyecto ni configuración.
+No volver a volcar títulos, URLs completas ni respuestas CDP sin una allowlist de
+campos: incluso `title` puede contener secretos. Se recomienda revocar ese token
+desde Kongregate; al terminar esa prueba no se había confirmado su invalidación
+ni que cerrar sesión bastara. La mitigación posterior se registra más abajo.
+
+**Pendiente:** resolver Escape y verificar la geometría efectiva del contenido
+antes de cada input, estabilizar la parada del flujo y validar Perfil 1/cuentas
+distintas. `require_calibrated_client()` sigue intacto:
+Brave no se habilitó. Supervisor y farmeo triple continúan pendientes.
+
+Verificación final de esta prueba: 33 tests de cuentas/gamescope/orquestador pasan
+headless (8,217 s); los tres PNG de Home/Settings/Home se reclasifican offline con
+las plantillas actuales, y `git diff --check` pasa. No se cambió código del bot,
+no se retiraron guardas y no hay commits ni publicación.
+
+### Mitigación del token expuesto — 2026-10-07
+
+- La cuenta afectada era Kortzz, del perfil entonces etiquetado Personal. No se
+  cambió la contraseña de fmani ni de Steam.
+- El usuario pidió gestionar la revocación y autorizó específicamente cambiar la
+  contraseña de la cuenta afectada, después de explicar ese efecto. Kongregate
+  exigió login manual para acceder a los ajustes. No se abrió el juego, no se
+  leyeron credenciales ni se tocaron los perfiles originales.
+- Ajustes de Password & Security y Authorized Apps revisados; no se encontró una
+  acción separada de revocación para el token de juego. La
+  [documentación oficial de autenticación](https://docs.kongregate.com/docs/concepts-authentication)
+  establece que el token de juego cambia cuando el usuario cambia su contraseña.
+- El primer envío fue rechazado por falta de contraseña nueva: no se consideró
+  un cambio aplicado. A petición del usuario se generó una contraseña únicamente
+  dentro de Brave con `crypto.getRandomValues`, sin devolver el valor al agente,
+  copiarlo al chat, guardarlo en notas ni leer la contraseña anterior. El usuario
+  confirmó haberla guardado y haber introducido la actual directamente en Brave.
+- Segundo envío autorizado: Kongregate mostró la confirmación de cambio de
+  contraseña y no presentó errores de validación. Con ese cambio se mitiga el
+  token anterior conforme al mecanismo oficial; no se reutilizó el token expuesto
+  para intentar autenticarse ni se leyeron tokens nuevos para compararlos.
+- Se cerraron limpiamente solo ese Brave del bot y su sesión de diagnóstico,
+  sin juegos ni motores. El bloqueo por el token ya no queda pendiente; permanecen
+  los problemas de Escape/FullScreen y parada de PipeWire, la validación de Perfil 1
+  y el supervisor multicuenta. Farmeo Brave todavía deshabilitado.
+
+### Cierre del lector GStreamer — incremento offline, 2026-10-07
+
+Las reglas actuales limitan las pruebas a offline. No se inició Brave, gamescope,
+un panel ni un motor, no se capturó el escritorio y no se enviaron inputs.
+
+- Defecto reproducido sin juego: `PipeWireFrames.close()` enviaba SIGTERM, no
+  esperaba al hilo lector ni cerraba stdout; al forzar la salida tampoco esperaba
+  después de `kill()`. Un flujo real de GStreamer con `videotestsrc` terminaba con
+  código -15, en vez de cerrar limpiamente.
+- Cierre corregido en la función compartida: `gst-launch -e`, SIGINT, espera del
+  proceso, hilo y tubería. Si no termina, escalada acotada a SIGTERM/SIGKILL y espera
+  del hijo propio. Se mantiene el flujo único de cada FrameServer y no se añaden
+  reaperturas ni recuperaciones globales. El cierre repetido también se comprueba.
+- Mecanismo respaldado por la
+  [documentación de gst-launch](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html)
+  y el [código de GStreamer 1.28.7](https://github.com/GStreamer/gstreamer/blob/1.28.7/subprojects/gstreamer/tools/gst-launch.c):
+  registra SIGINT para la interrupción y `-e` solicita EOS antes de apagar.
+- Tres regresiones nuevas: salida normal/forzada, lector ya terminado y flujo
+  sintético real (solo `videotestsrc` → conversión BGR → tubería, sin PipeWire ni
+  ventana). Primero fallaron; después pasan los 20 tests de `test_gamescope.py`
+  (7,205 s). Una mutación SIGINT → SIGTERM solo en memoria hizo fallar la prueba
+  sintética: el test detecta volver al cierre abrupto.
+
+**Límite:** esto corrige el ciclo de vida del lector, no certifica la eliminación
+del aborto de gamescope. En el
+[código de gamescope 3.16.25](https://github.com/ValveSoftware/gamescope/blob/3.16.25/src/pipewire.cpp#L37-L55),
+la aserción de la línea 54 corresponde a un tipo de buffer inesperado; no basta
+ese mensaje para determinar su causa. La versión instalada es 3.16.25-1, con
+PipeWire 1.6.9-1 y GStreamer 1.28.7-2.1. No se actualizaron paquetes ni se parcheó
+gamescope. Escape y la geometría del iframe siguen pendientes de validación real:
+no se inventaron coordenadas de cierre, no se aumentaron timeouts y
+`require_calibrated_client()` continúa bloqueando Brave. Perfil 1, cuentas
+distintas, supervisor y F8 conjunto todavía no están certificados.
+
+### Asignación corregida y validación de ambos Brave — 2026-10-07
+
+- Tras confirmar cerrados ambos Brave del bot y vacío el destino, se trasladó
+  íntegramente el perfil autenticado de Kortzz a `runs/accounts/perfil-1/brave-data`.
+  Se conservó el inode y el modo 0700, sin leer ni copiar secretos; el directorio
+  vacío anterior quedó respaldado. Personal se recreó vacío y el usuario realizó
+  el login manual de la cuenta cuyo personaje es fmani.
+- Antes de abrir juegos aislados, el usuario confirmó cerrados los juegos de
+  fmani y Kortzz en los clientes originales. Steam original se mantuvo intacto.
+  La autorización gráfica permite diagnóstico de Home, Settings y perfil del
+  personaje, no farmeo, compras, cambios de equipo ni gasto.
+- Una prueba real anterior de Personal midió viewport, dos iframe anidados y
+  canvas/buffer 1920×1080, escala 1. NEWS se cerró por XTest, pero Home quedó UNKNOWN:
+  Quest contenía una variante no cubierta por la máscara de las referencias Steam.
+  Se detuvieron los inputs. Al cerrar su FrameServer, la SHM desapareció y gamescope
+  sobrevivió; después se cerraron solo ese juego, navegador y diagnóstico propios.
+- Regresión offline: fixture `home_personal`, con solo Quest y Settings. Primero
+  falló con UNKNOWN; añadir `HOME_QUEST_TOWN_PERSONAL` al mecanismo de variantes
+  existente permite reconocerla, sin modificar `.97/12`, geometría ni guardas.
+  Se conservaron exactamente los 293 templates y 146 frames anteriores. Casos
+  oscuros, grises, sin iconos y con el pergamino dañado siguen rechazándose; retirar
+  la nueva variante solo en memoria vuelve a hacer fallar la regresión.
+  Límite: máscara de variantes observadas, no alfa universal. Efectos transitorios
+  de brillo todavía pueden dar UNKNOWN; no se compensan con clics ni umbrales menores.
+- Nueva validación: ambos juegos coexisten con display, nodo PipeWire, CDP, PID y
+  SHM distintos. Capturas BGR 1920×1080 y Home independientes, sin motores activos.
+  Settings se abre por XTest y Escape CDP devuelve Home en ambos sin abandonar
+  Fullscreen. También se abrió únicamente el perfil del personaje: encabezados
+  **FMANI** y **KORTZZ** contrastados gráficamente; Escape devuelve Home.
+- Escape probado: `Input.dispatchKeyEvent`, `rawKeyDown`/`keyUp`, `key` y `code`
+  Escape, `windowsVirtualKeyCode=27`, sin `nativeVirtualKeyCode`. El diagnóstico
+  comprueba antes la ventana propia y toda la cadena iframe/canvas; esto aún no
+  está integrado en `GamescopeIO.escape()` ni en las guardas del bot.
+- Perfil 1 restauró una ventana sin kiosco efectivo: HTML Fullscreen dio
+  1920×1024. Se cerró ese juego antes de crear una ventana nueva del mismo perfil
+  con `--kiosk --new-window`, cerrar la ventana antigua y volver a abrir el juego.
+  Entonces se comprobaron 1920×1080 en contenido y buffer. No se da por correcta
+  ninguna ventana restaurada por tener solo geometría X correcta.
+- Suite final offline de este incremento: **375 tests, 366 pasan y 9 omisiones
+  existentes** (6 Tk sin pantalla, 3 Windows), 211,110 s. Los 21 tests de visión
+  pasan; `git diff --check` correcto. Sin commits, publicación ni dependencias nuevas.
+
+Evidencias privadas: `/tmp/opencode/bitheroes-brave-roundtrip-1791423813631319413/`,
+con metadatos y recortes por cuenta; no reutilizar endpoints efímeros.
+Respaldo previo: `/tmp/opencode/bitheroes-home-before-1791423622882422229/`.
+**Pendiente actual:** parada conjunta con Detener del panel, integración de
+guardas web/Escape, Steam identificado y supervisor/farmeo triple. Se mantiene
+`require_calibrated_client()` bloqueando Brave; las pruebas manuales no lo habilitan.
+
+### Parada real de ambos flujos y F8 global — diagnóstico posterior
+
+- Los FrameServer de Personal y Perfil 1 se detuvieron por separado: SHM retirada
+  y gamescope siguió vivo en ambos (1,113 s y 1,111 s, incluida la espera de salud).
+  Después se cerraron los dos juegos/Brave del bot y las conexiones de diagnóstico;
+  PID, CDP y SHM quedaron comprobados detenidos/retirados. Steam original intacto.
+- Dos observadores sin input no detectaron la pulsación F8 comunicada por el
+  usuario durante su ventana de prueba de 90 s. `LinuxAPI.emergency()` consulta
+  XWayland; eso no prueba una parada global desde cualquier ventana Wayland.
+- El usuario autorizó un atajo nativo de niri. Añadido únicamente F8 en
+  `~/.config/niri/config.d/90-user-extra.kdl`, sin repetición y sin permitir que
+  una aplicación inhiba el atajo. Configuración validada y recargada, sin reinicio
+  ni cambios visuales. Respaldo: `/tmp/opencode/bitheroes-niri-f8-before-1791424941628468523.kdl`.
+- `fishing_core/global_stop.py` reutiliza SIGINT, como el botón Detener existente.
+  Solo selecciona intérpretes/workers conocidos del mismo usuario y proyecto;
+  no paneles, navegadores, Steam, FrameServer, tests ni fragmentos `python -c`.
+  Abre un pidfd antes de contrastar la identidad para no señalar un PID reciclado.
+  No lee teclas ni argumentos de procesos con otro directorio de trabajo.
+- Cinco regresiones offline pasan, incluida una señal real a un proceso inerte.
+  Una mutación que elimina la comprobación de propietario se detecta. La acción
+  `spawn` de niri detuvo tres probes inertes, uno por cuenta, en 0,044 s; otro
+  proceso Python del mismo directorio siguió vivo. **Esto prueba la orden, no la tecla.**
+- Las pruebas físicas no certificaron F8. Una agotó sus 15 minutos mientras el
+  usuario estaba ausente. Al volver aclaró que usa **Fn+8**; la prueba de una
+  pulsación en una ventana propia no recibió evento y una comprobación temporal
+  directamente en el atajo de niri no produjo su marcador de activación.
+  No se concluye qué otra tecla genera esa combinación ni se registra un historial.
+  Se retiró la comprobación temporal, se restauró el atajo directo y se cancelaron
+  únicamente los probes propios. **Fn+8/F8 físico sigue pendiente.**
+- Suite completa después de añadir la parada: **380 tests, 371 pasan y 9 omisiones
+  existentes**, 208,712 s. Sin nuevos paquetes, permisos, captura del escritorio,
+  farmeo, entradas, compras ni gasto. El backend Brave continúa bloqueado.
+
+### Decisión posterior: Detener del panel, sin seguir bloqueados por Fn+8
+
+- El usuario pide detener mediante la aplicación y abandonar el diagnóstico del
+  RK61/Fn+8 para no retrasar las tres cuentas. F8 queda conservado como respaldo
+  no certificado; no se exige certificar su tecla física para seguir integrando.
+- La prueba en vivo confirmó sesión niri activa y desbloqueada, ventana Wayland
+  preparada con foco y recepción de **8 sin Fn**. Fn+8 no generó evidencia en el
+  atajo ni en esa ventana. Esto no identifica la tecla ni demuestra un fallo del
+  teclado. No se registraron letras/texto ni se accedió como administrador.
+- Se cerró únicamente la ventana de diagnóstico y se restauró exactamente el
+  archivo de niri respaldado: atajo directo, configuración validada y recargada,
+  sin reinicio. No quedaron diagnósticos activos ni enlaces a scripts temporales.
+- En Linux, STOP del panel reutiliza `global_stop.stop_workers()` para señalar
+  también hijos y motores de las otras cuentas, no solo su `farm_all`. Cerrar
+  un panel en marcha sigue la misma acción. Clientes, otros paneles, FrameServer
+  y procesos ajenos no son seleccionados; la ruta no Linux mantiene su señal previa.
+- Regresión roja→verde sin juego ni GUI: tres procesos inertes con las identidades
+  Personal/Perfil 1/Steam terminan por SIGINT y otro Python del proyecto sigue vivo.
+  El conjunto enfocado de ocho pruebas pasa; volver a señalar solo al padre falla
+  por mutación en memoria, sin modificar archivos originales.
+- Suite completa final: **383 tests, 374 pasan y 9 omisiones existentes**,
+  202,991 s; `git diff --check` correcto. Sin commits ni publicación.
+- Detener de los motores reales y el supervisor siguen pendientes: esto no
+  certifica farmeo triple ni desbloquea Brave antes de integrar sus guardas/Escape.
+  Evidencias y respaldo: `/tmp/opencode/bitheroes-f8-live-rk61-RpSZs8dt/`.
+
+### Runtime Brave: guardas y Escape integrados, validación offline — 2026-10-08
+
+- `fishing_core/brave.py` fija cuenta, PID/pidfd, ejecutable, perfil exclusivo,
+  puerto loopback poseído por ese PID y target CDP. La ventana X debe conservar
+  identidad, clase, PID, geometría y foco; no se intenta cerrar otra ventana.
+  Esto vincula el cliente al perfil aprobado; no hace OCR del personaje ni
+  sustituye la comprobación gráfica de FMANI/KORTZ (cuenta Kongregate Kortzz).
+- `fishing_core/brave_cdp.mjs` usa el WebSocket nativo de Node ya instalado, sin
+  paquetes nuevos. El adaptador recibe solo comandos acotados y devuelve ID/booleano,
+  nunca títulos, URLs, respuestas CDP, credenciales ni datos del perfil. No hereda
+  credenciales, proxies ni `NODE_OPTIONS`; no admite redirecciones del endpoint.
+- La guarda compartida de captura/input comprueba la única página oficial fijada,
+  ventana, documentos/contextos y cadena de iframe (incluidos procesos separados).
+  Exige viewport, iframe, canvas y buffer 1920×1080, escala 1, sin scroll y con foco.
+  La captura vuelve a comprobar la guarda después de copiar el fotograma BGR.
+  Antes de cada clic/rueda, el punto debe llegar al canvas sin overlays DOM.
+- Escape utiliza `rawKeyDown`/`keyUp`, `key/code: Escape` y
+  `windowsVirtualKeyCode: 27`, sin `nativeVirtualKeyCode` ni fallback XTest en Brave.
+  Se suelta en el target original aunque falle una guarda, haya STOP o muera el
+  padre; cerrar el adaptador desconecta CDP, no ejecuta `Browser.close`.
+  La ruta Steam mantiene Escape XTest y sus guardas existentes.
+- Brave no reintenta automáticamente una parada de seguridad, reconexión o UNKNOWN:
+  evita crear otra guarda que acepte una identidad distinta. Steam conserva sus
+  reintentos; los límites deliberados de duración siguen siendo independientes.
+- Regresiones rojas→verdes, cadena sintética y un servidor CDP ficticio en loopback:
+  transporte WebSocket nativo, geometría incorrecta, overlays en cada iframe/canvas,
+  proceso reciclado, EOF durante Escape y errores de limpieza. Cuatro mutaciones
+  detectadas: escala, identidad de documento, overlay y reintento automático.
+- Suite completa: **405 tests, 396 pasan y 9 omisiones existentes**, 178,729 s.
+  Sintaxis Python/Node y `git diff --check` correctos. Registro de esta ejecución:
+  `/tmp/opencode/bitheroes-brave-runtime-suite-20261008.log`. Sin commits ni publicación.
+- **Límite:** no se abrió navegador, juego ni panel; no hubo captura del escritorio,
+  pulsaciones reales, farmeo ni gasto. `require_calibrated_client()` sigue bloqueando
+  Brave. Falta certificar este mismo runtime y el arranque restaurado, contrastar
+  Steam/brandonr2600 y conectar el supervisor/parada de motores reales antes del
+  farmeo triple. Reconfirmar cuentas originales cerradas antes de reabrir juegos.
+
+Fuentes oficiales del transporte y comandos: [WebSocket de Node](https://nodejs.org/api/globals.html#class-websocket),
+[Page](https://chromedevtools.github.io/devtools-protocol/tot/Page/),
+[DOM](https://chromedevtools.github.io/devtools-protocol/tot/DOM/) e
+[Input.dispatchKeyEvent](https://chromedevtools.github.io/devtools-protocol/tot/Input/#method-dispatchKeyEvent).
+
+### Guardas Brave: diagnóstico real autorizado — 2026-10-08
+
+- Autorización gráfica renovada por el usuario: únicamente perfiles exclusivos
+  del bot, sin farmeo, entradas, compras, cambios de equipo ni gasto. No se abrió
+  una segunda instancia del mismo juego ni se accedió a perfiles originales.
+- El runtime real mostró diferencias no presentes en los mocks: redirección
+  oficial a `/en/games/juppiomenz/bit-heroes`, argumentos de Brave aplanados en
+  `/proc`, clase X con la ruta exacta del perfil y un iframe remoto omitido del
+  árbol padre. Se acepta solo esa ruta adicional, se parsea el título de proceso
+  con `shlex` sin ejecutarlo y se une el iframe por su `parentId` explícito.
+- La selección X de Brave usa PID y clase del perfil aprobado, no el título web:
+  cambia al cargar y no es una identidad fiable. `BraveGuard` mantiene XID,
+  pidfd, ejecutable, puerto propio, foco, origen y geometría; Steam conserva su
+  selección por título. Las regresiones impiden volver a leer títulos de Brave.
+- Personal y Perfil 1 completaron **Home→Settings→Home** y apertura/cierre del
+  perfil usando `GamescopeCapture`, `GamescopeIO`, `BraveGuard` y Escape CDP reales.
+  Viewport, ambos iframe, canvas y buffer: **1920×1080, escala 1**, sin scroll,
+  con endpoints y servidores de imagen separados. No hubo motores de farmeo.
+  El diagnóstico construyó explícitamente los componentes para probarlos sin
+  alterar `require_calibrated_client()` ni arrancar el backend bloqueado.
+- Identidad contrastada ahora: **FMANI** y **KORTZ**. La etiqueta pública de
+  Kongregate en Perfil 1 corresponde a **Kortzz**. Las anotaciones anteriores de
+  encabezado «KORTZZ» eran imprecisas; no cambió la asignación de cuentas.
+- **Arranque restaurado todavía no certificado:** Perfil 1 volvió a dar contenido
+  1920×1024 pese a tener ventana X 1920×1080. Fue necesaria una ventana nueva de
+  kiosco: primero vacía, cierre del juego anterior, navegación posterior y retiro
+  de la ventana vieja del bot. El origen de la ventana propia se fijó a 0,0.
+  La guarda rechazó la geometría incorrecta y dos ventanas candidatas; no se
+  redujeron sus exigencias. Falta incorporar y repetir un arranque estable.
+- Las pausas ante UNKNOWN funcionaron: no se pulsó el aviso de inactividad.
+  Una desconexión posterior se reconectó manualmente, con RECONNECT reconocido,
+  solo para esta prueba. El hover sobre Settings también producía UNKNOWN:
+  el diagnóstico omitía apartar el cursor, operación ya existente en
+  `DungeonControl.click`. Se reutilizó su zona neutra, sin añadir templates ni
+  bajar `.97/12`. Los motores Brave siguen sin reintentos automáticos de seguridad.
+- Cierre selectivo: ambos FrameServer terminaron, retiraron su SHM y dejaron
+  gamescope vivo (0,065 s y 0,042 s). Después se cerraron solo ambos Brave,
+  gamescope y sesiones Agent Browser propios. Steam original y su gamescope
+  siguieron vivos. **Todos estos endpoints gráficos/CDP quedaron detenidos.**
+- No se pudo vincular inequívocamente la sesión Steam existente a una pantalla
+  de juego. No se inició ni se intervino Steam; brandonr2600 sigue pendiente de
+  contraste gráfico. Supervisor, Detener con motores reales y farmeo triple
+  tampoco quedan certificados. F8 físico continúa aplazado.
+- Verificación offline: 42 pruebas enfocadas pasan y cinco mutaciones detectadas
+  (argv aplanado, clase del perfil, título web, ruta oficial y unión del iframe).
+  Suite completa final: **407 tests, 398 pasan y 9 omisiones existentes**,
+  219,512 s; ejecutada sin DISPLAY, WAYLAND_DISPLAY ni NIRI_SOCKET.
+  Respaldo y evidencias privadas: `/tmp/opencode/bitheroes-runtime-live-feditr2k/`.
+  Sin secretos en notas, dependencias nuevas, commits ni publicación.
+
+### Preparación de ventana Brave — incremento offline, 2026-10-08
+
+- El diagnóstico anterior de arranque mostró que `--app=about:blank` restauraba
+  el juego y que `--no-startup-window` aplazaba la restauración hasta crear una
+  ventana. No bastaba comprobar cero páginas al abrir CDP. Con Perfil 1, cerrar
+  aquella restauración antes de navegar permitió después Home→Settings→Home con
+  las guardas reales. Ese diagnóstico no certificó Personal ni un arranque automático.
+- `prepare_brave(pid, port)` valida la cuenta Brave explícita, propietario,
+  ejecutable/perfil/puerto propios y pidfd; el adaptador nativo tiene timeout,
+  entorno mínimo y respuesta acotada sin datos web. Rechaza PID muerto o identidad
+  cambiada y cierra solo el adaptador/pidfd, nunca el navegador o gamescope.
+  **No lanza Brave:** el llamador debe confirmar exclusividad y abrir el perfil
+  del bot con `--no-startup-window`; ese lanzador todavía falta.
+- `prepareTarget` crea un target vacío, admite como máximo una restauración
+  oficial y confirma su desaparición antes de navegar a la ruta fija del juego.
+  Páginas ajenas, duplicadas o nuevas inesperadas detienen la preparación sin
+  cerrarlas. No reutiliza ni sustituye una guarda activa. EOF del padre cancela
+  el adaptador; no envía teclas ni clics ni ejecuta `Browser.close`.
+- La ventana vacía requiere viewport 1920×1080, escala 1, foco, sin scroll/canvas,
+  y la misma ventana CDP situada en 0,0. Cambiar bounds o solicitar Fullscreen no
+  sustituye la comprobación efectiva. La navegación puede perder ese tamaño:
+  **el target devuelto no significa «juego listo»**. Play/Fullscreen del sitio,
+  posición X, iframe/canvas/buffer y personaje aún deben validarse después.
+- Regresiones rojas→verdes: 19 pruebas Python y 18 Node enfocadas pasan, incluyendo
+  transporte WebSocket real contra CDP ficticio, cierre asíncrono, restauración
+  tardía, geometría incorrecta, identidad cambiada y EOF antes de crear páginas.
+  Tres mutaciones en memoria detectadas: retirar validación de viewport, ventana
+  o la separación entre el adaptador de la guarda y el modo de preparación.
+  El adaptador de captura/input exige puerto entero y target hexadecimal antes
+  de abrir Node; no puede aceptar `--prepare` ni acceder al flujo de preparación.
+- En este incremento rige la instrucción actual de **solo pruebas offline**:
+  no se iniciaron clientes, juegos, paneles ni motores; no hubo capturas, inputs
+  reales, gasto ni acceso a perfiles. No se comprobó ni intervino el estado actual
+  de los diagnósticos anteriores. `require_calibrated_client()` permanece intacto;
+  panel/supervisor, Steam, Detener real y farmeo triple siguen pendientes.
+  Respaldo de código y pruebas: `runs/startup-offline-nwgq1_ap/`, ignorado por Git.
+
+Contrato CDP: [Target.createTarget](https://chromedevtools.github.io/devtools-protocol/tot/Target/#method-createTarget),
+[Browser.setWindowBounds](https://chromedevtools.github.io/devtools-protocol/tot/Browser/#method-setWindowBounds)
+y [Page.navigate](https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-navigate).
+
+### Arranque posterior y diagnóstico offline por etapas — 2026-10-08
+
+- La suite final del incremento anterior terminó con **413 tests, 404 pasan y
+  9 omisiones existentes** (191,002 s). Resultado confirmado en la conversación
+  anterior; no se ha vuelto a consultar su log en este incremento.
+- Durante las pruebas gráficas posteriormente autorizadas, ambos perfiles del
+  bot completaron Home→Settings→Home y perfil→Home con guardas reales. Personal
+  mostró **FMANI** y Perfil 1 **KORTZ**. Play/Fullscreen se pulsaron manualmente;
+  ese resultado **no certifica el arranque automático**.
+- Tras autorización específica se pidió abrir Bit Heroes una sola vez en el
+  Steam existente, sin reiniciarlo: personaje **BRANDONR2600**, imagen 1920×1080,
+  perfil→Home y Home→Settings→Home contrastados, sin farmeo ni gasto. Se reutilizó
+  solo en el diagnóstico el FrameServer antiguo, después de vincular su proceso
+  y nodo. Falta integrar esa compatibilidad en el supervisor multicuenta.
+- `prepare_brave` ahora también intenta Play/Fullscreen del sitio, foco del
+  canvas y comprobación final de la cadena web. Solo esos dos botones DOM,
+  target propio y sin overlays; no pulsa coordenadas del juego. Una restauración
+  vacía adicional del kiosco solo se retira si URL y DOM están vacíos. Viewport
+  vacío y documento cargado se esperan de forma acotada antes de actuar.
+- Las regresiones offline cubren esas carreras, pero el último arranque automático
+  de ambos perfiles **siguió fallando** después de verificar la ventana vacía.
+  No hay evidencia suficiente para atribuirlo a una causa concreta. No aumentar
+  timeouts, repetir clics ni debilitar guardas para disimularlo.
+- El error genérico impedía localizar el paso. El adaptador devuelve ahora solo
+  una etapa fija: `connection`, `blank`, `play`, `fullscreen`, `canvas` o `snapshot`.
+  Python muestra una etiqueta propia tras validar forma, tipos y lista cerrada;
+  nunca incorpora errores CDP, títulos, URLs, DOM ni otros datos web al mensaje.
+  El éxito y el protocolo de la guarda activa no cambian; no implica reintentos.
+- Verificación enfocada: **21 pruebas Python y 26 Node pasan**. La regresión de
+  diagnóstico falló antes del cambio y pasa con WebSocket/pipe nativos contra CDP
+  ficticio. Una mutación en memoria de la lista segura fue detectada; fuentes
+  originales intactas. Sintaxis Python/Node y `git diff --check` correctos.
+  Suite completa final: **415 tests, 406 pasan y 9 omisiones existentes**, 207,258 s,
+  sin DISPLAY, WAYLAND_DISPLAY ni NIRI_SOCKET; no se omitieron pruebas adicionales.
+- En este nuevo incremento rige otra vez **solo offline**: no se iniciaron ni
+  inspeccionaron clientes reales, no hubo capturas/inputs ni acceso a perfiles.
+  Los últimos diagnósticos gráficos podrían seguir abiertos; **su estado actual
+  no se ha comprobado ni intervenido**. Las validaciones anteriores no renuevan
+  autorización para tocar esos clientes.
+- Se conservan `require_calibrated_client()`, umbrales `.97/12`, pausa ante
+  UNKNOWN, exclusividad y límites de gasto. Lanzador, panel/supervisor, STOP con
+  motores reales y farmeo triple siguen sin certificar. Sin dependencias nuevas,
+   commits ni publicación. Respaldo de este cambio: `runs/startup-stages-offline-p7hx4isg/`.
+
+### Prueba online renovada, sin farmeo — 2026-10-08
+
+- Autorización actual del usuario: probar online las tres cuentas sin gasto;
+  acordar los límites antes de iniciar farmeo. No autoriza compras ni aventuras.
+- Los tres clientes ya estaban abiertos. Se reutilizaron sus procesos, sin
+  iniciar duplicados ni leer perfiles, credenciales, títulos o URLs de iframe.
+  Los endpoints se identificaron por PID/perfil/puerto, ventana X y propietario
+  PipeWire actuales, no reutilizando metadatos históricos.
+- Ambos Brave estaban en Play. `finishPreparation()` sobre esos targets propios
+  completó Play/Fullscreen y su guarda final en ambos, sin cambios de código,
+  timeouts, umbrales o guardas. Esto **no valida un arranque desde perfiles
+  cerrados ni el flujo completo de `prepare_brave()`**: la causa del fallo anterior
+  sigue sin determinarse.
+- `BraveGuard` y `GamescopeCapture` reales confirmaron imagen 1920×1080 antes y
+  después de copiarla. Se cerró NEWS en Personal, se abrió el perfil de ambos y
+  Escape devolvió HOME conservando la guarda web. Los anuncios globales taparon
+  parcialmente los encabezados de FMANI/KORTZ; no se cambiaron preferencias.
+- Steam estaba DISCONNECTED. Se pulsó RECONNECT una sola vez, contrastado con
+  las plantillas existentes. La transición inicial desconocida solo se observó,
+  sin acciones ni reintentos; después llegó HOME. Perfil BRANDONR2600 leído
+  gráficamente y cerrado con Escape; HOME confirmado. Se reutilizó su servidor
+  de imagen antiguo tras vincular su PID y el target PipeWire, sin reiniciar Steam.
+- Los tres juegos quedaron vivos y en HOME. Los FrameServer temporales de Brave
+  terminaron con código 0 y retiraron sus SHM; el servidor antiguo de Steam y el
+  panel existente se conservaron. No hubo motores, aventuras, gasto ni compras.
+- Diagnóstico y capturas exclusivamente del juego: `/tmp/opencode/`, prefijo
+  `bitheroes-online-20261008-`; script `bitheroes-online-check-20261008.py`.
+  Archivos privados (0600), sin capturas del escritorio ni secretos.
+- `git diff --check` pasa. No se reejecutó la suite ni modificó código del
+  proyecto; el bloqueo Brave permanece. Supervisor/STOP con motores reales,
+  arranque desde perfiles cerrados y farmeo simultáneo siguen pendientes.
+
+### Arranque corregido y supervisor acotado — 2026-10-08
+
+- En la fase online posteriormente autorizada se localizaron dos carreras: URL
+  vacía transitoria al navegar y Fullscreen disponible antes de crear el canvas.
+  La URL vacía solo se espera durante la navegación propia de arranque; nunca
+  se acepta como identidad activa. Fullscreen espera al canvas y usa una única
+  pulsación nativa CDP sobre el botón del sitio, tras hit-test; sin reintentos.
+- `prepare_brave()` completo pasó después en ambos **procesos ya abiertos**, con
+  geometría final 1920×1080. Perfil→HOME y captura/guardas se comprobaron sin
+  farmeo. No equivale a validar el lanzador desde perfiles cerrados. Suite de esa
+  fase: 415 tests, 406 pasan y 9 omisiones (233,232 s).
+- La nueva instrucción del usuario vuelve a limitar el trabajo a **solo offline**.
+  En el incremento del supervisor no se abrieron ni inspeccionaron clientes,
+  paneles reales o perfiles, ni hubo captura del escritorio, input o gasto.
+- `fishing_core.farm_multi` prepara un entorno independiente por cuenta, valida
+  formato y separación de display/serial/PID/puerto/target y supervisa tres
+  workers concurrentes. No descubre endpoints ni abre clientes. El preflight
+  aplica `require_calibrated_client()` antes del primer worker: Brave sigue
+  bloqueado y tampoco se inicia Steam parcialmente.
+- `farm_all --single-dungeon` conserva la ruta configurada por cuenta pero fija
+  Normal, 1 run, máximo 10 energía, cero oro y objetivos vacíos. Sin runas, otros
+  modos, progreso previo ni reintentos; Special/sin calibrar se rechazan. STOP o
+  pérdida del supervisor limpian el hijo de dungeon antes de soltar su lock.
+- El panel tiene una entrada opt-in `farm_app --trial`, con endpoints JSON por
+  stdin (máximo 8192 caracteres); sin flag conserva el START antiguo. Pantalla
+  limitada, START/STOP por botón o espacio y sin guardar preferencias. El JSON
+  contiene exactamente `personal`, `perfil-1`, `steam`; cada valor solo incluye
+  `FARM_GAMESCOPE_DISPLAY`/`FARM_GAMESCOPE_SERIAL`, más los tres `FARM_BRAVE_*`
+  del contrato para Brave. No se guardaron endpoints reales ni se activó el panel.
+- Verificación offline: límites y fallos con dobles; supervisor probado con tres
+  probes inertes, STOP selectivo y otro Python intacto. No son motores del juego.
+  El dibujo del panel se comprueba en memoria con PIL, no en una ventana real.
+  31 pruebas Node pasan; tres mutaciones de aislamiento, cuota y selección STOP
+  detectadas en memoria. Suite Python completa: **437 tests, 428 pasan y 9 omisiones
+  existentes** (223,957 s), sin DISPLAY, WAYLAND_DISPLAY ni NIRI_SOCKET. Sintaxis
+  y `git diff --check` correctos; no se debilitaron ni omitieron pruebas adicionales.
+- Pendientes antes de habilitar Brave: arranque desde perfiles cerrados, captura
+  Steam antigua sin duplicar flujos, identidad/guardas de cada worker y STOP con
+  motores reales. Farmeo triple todavía **no certificado**. Sin dependencias,
+   commits o publicación; respaldo: `runs/multi-supervisor-offline-tkinba45/`.
+
+### Preparación de STOP sin input — revisión solo offline, 2026-10-08
+
+- Revisado el incremento `--stop-check` de panel → supervisor → worker → dungeon.
+  Selecciona el backend de observación, bloquea clic/movimiento/rueda/Escape y
+  exige HOME antes de publicar readiness con cuotas sin reservar. Se conserva el
+  bloqueo del START de farmeo Brave y la exclusividad anterior.
+- Corregidos con regresiones rojas→verdes: la restauración de foco podía cerrar
+  avisos de Steam mediante una llamada directa; una captura antigua no verificable
+  podía abrir un segundo flujo; un panel de observación sin endpoints podía caer
+  en el flujo habitual; el lector accedía al mmap antes de comprobar su integridad.
+- Steam antiguo se reutiliza **solo en observación**, verificando proceso propio,
+  memoria privada y un único lector GStreamer del serial exacto. Restos no
+  verificables detienen, sin borrar ni duplicar. El lector detecta sustitución,
+  symlink y truncado antes del acceso; la carrera de truncado concurrente no queda
+  eliminada por estas comprobaciones.
+- Pruebas enfocadas: **155 tests, 149 pasan y 6 omisiones Tk existentes**; **31 tests
+  Node pasan**. Tres mutaciones de foco, tamaño de memoria y bloqueo de duplicación
+  fueron detectadas en memoria, sin modificar los archivos para esa comprobación.
+  Flags, F8, IPC, pérdida del padre y plazo de observación cubiertos con dobles.
+- Suite completa final, sin DISPLAY, WAYLAND_DISPLAY ni NIRI_SOCKET: **456 tests,
+  447 pasan y 9 omisiones existentes** (213,403 s). Sintaxis de 13 archivos y
+  `git diff --check` correctos; no se debilitaron ni omitieron pruebas adicionales.
+- En esta revisión no se inspeccionaron ni iniciaron clientes, paneles o motores
+  reales, ni hubo captura de escritorio, input o gasto. El script gráfico preparado
+  no se ejecutó y no constituye evidencia. STOP real, captura Steam de farmeo,
+  arranque desde perfiles cerrados y farmeo triple siguen **sin certificar**.
+- Sin commits, publicación, dependencias ni cambios de preferencias; respaldo
+  previo a la revisión: `runs/stop-check-review-offline-s5c301ed/`.
+
+### Intento online autorizado y vuelta a offline — 2026-10-08
+
+- Durante la autorización online posterior pasaron las guardas de las tres cuentas
+  en observación, pero no se completó HOME/readiness simultáneo. El evento STOP
+  del panel no llegó a enviarse: esta prueba **no certifica la parada real**.
+- Se atendieron diálogos de inactividad, reconexión, recompensa gratuita y ventanas
+  conocidas; aparecieron también perfil PvP y diálogo de historia. No se ejecutó
+  una dungeon ni farmeo triple. Estas intervenciones no validan el arranque desde
+  perfiles cerrados ni justifican eliminar el bloqueo Brave.
+- La instrucción posterior de `AGENTS.md` restablece **solo offline**. Desde ese
+  cambio no se inspeccionaron clientes, capturó imagen real ni enviaron inputs;
+  no se revalidó el estado actual de juegos, paneles o servidores anteriores.
+
+### Protección de captura Steam en farmeo — revisión offline, 2026-10-08
+
+- El bloqueo de duplicación antigua solo cubría `start_frame_server(read_only=True)`.
+  La ruta habitual/prueba de dungeon podía intentar abrir otro servidor. Ahora
+  los restos antiguos (imagen, PID o enlace, incluido uno roto) también bloquean
+  el farmeo, antes de lanzar procesos o reutilizar un servidor de cuenta.
+- `FrameServer` comprueba lo mismo tras obtener su lock y antes de consultar
+  PipeWire o crear memoria. No borra ni modifica los restos; la reutilización
+  verificada sigue permitida exclusivamente en observación. Steam sin esos
+  archivos conserva su ruta de arranque. No se habilita Brave.
+- Dos regresiones fallaron antes del cambio en nueve subcasos; después pasan.
+  Las mutaciones en memoria de ambas guardas fueron detectadas, sin editar
+  archivos para esa comprobación. Se añadió también el caso positivo sin restos.
+- Suite completa offline, sin DISPLAY, WAYLAND_DISPLAY ni NIRI_SOCKET: **459 tests,
+  450 pasan y 9 omisiones existentes** (403,329 s). **31 tests Node pasan**;
+  sintaxis de 13 archivos Python y `git diff --check` correctos. Los mensajes de
+  supervisor de esta suite proceden de dobles/probes, no de farmeo real.
+- Sigue pendiente comprobar STOP con motores reales, arranque desde perfiles
+  cerrados y compatibilidad de captura Steam durante farmeo. No se ejecutó el
+  diagnóstico gráfico ni se completó la prueba triple en esta revisión offline.
+- Sin commits, publicación, dependencias ni cambios de preferencias. Respaldo:
+  `runs/steam-stream-guard-offline-5oges9_z/`.
+
+### Lanzador Brave: exclusividad ante metadatos inciertos — solo offline, 2026-10-08
+
+- Al retomar ya existían `launch_brave()` y las referencias de recompensas gratuitas
+  Trials/Fishing; se conservaron junto al resto del trabajo local. El registro
+  histórico informa dos lanzamientos desde perfiles cerrados que pasaron; no se
+  revalidaron clientes, endpoints, capturas ni pantallas durante esta revisión.
+- `require_closed_profile()` ignoraba errores de lectura y podía omitir un perfil
+  activo si el argv estaba truncado, malformado o escapado. También se añadió el
+  caso de un Brave vivo cuyo ejecutable aparece como eliminado tras una actualización.
+  Ahora esas incertidumbres bloquean antes de crear otro cliente, sin leer perfiles
+  ni mostrar los datos consultados. La desaparición del proceso sigue tolerada.
+- Tres regresiones rojas→verdes cubren seis fallos iniciales; una comprobación del
+  llamador verifica bloqueo antes de `Popen` y liberación del lock en ambas cuentas.
+  **29 tests Brave pasan**, **31 Node pasan** y cuatro mutaciones de las guardas
+  fueron detectadas en memoria, sin modificar archivos para esa comprobación.
+- Suite completa final sin DISPLAY, WAYLAND_DISPLAY ni NIRI_SOCKET: **468 tests
+  Python, 459 pasan y 9 omisiones existentes** (478,526 s). Sintaxis de 13 archivos
+  Python y del adaptador Node, más `git diff --check`, correctos. Los mensajes de
+  Quest/cuentas corresponden a dobles y probes offline, no a entradas reales.
+- No se inició ni inspeccionó ningún cliente, panel o motor real; no hubo captura,
+  input, gasto, cambios de preferencias, dependencias, commits ni publicación.
+  Brave sigue bloqueado, Steam antiguo solo se reutiliza en observación y quedan
+  pendientes HOME/identidad/STOP integrados y el farmeo triple real.
+- Respaldo previo: `runs/brave-launch-review-offline-hffgf65e/`.

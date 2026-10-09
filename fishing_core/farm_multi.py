@@ -1,0 +1,168 @@
+"""Supervisor de una prueba limitada. No descubre, prepara ni abre clientes."""
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+
+from .accounts import NAMES,account_id,brave_target,gamescope_target
+from .gamescope import require_calibrated_client
+from .processes import Mutex,close_children
+from .telemetry import ROOT
+
+DISPLAY_KEYS={'FARM_GAMESCOPE_DISPLAY','FARM_GAMESCOPE_SERIAL'}
+BRAVE_KEYS={'FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT','FARM_BRAVE_TARGET_ID'}
+
+
+def trial_environments(sessions):
+    """Datos explícitos por cuenta; no mutar os.environ ni heredar otra identidad."""
+    if type(sessions) is not dict or set(sessions)!=set(NAMES):
+        raise ValueError('La prueba requiere exactamente Personal, Perfil 1 y Steam')
+    base={k:v for k,v in os.environ.items() if k not in DISPLAY_KEYS|BRAVE_KEYS|
+          {'FARM_ACCOUNT','FARM_LAUNCHER_PID','FARM_SUPERVISOR_PID','FISHING_GAME_WINDOW','FISHING_RUN_ID'}}
+    envs={};seen={key:set() for key in DISPLAY_KEYS|BRAVE_KEYS}
+    for account in NAMES:
+        record=sessions[account];keys=DISPLAY_KEYS if account=='steam' else DISPLAY_KEYS|BRAVE_KEYS
+        if type(record) is not dict or set(record)!=keys or any(type(v) is not str for v in record.values()):
+            raise ValueError('Endpoints incompletos o campos no permitidos en la prueba')
+        env={**base,**record,'FARM_ACCOUNT':account,'FARM_BACKEND':'gamescope','FARM_SUPERVISOR_PID':str(os.getpid())}
+        display,serial=gamescope_target(env);web=brave_target(env)
+        identity={'FARM_GAMESCOPE_DISPLAY':str(int(display[1:].split('.')[0])),'FARM_GAMESCOPE_SERIAL':serial}
+        if web:identity.update(zip(('FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT','FARM_BRAVE_TARGET_ID'),(web[0],web[1],web[2].upper())))
+        for key,value in identity.items():
+            if value in seen[key]:raise ValueError('Dos cuentas comparten un endpoint; no se inicia la prueba')
+            seen[key].add(value)
+        envs[account]=env
+    return envs
+
+
+def validate_trial(sessions,read_only=False):
+    envs=trial_environments(sessions)
+    if account_id() is not None:raise ValueError('El supervisor no debe fijarse a una sola cuenta')
+    for env in envs.values():
+        if read_only:require_calibrated_client(env,read_only=True);continue
+        env['FARM_SINGLE_DUNGEON']='1'  # el worker solo admite 1 run Normal, 10 energía, cero oro
+        require_calibrated_client(env)  # Brave vivo con su perfil y puerto, antes de ningún worker
+    return envs
+
+
+def start_trial(sessions,read_only=False):
+    """Entrada del panel: opt-in y preflight, sin escribir preferencias ni endpoints."""
+    validate_trial(sessions,read_only)
+    args=[sys.executable,'-B','-u','-m','fishing_core.farm_multi']+(['--stop-check'] if read_only else [])
+    process=subprocess.Popen(args,cwd=str(ROOT),
+                             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+    try:
+        process.stdin.write(json.dumps(sessions));process.stdin.close()
+    except BaseException:
+        try:process.send_signal(signal.SIGINT)
+        except OSError:pass
+        try:close_children([process])
+        finally:process.stdin.close();process.stdout.close()
+        raise
+    return process
+
+
+def run_trial(sessions,read_only=False):
+    envs=validate_trial(sessions,read_only)
+    lock=Mutex('MULTI_SUPERVISOR');workers=[];pending={};results={}
+    try:
+        for account,env in envs.items():
+            worker=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all','--stop-check' if read_only else '--single-dungeon'],
+                                    cwd=str(ROOT),env=env,stdin=subprocess.DEVNULL,start_new_session=True)
+            workers.append(worker);pending[account]=worker
+        while pending:
+            for account,worker in list(pending.items()):
+                code=worker.poll()
+                if code is None:continue
+                results[account]=code;del pending[account]
+                print(f'{NAMES[account]}: '+('OK (prueba limitada)' if code==0 else f'PARADO (código {code})'),flush=True)
+                if code:raise RuntimeError(f'Falló la prueba de {NAMES[account]}; se detienen las demás cuentas')
+            if pending:time.sleep(.05)
+        return results
+    finally:
+        try:
+            for worker in workers:
+                if worker.poll() is None:
+                    try:worker.send_signal(signal.SIGINT)
+                    except OSError:pass  # Puede haber salido; aun así limpiar todos los hijos propios.
+            close_children(workers)
+        finally:lock.close()
+
+
+def validate_farm(sessions):
+    """Farmeo completo: cada cuenta con su configuración; Brave vivo y propio antes de arrancar ninguna."""
+    envs=trial_environments(sessions)
+    if account_id() is not None:raise ValueError('El supervisor no debe fijarse a una sola cuenta')
+    for env in envs.values():
+        env['FARM_MULTI_FARM']='1'
+        require_calibrated_client(env)
+    return envs
+
+
+def start_farm(sessions):
+    """Entrada del panel: lanza el supervisor de farmeo y le pasa los endpoints por stdin."""
+    validate_farm(sessions)
+    process=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_multi','--farm'],cwd=str(ROOT),
+                             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+    try:process.stdin.write(json.dumps(sessions));process.stdin.close()
+    except BaseException:
+        try:process.send_signal(signal.SIGINT)
+        except OSError:pass
+        close_children([process]);raise
+    return process
+
+
+def run_farm(sessions):
+    """Las tres cuentas a la vez y por separado: una parada de una cuenta no detiene a las demás.
+    STOP (SIGINT al supervisor) detiene los tres motores propios."""
+    envs=validate_farm(sessions)
+    lock=Mutex('MULTI_SUPERVISOR');workers={};results={}
+    try:
+        for account,env in envs.items():
+            workers[account]=subprocess.Popen([sys.executable,'-B','-u','-m','fishing_core.farm_all'],cwd=str(ROOT),env=env,
+                                              stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                                              text=True,start_new_session=True)
+        import threading
+        def relay(account,worker):  # "== Modo" y "Modo: resultado" de cada cuenta, con su nombre delante
+            for line in worker.stdout:
+                line=line.rstrip()
+                if line:print(f'[{NAMES[account]}] {line}',flush=True)
+        threads=[threading.Thread(target=relay,args=item,daemon=True) for item in workers.items()]
+        for thread in threads:thread.start()
+        for account,worker in workers.items():
+            results[account]=worker.wait()
+            print(f'{NAMES[account]}: '+('TERMINADO' if results[account]==0 else f'PARADO (código {results[account]})'),flush=True)
+        for thread in threads:thread.join(timeout=2)
+        return results
+    finally:
+        try:
+            for worker in workers.values():
+                if worker.poll() is None:
+                    try:worker.send_signal(signal.SIGINT)
+                    except OSError:pass
+            close_children(list(workers.values()))
+        finally:lock.close()
+
+
+def read_sessions():
+    text=sys.stdin.read(8193)
+    if len(text)>8192:raise ValueError('Payload de endpoints demasiado grande')
+    try:sessions=json.loads(text)
+    except (ValueError,RecursionError):raise ValueError('JSON de endpoints inválido') from None
+    if type(sessions) is not dict:raise ValueError('JSON de endpoints inválido')
+    return sessions
+
+
+def main(argv):
+    if argv not in ([],['--stop-check'],['--farm']):raise ValueError('Argumentos del supervisor inválidos')
+    if argv==['--farm']:run_farm(read_sessions())
+    elif argv:run_trial(read_sessions(),read_only=True)
+    else:run_trial(read_sessions())
+
+
+if __name__=='__main__':
+    try:main(sys.argv[1:])
+    except KeyboardInterrupt:raise SystemExit(130)
+    except (ValueError,RuntimeError,OSError):raise SystemExit('PARADO: no se pudo completar la prueba multicuenta')

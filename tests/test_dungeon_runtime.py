@@ -16,6 +16,72 @@ from fishing_core.farm_budget import FarmBudget
 
 
 class DungeonRuntimeTests(unittest.TestCase):
+    def test_limited_worker_marker_enforces_one_normal_zero_gold_and_no_targets_in_the_shared_validator(self):
+        plan=farm_plan('Z1D2','Normal',1,10)
+        with patch.dict(os.environ,{'FARM_SINGLE_DUNGEON':'1'},clear=True):
+            self.assertEqual(validate_supported(plan)['runs'],1)
+            for changes in ({'runs':2},{'energy_limit':11},{'max_gold':1},{'targets':['Bob']},{'difficulty':'Hard'}):
+                with self.subTest(changes=changes),self.assertRaises(ValueError):validate_supported({**plan,**changes})
+
+    def test_stop_check_flag_reaches_the_dungeon_process_without_spawning_it(self):
+        from fishing_core import dungeon_runtime as runtime
+        plan=farm_plan('Z5D2','Normal',1,10)
+        with patch.object(runtime,'Mutex'),patch.object(runtime,'Channel'),patch.object(runtime,'atomic_json'), \
+                patch.object(runtime,'run_environment',return_value={'FISHING_RUN_ID':'test'}), \
+                patch.object(runtime.subprocess,'Popen') as spawn:
+            runtime.start_dungeon(None,plan,read_only=True)
+            self.assertEqual(spawn.call_args.args[0][-1],'--stop-check')
+            self.assertEqual(spawn.call_args.kwargs['env']['FARM_LAUNCHER_PID'],str(os.getpid()))
+
+    def test_stop_check_runtime_dispatches_only_observation_and_cleans_owned_guards(self):
+        from fishing_core import dungeon_runtime as runtime
+        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp:
+            directory=Path(tmp);(directory/'farm_plan.json').write_text(json.dumps(farm_plan('Z5D2','Normal',1,10)))
+            io=Mock();capture=Mock()
+            with patch.dict(os.environ,{'FISHING_RUN_ID':'test'},clear=True), \
+                    patch('fishing_core.gamescope.backend',return_value=(Mock(return_value=io),capture)) as backend, \
+                    patch.object(runtime,'Channel',return_value=SimpleNamespace(directory=directory,run_id='test')), \
+                    patch.object(runtime,'Mutex') as lock,patch.object(runtime,'Telemetry') as log, \
+                    patch.object(runtime,'DungeonVision'),patch.object(runtime,'DungeonRunner') as runner:
+                capture.return_value.__enter__=Mock(return_value=Mock());capture.return_value.__exit__=Mock(return_value=False)
+                runtime.run_dungeon(read_only=True)
+                backend.assert_called_once_with(read_only=True)
+                runner.return_value.observe_until_stopped.assert_called_once_with();runner.return_value.run.assert_not_called()
+                io.close.assert_called_once_with();log.return_value.close.assert_called_once_with()
+                self.assertEqual(lock.return_value.close.call_count,2)
+
+    def test_observation_keeps_f8_ipc_parent_and_deadline_guards_before_any_frame(self):
+        for stop in ('F8','IPC','parent','deadline'):
+            with self.subTest(stop=stop),tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp, \
+                    patch.dict(os.environ,{},clear=True),patch('fishing_core.dungeon_runtime.os.getppid',return_value=1):
+                runner,io,vision=self.runner(Path(tmp));io.read_only=True;del runner.capture
+                vision.screen.return_value='HOME'
+                if stop=='F8':io.emergency.side_effect=KeyboardInterrupt('F8')
+                elif stop=='IPC':runner.channel.stop_path.write_text('{}')
+                elif stop=='parent':os.environ['FARM_LAUNCHER_PID']='1234'
+                else:runner.deadline=time.monotonic()-1
+                with self.assertRaises(KeyboardInterrupt if stop=='F8' else SafetyStop):runner.observe_until_stopped()
+                runner.cap.grab.assert_not_called();io.click.assert_not_called();io.escape.assert_not_called()
+                self.assertFalse((Path(tmp)/'stop_check_ready.json').exists())
+
+    def test_stop_observation_requires_home_and_records_zero_entries_before_waiting_for_stop(self):
+        with tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp:
+            runner,io,vision=self.runner(Path(tmp));io.read_only=True;vision.screen.return_value='HOME'
+            runner.capture.side_effect=['frame','frame',KeyboardInterrupt('STOP')]
+            with self.assertRaises(KeyboardInterrupt):runner.observe_until_stopped()
+            ready=json.loads((Path(tmp)/'stop_check_ready.json').read_text())
+            self.assertEqual(ready['screen'],'HOME');self.assertEqual(ready['budget']['entries_reserved'],0)
+            self.assertEqual(ready['budget']['energy_reserved'],0)
+            io.click.assert_not_called();io._move.assert_not_called();io.escape.assert_not_called()
+
+    def test_stop_observation_refuses_unknown_screen_or_an_input_enabled_backend(self):
+        for read_only,state in ((False,'HOME'),(True,'UNKNOWN'),(True,'DISCONNECTED')):
+            with tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp:
+                runner,io,vision=self.runner(Path(tmp));io.read_only=read_only;vision.screen.return_value=state
+                with self.assertRaises(SafetyStop):runner.observe_until_stopped()
+                self.assertFalse((Path(tmp)/'stop_check_ready.json').exists())
+                io.click.assert_not_called();io.escape.assert_not_called()
+
     def test_uncertified_routes_are_not_silently_substituted(self):
         validate_supported(farm_plan('Z5D2','Normal',1,30))
         validate_supported(farm_plan('Z5D3','Heroic',1,30,'Tealk'))

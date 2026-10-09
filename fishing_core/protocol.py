@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .telemetry import ROOT
+from .accounts import runs_root
 
 ARMED_STATES = frozenset(("WAIT_CAST_RESULT", "CATCH_GAME"))
 LEASE_NS = 3_000_000_000
@@ -78,7 +79,7 @@ def _ipc_guard(path: Path, wait_ms: int):
 def session_directory(run_id: str, root: Path = ROOT) -> Path:
     if not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", run_id):
         raise ValueError("Identificador de sesion invalido")
-    return root / "runs" / run_id
+    return runs_root(root) / run_id
 
 
 def read_json(path: Path):
