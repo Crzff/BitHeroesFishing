@@ -12,6 +12,45 @@ from types import SimpleNamespace
 from fishing_core.telemetry import ROOT
 
 
+class BraveBridgeProtocolTests(unittest.TestCase):
+    def bridge(self):
+        import io
+        from fishing_core.brave import Bridge
+        bridge=Bridge.__new__(Bridge)
+        bridge.closed=bridge.broken=False;bridge.sequence=0
+        bridge.process=SimpleNamespace(stdin=io.BytesIO())
+        bridge._receive=Mock()
+        return bridge
+
+    def test_mouse_and_frame_json_lines(self):
+        import json
+        bridge=self.bridge()
+        bridge.call('move',xy=(1,2));bridge.call('click',xy=(3,4))
+        bridge.call('wheel',xy=(5,6),steps=-2);bridge.call('frame',path='test.png')
+        lines=bridge.process.stdin.getvalue().splitlines()
+        self.assertEqual([json.loads(line) for line in lines],[
+            {'id':1,'op':'move','xy':[1,2]},{'id':2,'op':'click','xy':[3,4]},
+            {'id':3,'op':'wheel','xy':[5,6],'steps':-2},{'id':4,'op':'frame','path':'test.png'}])
+        self.assertTrue(all(len(line)<1024 for line in lines))
+
+    def test_refused_reply_blocks_later_requests(self):
+        bridge=self.bridge();bridge._receive.side_effect=ValueError('refuse')
+        with self.assertRaises(RuntimeError):bridge.call('click',xy=(1,2))
+        before=bridge.process.stdin.getvalue()
+        with self.assertRaises(RuntimeError):bridge.call('move',xy=(3,4))
+        self.assertEqual(bridge.process.stdin.getvalue(),before)
+
+    def test_windows_pipe_receive_keeps_bounded_protocol(self):
+        import queue
+        bridge=self.bridge();bridge.buffer=b'';bridge.replies=queue.Queue()
+        for byte in b'{"id":1,"ok":true}\n':bridge.replies.put(bytes([byte]))
+        from fishing_core.brave import Bridge
+        with patch('fishing_core.brave.os.name','nt'):
+            Bridge._receive(bridge,1)
+            for byte in b'x'*1025:bridge.replies.put(bytes([byte]))
+            with self.assertRaises(ValueError):Bridge._receive(bridge,2)
+
+
 @unittest.skipIf(os.name=='nt','Identidad de proceso Linux')
 class BraveIdentityTests(unittest.TestCase):
     def fixture(self,path,account='personal',port=45678):

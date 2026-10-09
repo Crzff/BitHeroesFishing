@@ -4,6 +4,11 @@
 // WebSocket nativo: https://nodejs.org/api/globals.html#class-websocket
 import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+// Calibrado en vivo (SETTINGS, KORTZZ): 1 evento de deltaY=100 = 1 paso de rueda XTest. Unity solo atiende la rueda
+// si antes llega mouseMoved sobre el canvas.
+export const WHEEL_DELTA_PER_STEP=100;
 export function gamePage(value){
   try{
     const u=new URL(value);
@@ -401,17 +406,19 @@ export async function finishPreparation(c,timeout=30_000){
   }catch{refuse();}
 }
 
-export async function runCommand(c,op,state,xy){
-  if(op==='check' || op==='escapeDown' || op==='point'){
+export async function runCommand(c,op,state,xy,steps,framePath){
+  const point=['point','move','click','wheel'].includes(op);
+  if(op==='check' || op==='escapeDown' || point || op==='frame'){
     if(op!=='check' && !state.identity)refuse();
-    if(op==='point' && (!Array.isArray(xy) || xy.length!==2 || !xy.every(Number.isInteger) ||
+    if(point && (!Array.isArray(xy) || xy.length!==2 || !xy.every(Number.isInteger) ||
       xy[0]<0 || xy[0]>=1920 || xy[1]<0 || xy[1]>=1080))refuse();
+    if(op==='wheel' && (!Number.isSafeInteger(steps) || Math.abs(steps)>100))refuse();
     const geometry=await snapshot(c),current=JSON.stringify(geometry);
     if(state.identity && current!==state.identity)refuse();
     state.identity=current;
     if(op==='check')return;
     if(state.cancelled)refuse();
-    if(op==='point'){
+    if(point){
       for(const [, ,session,context,owner] of geometry.chain){
         let object,result;
         try{
@@ -427,7 +434,41 @@ export async function runCommand(c,op,state,xy){
           if(result.exceptionDetails || result.result?.value!==true)refuse();
         }finally{if(object)await c.call('Runtime.releaseObject',{objectId:object},session);}
       }
-      if(state.cancelled)refuse();return;
+      if(state.cancelled)refuse();
+      const mouse=type=>c.call('Input.dispatchMouseEvent',{type,x:xy[0],y:xy[1],
+        ...(type==='mousePressed'||type==='mouseReleased'?{button:'left',buttons:type==='mousePressed'?1:0,clickCount:1}:{}),
+        ...(type==='mouseWheel'?{deltaX:0,deltaY:steps*WHEEL_DELTA_PER_STEP}:{})},c.root);
+      if(op==='move'||op==='click')await mouse('mouseMoved');
+      if(op==='click'){await mouse('mousePressed');await mouse('mouseReleased');}
+      if(op==='wheel'){
+        await mouse('mouseMoved');
+        for(let i=0;i<Math.abs(steps);i++){
+          if(state.cancelled)refuse();
+          await c.call('Input.dispatchMouseEvent',{type:'mouseWheel',x:xy[0],y:xy[1],deltaX:0,deltaY:Math.sign(steps)*WHEEL_DELTA_PER_STEP},c.root);
+          await new Promise(resolve=>setTimeout(resolve,40));
+        }
+      }
+      return;
+    }
+    if(op==='frame'){
+      if(typeof framePath!=='string' || !/^[a-zA-Z0-9_-]+\.png$/.test(framePath) || !state.framesDir)refuse();
+      const dir=await fs.lstat(state.framesDir);
+      if(!dir.isDirectory() || dir.isSymbolicLink() || (dir.mode&0o077))refuse();
+      const destination=path.join(state.framesDir,framePath),temporary=destination+'.partial';
+      // Nunca reemplazar un frame existente; el directorio es exclusivo del Bridge.
+      try{await fs.lstat(destination);refuse();}catch(error){if(error.code!=='ENOENT')throw error;}
+      const {data}=await c.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false,
+        clip:{x:0,y:0,width:1920,height:1080,scale:1}},c.root);
+      if(state.cancelled)refuse();
+      const png=Buffer.from(data,'base64');
+      if(png.length<24 || !png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ||
+        png.toString('ascii',12,16)!=='IHDR' || png.readUInt32BE(16)!==1920 || png.readUInt32BE(20)!==1080)refuse();
+      const file=await fs.open(temporary,'wx',0o600);
+      try{
+        try{await file.writeFile(png);await file.sync();}finally{await file.close();}
+        await fs.rename(temporary,destination);
+      }finally{await fs.rm(temporary,{force:true});}
+      return;
     }
     state.pressed=true;
     await c.call('Input.dispatchKeyEvent',{type:'rawKeyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27},c.root);
@@ -444,7 +485,8 @@ async function main(){
   process.stdout.on('error',()=>{state.cancelled=true;if(startup)c?.close();});  // El padre murió: limpiar, no abortar por EPIPE.
   const answer=(id,ok)=>process.stdout.write(JSON.stringify({id,ok})+'\n');
   try{
-    if(process.argv.length!==4)refuse();
+    if(process.argv.length!==4 && !(process.argv.length===5 && !startup))refuse();
+    if(process.argv[4])state.framesDir=path.resolve(process.argv[4]);
     if(startup){
       process.stdin.resume();c=await openBrowser(Number(process.argv[2]));
       if(state.cancelled)refuse();
@@ -458,10 +500,11 @@ async function main(){
     for await(const line of lines){
       let request;
       try{
-        if(line.length>128)refuse();request=JSON.parse(line);
+        if(line.length>1024)refuse();request=JSON.parse(line);
         if(!Number.isSafeInteger(request.id) || request.id<=0 || request.id>=2**31 ||
-          Object.keys(request).sort().join(',')!==(request.op==='point'?'id,op,xy':'id,op'))refuse();
-        await runCommand(c,request.op,state,request.xy);answer(request.id,true);
+          Object.keys(request).sort().join(',')!==(request.op==='frame'?'id,op,path':request.op==='wheel'?'id,op,steps,xy':
+            ['point','move','click'].includes(request.op)?'id,op,xy':'id,op'))refuse();
+        await runCommand(c,request.op,state,request.xy,request.steps,request.path);answer(request.id,true);
       }catch{answer(Number.isSafeInteger(request?.id)?request.id:null,false);}
     }
   }catch{

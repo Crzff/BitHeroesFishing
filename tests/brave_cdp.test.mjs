@@ -1,12 +1,103 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { gamePage, validView, snapshot, CDP, runCommand, prepareTarget, finishPreparation } from '../fishing_core/brave_cdp.mjs';
 
 const page='https://www.kongregate.com/en/games/Juppiomenz/bit-heroes';
 const quad=[0,0,1920,0,1920,1080,0,1080];
 const view={size:[1920,1080],dpr:1,visual:[0,0,1920,1080,1],scroll:[0,0],
   focused:true,visible:true,brave:true,activeTag:'BODY',canvases:[]};
+
+function inputFixture(){
+  const f=fixture(),call=f.client.call;f.inputs=[];
+  f.client.call=async(method,params,session)=>{
+    if(method.startsWith('Input.')){f.inputs.push({params,session});return {};}
+    if(method==='DOM.resolveNode')return {object:{objectId:'owner'}};
+    if(method==='Runtime.releaseObject')return {};
+    if(method==='Runtime.evaluate'||method==='Runtime.callFunctionOn')return {result:{value:true}};
+    if(method==='Page.captureScreenshot'){
+      assert.equal(session,'root');assert.deepEqual(params.clip,{x:0,y:0,width:1920,height:1080,scale:1});
+      const header=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(header);
+      header.write('IHDR',12);header.writeUInt32BE(1920,16);header.writeUInt32BE(1080,20);
+      return {data:header.toString('base64')};
+    }
+    return call(method,params,session);
+  };
+  return f;
+}
+
+test('CDP ratón: identidad, punto válido y eventos en la sesión raíz',async()=>{
+  for(const op of ['move','click','wheel']){
+    const f=inputFixture(),state={identity:null};
+    await assert.rejects(runCommand(f.client,op,state,[10,20],2));
+    await runCommand(f.client,'check',state);
+    for(const xy of [[-1,0],[1920,0],[0,1080],[1.5,2],['1',2],[1,2,3]])
+      await assert.rejects(runCommand(f.client,op,state,xy,2));
+    assert.equal(f.inputs.length,0);
+    await runCommand(f.client,op,state,[10,20],2);
+    assert.deepEqual(f.inputs.map(i=>i.params.type),op==='click'?['mouseMoved','mousePressed','mouseReleased']:
+      op==='move'?['mouseMoved']:['mouseMoved','mouseWheel','mouseWheel']);  // rueda: mover encima y un evento por paso
+    assert.ok(f.inputs.every(i=>i.session==='root' && i.params.x===10 && i.params.y===20));
+    if(op==='click')assert.ok(f.inputs.slice(1).every(i=>i.params.button==='left'));
+    if(op==='wheel')assert.deepEqual(f.inputs.slice(1).map(i=>i.params.deltaY),[100,100]);  // calibrado en vivo
+  }
+});
+
+test('CDP ratón: cambios de huella, overlays y pasos inválidos no envían eventos',async()=>{
+  for(const op of ['move','click','wheel'])for(const kind of ['identity','overlay','steps']){
+    const f=inputFixture(),state={identity:null};await runCommand(f.client,'check',state);
+    if(kind==='identity')f.geometry.get('game').context++;
+    if(kind==='overlay'){
+      const call=f.client.call;f.client.call=(method,...args)=>method==='Runtime.callFunctionOn'?
+        {result:{value:false}}:call(method,...args);
+    }
+    if(kind==='steps' && op!=='wheel')continue;
+    await assert.rejects(runCommand(f.client,op,state,[10,20],kind==='steps'?1.5:1));
+    assert.equal(f.inputs.length,0);
+  }
+});
+
+test('CDP frame: identidad fija, archivo privado, sin sobrescritura ni salida del directorio',async()=>{
+  const dir=await fs.mkdtemp(path.resolve('tests/.cdp-frame-'));
+  try{
+    const f=inputFixture(),state={identity:null,framesDir:dir};
+    await assert.rejects(runCommand(f.client,'frame',state,undefined,undefined,'one.png'));
+    await runCommand(f.client,'check',state);
+    for(const name of ['../escape.png','/escape.png','nested/a.png'])
+      await assert.rejects(runCommand(f.client,'frame',state,undefined,undefined,name));
+    await runCommand(f.client,'frame',state,undefined,undefined,'one.png');
+    assert.equal((await fs.stat(path.join(dir,'one.png'))).mode&0o777,0o600);
+    assert.equal((await fs.readFile(path.join(dir,'one.png'))).readUInt32BE(16),1920);
+    await assert.rejects(runCommand(f.client,'frame',state,undefined,undefined,'one.png'));
+    f.geometry.get('root').dpr=2;
+    await assert.rejects(runCommand(f.client,'frame',state,undefined,undefined,'two.png'));
+    assert.deepEqual(await fs.readdir(dir),['one.png']);assert.equal(f.inputs.length,0);
+  }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+
+test('CDP frame: PNG o tamaño inválido y directorio público no publican archivos',async()=>{
+  const dir=await fs.mkdtemp(path.resolve('tests/.cdp-frame-'));
+  try{
+    for(const kind of ['format','size','permissions']){
+      const f=inputFixture(),state={identity:null,framesDir:dir},call=f.client.call;
+      await runCommand(f.client,'check',state);
+      if(kind==='permissions')await fs.chmod(dir,0o755);
+      else f.client.call=async(method,...args)=>{
+        const result=await call(method,...args);
+        if(method==='Page.captureScreenshot'){
+          if(kind==='format')return {data:Buffer.from('not PNG').toString('base64')};
+          const header=Buffer.from(result.data,'base64');header.writeUInt32BE(1024,20);
+          return {data:header.toString('base64')};
+        }
+        return result;
+      };
+      await assert.rejects(runCommand(f.client,'frame',state,undefined,undefined,'bad.png'));
+      assert.deepEqual(await fs.readdir(dir),[]);
+    }
+  }finally{await fs.chmod(dir,0o700);await fs.rm(dir,{recursive:true,force:true});}
+});
 
 test('solo la página oficial, sin confundir host, ruta o esquema',()=>{
   assert.ok(gamePage(page+'?ignored=PRIVATE_TEST_MARKER'));

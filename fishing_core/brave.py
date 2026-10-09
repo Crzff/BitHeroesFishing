@@ -8,6 +8,8 @@ import shlex
 import shutil
 import subprocess
 import time
+import queue
+import threading
 
 from .telemetry import ROOT
 from .accounts import account_id,brave_target,gamescope_target
@@ -222,8 +224,8 @@ def launch_brave(executable=None):
 
 
 class Bridge:
-    """Un WebSocket nativo persistente por guarda; solo check y Escape, sin datos web en stdout."""
-    def __init__(self,port,target):
+    """CDP persistente; respuestas acotadas, imagen por archivos privados."""
+    def __init__(self,port,target,frames_dir=None):
         self.process=None;self.closed=False;self.broken=False;self.buffer=b'';self.sequence=0
         if type(port) is not int or not 0<port<65536 or not isinstance(target,str) or not re.fullmatch(r'[0-9a-fA-F]{32}',target):
             raise RuntimeError('El adaptador de la guarda requiere puerto válido y target hexadecimal fijo')
@@ -231,9 +233,20 @@ class Bridge:
         if node is None:raise RuntimeError('Brave requiere Node con WebSocket nativo; no se habilita input')
         try:
             # No heredar credenciales, proxies ni NODE_OPTIONS/preloads al adaptador CDP.
-            self.process=subprocess.Popen([node,str(Path(__file__).with_name('brave_cdp.mjs')),str(port),target],
+            self.process=subprocess.Popen([node,str(Path(__file__).with_name('brave_cdp.mjs')),str(port),target]+
+                ([str(frames_dir)] if frames_dir is not None else []),
                 cwd=str(ROOT),env={'PATH':os.defpath,'LANG':'C.UTF-8'},stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,bufsize=0,start_new_session=True)
+            if os.name=='nt':
+                self.replies=queue.Queue()
+                def read_pipe():
+                    try:
+                        while True:
+                            chunk=self.process.stdout.read(1)
+                            self.replies.put(chunk)
+                            if not chunk:return
+                    except OSError:self.replies.put(b'')
+                threading.Thread(target=read_pipe,daemon=True).start()
             self._receive(0,15)  # en vivo, con tres cuentas arrancando a la vez, 5 s no bastó
         except (OSError,ValueError,TypeError):
             self.close()
@@ -245,20 +258,27 @@ class Bridge:
         end=time.monotonic()+timeout
         while b'\n' not in self.buffer:
             remaining=end-time.monotonic()
-            if remaining<=0 or not select.select([self.process.stdout],[],[],remaining)[0]:raise ValueError
-            chunk=os.read(self.process.stdout.fileno(),1025)
+            if remaining<=0:raise ValueError
+            if os.name=='nt':
+                try:chunk=self.replies.get(timeout=remaining)
+                except queue.Empty:raise ValueError from None
+            else:
+                if not select.select([self.process.stdout],[],[],remaining)[0]:raise ValueError
+                chunk=os.read(self.process.stdout.fileno(),1025)
             if not chunk or len(self.buffer)+len(chunk)>1024:raise ValueError
             self.buffer+=chunk
         line,self.buffer=self.buffer.split(b'\n',1);reply=json.loads(line)
         if not isinstance(reply,dict) or set(reply)!={'id','ok'} or type(reply['id']) is not int or \
                 reply['id']!=expected or reply['ok'] is not True:raise ValueError
 
-    def call(self,op,xy=None):
-        if self.closed or self.broken or op not in ('check','escapeDown','escapeUp','point'):
+    def call(self,op,xy=None,steps=None,path=None):
+        if self.closed or self.broken or op not in ('check','escapeDown','escapeUp','point','move','click','wheel','frame'):
             raise RuntimeError('CDP propio no disponible; no se envía input')
         try:
             self.sequence+=1;request={'id':self.sequence,'op':op}
-            if op=='point':request['xy']=xy
+            if op in ('point','move','click','wheel'):request['xy']=xy
+            if op=='wheel':request['steps']=steps
+            if op=='frame':request['path']=path
             data=json.dumps(request).encode()+b'\n'
             if self.process.stdin.write(data)!=len(data):raise ValueError
             self._receive(self.sequence)
