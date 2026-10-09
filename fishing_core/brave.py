@@ -229,7 +229,7 @@ class Bridge:
             self.process=subprocess.Popen([node,str(Path(__file__).with_name('brave_cdp.mjs')),str(port),target],
                 cwd=str(ROOT),env={'PATH':os.defpath,'LANG':'C.UTF-8'},stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,bufsize=0,start_new_session=True)
-            self._receive(0,5)
+            self._receive(0,15)  # en vivo, con tres cuentas arrancando a la vez, 5 s no bastó
         except (OSError,ValueError,TypeError):
             self.close()
             raise RuntimeError('No se puede abrir el CDP local propio de Brave') from None
