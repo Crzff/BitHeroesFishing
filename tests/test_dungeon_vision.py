@@ -10,6 +10,15 @@ FIXTURES=Path(__file__).parent/'fixtures/dungeons.npz'
 
 
 class DungeonVisionTests(unittest.TestCase):
+    def test_merchant_requires_title_and_decline_and_excludes_other_fixtures(self):
+        frame=self.frames['merchant_offer']
+        self.assertEqual(self.vision.screen(frame),'MERCHANT')
+        for x,y,x1,y1 in ((740,240,1140,315),(1015,790,1225,841)):
+            damaged=frame.copy();damaged[y:y1,x:x1]=0
+            self.assertNotEqual(self.vision.screen(damaged),'MERCHANT')
+        for name,other in self.frames.items():
+            if name!='merchant_offer':self.assertNotEqual(self.vision.screen(other),'MERCHANT',name)
+
     @classmethod
     def setUpClass(cls):
         cls.vision=DungeonVision()

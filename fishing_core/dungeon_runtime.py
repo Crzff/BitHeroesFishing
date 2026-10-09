@@ -48,7 +48,7 @@ ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
 # Pantallas de una run en marcha que pueden quedar al reiniciar el bot.
 LEFTOVER_SCREENS=('AUTO_ON','AUTO_ON_BATTLE','AUTO_OFF','AUTO_OFF_BATTLE','BATTLE_VICTORY','LOADING','FAMILIAR_OFFER','DECLINE_CONFIRM','STORY',
-                  'RESUME_DUNGEON','CAPTURE_SUCCESS')
+                  'RESUME_DUNGEON','CAPTURE_SUCCESS','MERCHANT')
 
 
 class OfferChanged(Exception):
@@ -257,7 +257,8 @@ class DungeonRunner:
 
     def finish_leftover_run(self,screen):
         """Un paso de una run que quedó a medias al reiniciar el bot; nunca gasta."""
-        if screen=='FAMILIAR_OFFER':
+        if screen=='MERCHANT':self.decline_merchant()
+        elif screen=='FAMILIAR_OFFER':
             # Sin sesión no hay cuota de oro: rechazar es gratis (BRIBE nunca).
             self.click('FAMILIAR_OFFER',(755,955),'DECLINE',(550,890,965,1015))
             self.log.emit('FAMILIAR_DECLINED',message='Oferta de una run anterior rechazada al reanudar')
@@ -273,6 +274,18 @@ class DungeonRunner:
             if self.vision.screen(self.capture())==screen:self.click(screen,(1880,530))
         else:time.sleep(2)  # la run sigue sola con Auto
         time.sleep(.5)
+
+    def decline_merchant(self):
+        self.click('MERCHANT',(1120,815),'MERCHANT_DECLINE',(990,765,1250,865))
+        self.log.emit('MERCHANT_DECLINED')
+        def closed(frame):
+            screen=self.vision.screen(frame)
+            if screen=='MERCHANT':return False
+            if screen not in ('AUTO_ON','AUTO_OFF','AUTO_ON_BATTLE','AUTO_OFF_BATTLE','BATTLE_VICTORY',
+                              'LOADING','STORY','STORY_ZORUL','FAMILIAR_OFFER','VICTORY','HOME','WB_DEFEAT','WB_VICTORY'):
+                raise SafetyStop('Confirmación desconocida tras DECLINE del mercader; no se pulsa')
+            return True
+        self.wait(closed,5,'mercader rechazado')
 
     def cost_shown(self,frame):
         x,y,x1,y1=COST_ROI;return self.vision.number(frame[y:y1,x:x1])
@@ -572,6 +585,8 @@ class DungeonRunner:
         unknown_since=None;story_sent=set();declined=len(previous);deadline=time.monotonic()+180;battle_autos=0;map_autos=0;map_off_since=None;battle_off_since=None
         while time.monotonic()<deadline:
             frame=self.capture();screen=self.vision.screen(frame)
+            if screen=='MERCHANT':
+                self.decline_merchant();unknown_since=None;continue
             if screen=='FAMILIAR_OFFER':
                 cv2.imwrite(str(self.channel.directory/'familiar-offer.png'),frame[110:900,350:1600])
                 if declined>=20:raise SafetyStop('Demasiadas ofertas de familiar; no se continúa')

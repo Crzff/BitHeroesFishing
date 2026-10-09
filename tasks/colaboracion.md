@@ -23,3 +23,4 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
   siempre desde Python (como el panel) con SIGINT por defecto.
 
 - t3 (Codex): huecos de runa vacíos (INSERT) se saltan; 493 OK.
+- t4 (Codex, timeout 124 pero diff completo): Mercader → DECLINE; 495 OK.

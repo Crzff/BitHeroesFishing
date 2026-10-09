@@ -99,6 +99,9 @@ class DungeonVision:
     def __init__(self,path=ASSETS):
         with np.load(path,allow_pickle=False) as data:
             self.templates={key:data[key] for key in data.files}
+        for key in ('MERCHANT_TITLE','MERCHANT_DECLINE'):
+            template=cv2.imread(str(ASSETS.parent/f'{key.lower()}.png'))
+            if template is not None:self.templates[key]=template
         # ponytail: fondos/variantes observados; máscara alfa etiquetada si otro fondo falla.
         # El fondo de la ciudad cambia: comparar solo los píxeles comunes a todas las variantes observadas.
         self.home_masks={key:np.all([np.all(self.templates[key]==self.templates[v],axis=2) for v in self.templates
@@ -148,6 +151,9 @@ class DungeonVision:
 
     def screen(self,frame):
         if frame.shape!=(1080,1920,3):return 'UNKNOWN'
+        if (all(key in self.templates for key in ('MERCHANT_TITLE','MERCHANT_DECLINE')) and
+                self.locate(frame,'MERCHANT_TITLE',(720,220,1160,335)) and
+                self.locate(frame,'MERCHANT_DECLINE',(990,765,1250,865))):return 'MERCHANT'
         if (self.locate(frame,'DECLINE_CONFIRM',(700,455,1220,620)) and
                 self.locate(frame,'DECLINE_YES',(670,695,955,805))):return 'DECLINE_CONFIRM'
         if (self.locate(frame,'WB_NOT_FULL',(680,410,1240,575)) and

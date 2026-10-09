@@ -16,6 +16,40 @@ from fishing_core.farm_budget import FarmBudget
 
 
 class DungeonRuntimeTests(unittest.TestCase):
+    def test_merchant_declines_only_in_observation_and_home_recovery(self):
+        from fishing_core.dungeon_vision import DungeonVision
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('merchant_offer','home','auto_on','decline_confirm')}
+        for mode in ('observe','ensure_home','unknown','confirmation','stuck','changed'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                runner,io,_=self.runner(Path(tmp));runner.vision=DungeonVision();state=['merchant_offer'];finished=[False]
+                def capture():
+                    if finished[0]:raise SafetyStop('fin offline')
+                    return np.zeros((1080,1920,3),np.uint8) if state[0]=='unknown' else frames[state[0]]
+                runner.capture=capture
+                def click(xy):
+                    self.assertEqual(tuple(xy),(1120,815))
+                    state[0]={'observe':'auto_on','ensure_home':'home','unknown':'unknown',
+                              'confirmation':'decline_confirm','stuck':'merchant_offer'}[mode]
+                io.click.side_effect=click
+                def wait(predicate,timeout=10,expected=None):
+                    frame=capture()
+                    okay=predicate(frame) if callable(predicate) else runner.vision.screen(frame)==predicate
+                    if not okay:raise SafetyStop('Cierre no confirmado')
+                    if expected=='mercader rechazado' and mode=='observe':finished[0]=True
+                    return frame
+                runner.wait=wait
+                with patch('fishing_core.dungeon_runtime.time.sleep'):
+                    if mode=='ensure_home':self.assertEqual(runner.ensure_home(),'HOME')
+                    elif mode=='observe':
+                        with self.assertRaisesRegex(SafetyStop,'fin offline'):runner.observe('test:1',1)
+                    else:
+                        if mode=='changed':state[0]='home'
+                        with self.assertRaises(SafetyStop):runner.decline_merchant()
+                self.assertEqual([c.args[0] for c in io.click.call_args_list],[] if mode=='changed' else [(1120,815)])
+                if mode!='changed':runner.log.emit.assert_any_call('MERCHANT_DECLINED')
+                io.escape.assert_not_called()
+
     def test_reconnect_rebaselines_before_capture_if_supported(self):
         for supported in (False,True):
             with self.subTest(supported=supported),tempfile.TemporaryDirectory() as tmp:
