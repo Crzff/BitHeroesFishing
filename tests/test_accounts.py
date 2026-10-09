@@ -2,6 +2,7 @@
 
 import json
 import os
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -13,6 +14,41 @@ from uuid import uuid4
 from fishing_core import accounts
 from fishing_core.processes import Mutex
 from fishing_core.protocol import Channel
+
+
+class BrokerEndpointTests(unittest.TestCase):
+    def test_endpoint_metadata_and_session_formats(self):
+        from unittest.mock import Mock
+        endpoint=str(accounts.ROOT/'runs/cdp-test/cdp.sock')
+        info=Mock(st_mode=stat.S_IFSOCK|0o600,st_uid=os.getuid())
+        directory=Mock(st_mode=stat.S_IFDIR|0o700,st_uid=os.getuid())
+        env={'FARM_ACCOUNT':'personal','FARM_BACKEND':'cdp','FARM_BRAVE_PID':'1234',
+             'FARM_BRAVE_CDP_ENDPOINT':endpoint,'FARM_BRAVE_TARGET_ID':'A'*32}
+        with patch.object(Path,'is_symlink',return_value=False),patch.object(Path,'lstat',return_value=info), \
+                patch.object(Path,'stat',return_value=directory):
+            self.assertEqual(accounts.brave_target(env),(1234,endpoint,'A'*32))
+            from fishing_core import farm_multi,browser_launcher
+            self.assertEqual(farm_multi.trial_environments({'personal':{k:v for k,v in env.items() if k!='FARM_ACCOUNT'}},farm=True)['personal']['FARM_BRAVE_CDP_ENDPOINT'],endpoint)
+            with self.assertRaises(ValueError):accounts.brave_target({**env,'FARM_BRAVE_CDP_PORT':'9222'})
+            for mode in (stat.S_IFSOCK|0o666,stat.S_IFREG|0o600):
+                info.st_mode=mode
+                with self.assertRaises(ValueError):accounts.brave_target(env)
+            info.st_mode=stat.S_IFSOCK|0o600;directory.st_mode=stat.S_IFDIR|0o755
+            with self.assertRaises(ValueError):accounts.brave_target(env)
+            directory.st_mode=stat.S_IFDIR|0o700;info.st_uid=os.getuid()+1
+            with self.assertRaises(ValueError):accounts.brave_target(env)
+        with self.assertRaises(ValueError):accounts.validate_cdp_endpoint('/tmp/cdp.sock')
+        with patch.object(Path,'is_symlink',return_value=True):
+            with self.assertRaises(ValueError):accounts.validate_cdp_endpoint(endpoint)
+        with patch.object(Path,'is_symlink',return_value=False),patch.object(Path,'lstat',side_effect=FileNotFoundError):
+            with self.assertRaises(ValueError):accounts.validate_cdp_endpoint(endpoint)
+
+    def test_windows_pipe_pattern(self):
+        pipe=r'\\.\pipe\bitheroes-12345678-1234-1234-1234-123456789abc'
+        with patch.object(accounts.os,'name','nt'):
+            self.assertEqual(accounts.validate_cdp_endpoint(pipe),pipe)
+            for bad in (pipe+'x',pipe.replace('bitheroes','other'),'1234'):
+                with self.assertRaises(ValueError):accounts.validate_cdp_endpoint(bad)
 from fishing_core.telemetry import ROOT, Telemetry
 
 

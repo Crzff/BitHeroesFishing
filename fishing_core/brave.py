@@ -12,14 +12,14 @@ import queue
 import threading
 
 from .telemetry import ROOT
-from .accounts import account_id,brave_target,gamescope_target,browser_accounts
+from .accounts import account_id,brave_target,gamescope_target,browser_accounts,validate_cdp_endpoint
 
 CHROMIUM_NAMES=('brave','brave-browser','google-chrome','google-chrome-stable','chrome','chromium','chromium-browser','microsoft-edge','microsoft-edge-stable','msedge','brave.exe','chrome.exe','chromium.exe','msedge.exe')
 
 
 def _windows_processes():
     # Solo metadatos; no se consultan archivos de perfiles. Fallo cerrado.
-    script="$ErrorActionPreference='Stop'; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('brave.exe','chrome.exe','chromium.exe','msedge.exe') } | Select-Object ProcessId,ExecutablePath,CommandLine,CreationDate)"
+    script="$ErrorActionPreference='Stop'; ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('brave.exe','chrome.exe','chromium.exe','msedge.exe') } | Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine,CreationDate)"
     out=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],capture_output=True,text=True,timeout=10)
     if out.returncode or len(out.stdout)>1048576:raise ValueError
     rows=json.loads(out.stdout or '[]')
@@ -46,8 +46,13 @@ def _windows_identity(pid,port,account):
     if len(rows)!=1:raise ValueError
     row=rows[0];exe=Path(row['ExecutablePath']);argv=_windows_argv(row['CommandLine'])
     if exe.name.lower() not in CHROMIUM_NAMES or not row['CreationDate'] or \
-            _flag(argv,'--user-data-dir')!=str(ROOT/'runs/accounts'/account/'brave-data') or \
-            _flag(argv,'--remote-debugging-port')!=str(port):raise ValueError
+            _flag(argv,'--user-data-dir')!=str(ROOT/'runs/accounts'/account/'brave-data'):raise ValueError
+    if isinstance(port,str):
+        validate_cdp_endpoint(port)
+        if argv.count('--remote-debugging-pipe')!=1 or any(a.startswith('--remote-debugging-port') for a in argv) or \
+                type(row['ParentProcessId']) is not int or row['ParentProcessId']<=0:raise ValueError
+        return str(exe),row['CreationDate'],row['ParentProcessId']
+    if _flag(argv,'--remote-debugging-port')!=str(port):raise ValueError
     script=f"$ErrorActionPreference='Stop'; ConvertTo-Json -Compress -InputObject @(Get-NetTCPConnection -State Listen | Where-Object {{ $_.OwningProcess -eq {pid} -and $_.LocalPort -eq {port} }} | Select-Object LocalAddress)"
     out=subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],capture_output=True,text=True,timeout=10)
     if out.returncode or len(out.stdout)>4096 or json.loads(out.stdout or '[]')!=[{'LocalAddress':'127.0.0.1'}]:raise ValueError
@@ -69,21 +74,28 @@ def _flag(argv,name):
 def browser_identity(pid,port,account,proc=Path('/proc')):
     """Solo metadatos del proceso aprobado; no cookies, storage ni archivos del perfil."""
     try:
-        if type(pid) is not int or not 0<pid<2**31 or type(port) is not int or not 0<port<65536 or \
+        endpoint=isinstance(port,str)
+        if endpoint:validate_cdp_endpoint(port)
+        if type(pid) is not int or not 0<pid<2**31 or (not endpoint and (type(port) is not int or not 0<port<65536)) or \
                 account not in browser_accounts():raise ValueError
         if os.name=='nt':return _windows_identity(pid,port,account)
         p=proc/str(pid)
         if p.stat().st_uid!=os.getuid():raise ValueError
         exe=(p/'exe').resolve(strict=True)
         if exe.name not in CHROMIUM_NAMES:raise ValueError
-        stamp=(p/'stat').read_text().rsplit(') ',1)[1].split()[19]
+        fields=(p/'stat').read_text().rsplit(') ',1)[1].split();stamp=fields[19]
+        if fields[0] in ('Z','X'):raise ValueError
         if not stamp.isdecimal() or int(stamp)<=0:raise ValueError
         with (p/'cmdline').open('rb') as stream:raw=stream.read(65537)
         if len(raw)>65536 or not raw.endswith(b'\0'):raise ValueError
         argv=[os.fsdecode(a) for a in raw[:-1].split(b'\0')]
         if len(argv)==1:argv=shlex.split(argv[0])  # Brave expone su título de proceso aplanado en Linux.
-        if _flag(argv,'--user-data-dir')!=str(ROOT/'runs/accounts'/account/'brave-data') or \
-                _flag(argv,'--remote-debugging-port') not in ('0',str(port)):raise ValueError
+        if _flag(argv,'--user-data-dir')!=str(ROOT/'runs/accounts'/account/'brave-data'):raise ValueError
+        if endpoint:
+            parent=int(fields[1])
+            if parent<=0 or argv.count('--remote-debugging-pipe')!=1 or any(a.startswith('--remote-debugging-port') for a in argv):raise ValueError
+            return str(exe),stamp,parent
+        if _flag(argv,'--remote-debugging-port') not in ('0',str(port)):raise ValueError
         sockets=set()
         for fd in (p/'fd').iterdir():
             try:match=re.fullmatch(r'socket:\[([0-9]+)\]',os.readlink(fd))
@@ -124,7 +136,8 @@ def prepare_brave(pid,port):
     try:
         account=account_id();node=shutil.which('node')
         if account not in browser_accounts() or node is None or type(pid) is not int or not 0<pid<2**31 or \
-                type(port) is not int or not 0<port<65536:raise ValueError
+                (not isinstance(port,str) and (type(port) is not int or not 0<port<65536)):raise ValueError
+        if isinstance(port,str):validate_cdp_endpoint(port)
         if os.name!='nt':pidfd=os.pidfd_open(pid)
         identity=browser_identity(pid,port,account)
         if pidfd is not None and select.select([pidfd],[],[],0)[0]:raise ValueError
@@ -291,7 +304,10 @@ class Bridge:
     """CDP persistente; respuestas acotadas, imagen por archivos privados."""
     def __init__(self,port,target,frames_dir=None):
         self.process=None;self.closed=False;self.broken=False;self.buffer=b'';self.sequence=0
-        if type(port) is not int or not 0<port<65536 or not isinstance(target,str) or not re.fullmatch(r'[0-9a-fA-F]{32}',target):
+        if isinstance(port,str):
+            try:validate_cdp_endpoint(port)
+            except ValueError as exc:raise RuntimeError('Endpoint CDP inválido') from exc
+        if (not isinstance(port,str) and (type(port) is not int or not 0<port<65536)) or not isinstance(target,str) or not re.fullmatch(r'[0-9a-fA-F]{32}',target):
             raise RuntimeError('El adaptador de la guarda requiere puerto válido y target hexadecimal fijo')
         node=shutil.which('node')
         if node is None:raise RuntimeError('Brave requiere Node con WebSocket nativo; no se habilita input')

@@ -10,7 +10,9 @@ import json
 import os
 from pathlib import Path
 import shutil
-import socket
+import queue
+import threading
+import uuid
 import subprocess
 import tempfile
 import time
@@ -59,10 +61,10 @@ def launch_browser(account,executable=None,visible=False):
     process=None
     with _exclusive(profile.parent/'browser-launch.lock'):
         require_closed_profile(profile)
-        with socket.socket() as reserve:
-            reserve.bind(('127.0.0.1',0));port=reserve.getsockname()[1]
-        flags=[f'--user-data-dir={profile}',f'--remote-debugging-port={port}',
-               '--remote-debugging-address=127.0.0.1','--window-size=1920,1080',
+        node=shutil.which('node')
+        if node is None:raise RuntimeError('CDP requiere Node')
+        requested=ROOT/'runs'/('cdp-'+uuid.uuid4().hex)/'cdp.sock'
+        flags=[f'--user-data-dir={profile}','--window-size=1920,1080',
                '--force-device-scale-factor=1','--disable-background-timer-throttling',
                '--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding',
                '--no-first-run','--no-default-browser-check']
@@ -73,24 +75,45 @@ def launch_browser(account,executable=None,visible=False):
         previous={key:os.environ.get(key) for key in ('FARM_ACCOUNT','FARM_BACKEND')}
         try:
             os.environ.update(FARM_ACCOUNT=account,FARM_BACKEND='cdp')
-            process=subprocess.Popen([binary,*flags],cwd=str(ROOT),stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+            process=subprocess.Popen([node,str(Path(__file__).with_name('cdp_broker.mjs')),str(requested),binary,*flags],
+                cwd=str(ROOT),env={'PATH':os.defpath,'LANG':'C.UTF-8'},stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,start_new_session=True)
+            replies=queue.Queue()
+            def read_reply():
+                try:replies.put(process.stdout.readline(1025))
+                except OSError:replies.put(b'')
+            threading.Thread(target=read_reply,daemon=True).start()
+            try:raw=replies.get(timeout=30)
+            except queue.Empty:raise RuntimeError('El intermediario CDP no respondió') from None
+            try:
+                reply=json.loads(raw)
+                if len(raw)>1024 or not raw.endswith(b'\n') or type(reply) is not dict or set(reply)!={'ok','pid','endpoint'} or reply['ok'] is not True or \
+                        type(reply['pid']) is not int or not 0<reply['pid']<2**31 or type(reply['endpoint']) is not str:raise ValueError
+                pid=reply['pid'];endpoint=reply['endpoint']
+                if os.name!='nt' and endpoint!=str(requested):raise ValueError
+            except (ValueError,TypeError):raise RuntimeError('Respuesta del intermediario CDP inválida') from None
             end=time.monotonic()+30
             while True:
                 if process.poll() is not None:raise RuntimeError('El navegador terminó antes de preparar CDP')
-                try:browser_identity(process.pid,port,account);break
+                try:
+                    identity=browser_identity(pid,endpoint,account)
+                    break
                 except RuntimeError:
                     if time.monotonic()>=end:raise
                     time.sleep(.1)
-            target=prepare_brave(process.pid,port)
+            if identity[2]!=process.pid:raise RuntimeError('El navegador no es hijo del intermediario propio')
+            target=prepare_brave(pid,endpoint)
             if process.poll() is not None:raise RuntimeError('El navegador terminó durante la preparación')
-            return process,{'FARM_BRAVE_PID':str(process.pid),'FARM_BRAVE_CDP_PORT':str(port),
+            if browser_identity(pid,endpoint,account)!=identity:raise RuntimeError('Cambió el navegador durante la preparación')
+            process.stdout.close()
+            return process,{'FARM_BRAVE_PID':str(pid),'FARM_BRAVE_CDP_ENDPOINT':endpoint,
                            'FARM_BRAVE_TARGET_ID':target,'FARM_BACKEND':'cdp'}
         except BaseException:
             if process is not None and process.poll() is None:
                 process.terminate()
                 try:process.wait(timeout=5)
                 except subprocess.TimeoutExpired:process.kill();process.wait(timeout=2)
+            if process is not None and process.stdout is not None:process.stdout.close()
             raise
         finally:
             for key,value in previous.items():
@@ -99,7 +122,8 @@ def launch_browser(account,executable=None,visible=False):
 
 
 def write_session(account,session):
-    if account not in browser_accounts() or set(session)!={'FARM_BRAVE_PID','FARM_BRAVE_CDP_PORT',
+    transport='FARM_BRAVE_CDP_ENDPOINT' if 'FARM_BRAVE_CDP_ENDPOINT' in session else 'FARM_BRAVE_CDP_PORT'
+    if account not in browser_accounts() or set(session)!={'FARM_BRAVE_PID',transport,
             'FARM_BRAVE_TARGET_ID','FARM_BACKEND'} or session['FARM_BACKEND']!='cdp':
         raise ValueError('Sesión CDP inválida')
     brave_target({**session,'FARM_ACCOUNT':account})

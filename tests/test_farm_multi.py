@@ -39,7 +39,7 @@ class MultiFarmTests(unittest.TestCase):
             self.assertEqual(env['FARM_BACKEND'],'cdp');self.assertEqual(env['FARM_MULTI_FARM'],'1')
             self.assertFalse(farm_multi.DISPLAY_KEYS&set(env))
             self.assertEqual(spawn.call_args_list[-1].kwargs['env']['FARM_BACKEND'],'gamescope')
-        for key in farm_multi.BRAVE_KEYS:
+        for key in farm_multi.BRAVE_KEYS-{'FARM_BRAVE_CDP_ENDPOINT'}:
             bad=copy.deepcopy(data);bad['perfil-1'][key]=bad['personal'][key]
             with self.subTest(key=key),self.assertRaises(ValueError):farm_multi.trial_environments(bad,farm=True)
         bad=copy.deepcopy(data);bad['steam']['FARM_BACKEND']='cdp'

@@ -9,6 +9,38 @@ from fishing_core.control_flow import SafetyStop
 
 
 class CdpBackendTests(unittest.TestCase):
+    def test_endpoint_bridge_and_deleted_socket_stop(self):
+        from fishing_core import accounts
+        import stat,os
+        endpoint=str(self.root/'runs/cdp-test/cdp.sock')
+        target=(1234,endpoint,'A'*32)
+        info=Mock(st_mode=stat.S_IFSOCK|0o600,st_uid=os.getuid())
+        directory=Mock(st_mode=stat.S_IFDIR|0o700,st_uid=os.getuid())
+        with patch('fishing_core.cdp_backend.brave_target',return_value=target), \
+                patch('fishing_core.cdp_backend.Bridge',return_value=self.bridge) as bridge:
+            io=CdpIO();self.addCleanup(io.close)
+            bridge.assert_called_once_with(endpoint,'A'*32,frames_dir=io.frames_dir)
+        env={'FARM_ACCOUNT':'personal','FARM_BACKEND':'cdp','FARM_BRAVE_PID':'1234',
+             'FARM_BRAVE_CDP_ENDPOINT':endpoint,'FARM_BRAVE_TARGET_ID':'A'*32}
+        with patch.object(accounts,'ROOT',self.root),patch.dict(os.environ,env,clear=True), \
+                patch('fishing_core.cdp_backend.brave_target',side_effect=accounts.brave_target), \
+                patch.object(Path,'is_symlink',return_value=False),patch.object(Path,'stat',return_value=directory), \
+                patch.object(Path,'lstat',return_value=info) as metadata:
+            io.check();self.bridge.reset_mock();metadata.side_effect=FileNotFoundError
+            with self.assertRaises(SafetyStop):io.check()
+            self.bridge.call.assert_not_called()
+
+    def test_endpoint_dead_browser_or_changed_broker_stops(self):
+        self.io.target=(1234,'/endpoint','A'*32);self.io.identity=('brave','start',99)
+        for result in (('brave','start',100),RuntimeError('Navegador muerto')):
+            self.io.failed=False;self.io.identity_checked=0
+            with patch('fishing_core.cdp_backend.brave_target',return_value=self.io.target), \
+                    patch('fishing_core.cdp_backend.time.monotonic',return_value=3), \
+                    patch('fishing_core.cdp_backend.browser_identity',return_value=result,
+                          side_effect=result if isinstance(result,Exception) else None):
+                with self.assertRaises(SafetyStop):self.io.check()
+            self.bridge.call.assert_not_called()
+
     def setUp(self):
         self.directory=tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]/'tests')
         self.addCleanup(self.directory.cleanup)

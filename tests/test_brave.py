@@ -53,6 +53,19 @@ class BraveBridgeProtocolTests(unittest.TestCase):
 
 @unittest.skipIf(os.name=='nt','Identidad de proceso Linux')
 class BraveIdentityTests(unittest.TestCase):
+    def test_endpoint_identity_keeps_browser_start_parent_and_pipe(self):
+        from fishing_core import brave
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);p=self.fixture(root)
+            (p/'stat').write_text('1234 (brave) '+' '.join(['S','99']+['0']*17+['9001']))
+            args=['brave',f'--user-data-dir={ROOT}/runs/accounts/personal/brave-data','--remote-debugging-pipe']
+            (p/'cmdline').write_bytes(b'\0'.join(os.fsencode(a) for a in args)+b'\0')
+            with patch.object(brave,'validate_cdp_endpoint'):
+                self.assertEqual(brave.browser_identity(1234,'/endpoint','personal',root),(str(root/'brave'),'9001',99))
+                with self.assertRaises(RuntimeError):brave.browser_identity(1234,'/endpoint','perfil-1',root)
+                (p/'cmdline').write_bytes(b'\0'.join(os.fsencode(a) for a in args+['--remote-debugging-port=9222'])+b'\0')
+                with self.assertRaises(RuntimeError):brave.browser_identity(1234,'/endpoint','personal',root)
+
     def test_registered_browser_keeps_profile_and_port_guards(self):
         from fishing_core import accounts
         from fishing_core.brave import browser_identity

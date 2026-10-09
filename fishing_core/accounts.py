@@ -1,6 +1,7 @@
 """Identidad de cuenta por proceso. Importar no crea perfiles ni inicia clientes."""
 
 import os
+import stat
 from pathlib import Path
 import re
 import json
@@ -180,14 +181,36 @@ def gamescope_target(env=None):
     return display,serial
 
 
+def validate_cdp_endpoint(endpoint):
+    if type(endpoint) is not str:raise ValueError('Endpoint CDP inválido')
+    if os.name=='nt':
+        if not re.fullmatch(r'\\\\\.\\pipe\\bitheroes-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',endpoint):
+            raise ValueError('Pipe CDP inválido')
+        return endpoint
+    path=Path(endpoint);runs=ROOT/'runs'
+    if not path.is_absolute() or '..' in path.parts or not path.is_relative_to(runs) or path.parent==runs:
+        raise ValueError('Endpoint CDP fuera de runs')
+    try:
+        for part in (path,*path.parents):
+            if part.is_symlink():raise ValueError('Endpoint CDP enlazado')
+        info=path.lstat();directory=path.parent.stat()
+        if not stat.S_ISSOCK(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o600 or info.st_uid!=os.getuid() or \
+                stat.S_IMODE(directory.st_mode)!=0o700 or directory.st_uid!=os.getuid():raise ValueError
+    except OSError:raise ValueError('Endpoint CDP ausente') from None
+    return endpoint
+
+
 def brave_target(env=None):
     env=os.environ if env is None else env
     if account_id(env) not in browser_accounts():return None
     pid=env.get('FARM_BRAVE_PID','');port=env.get('FARM_BRAVE_CDP_PORT','');target=env.get('FARM_BRAVE_TARGET_ID','')
-    if not re.fullmatch(r'[1-9][0-9]{0,9}',pid) or int(pid)>2**31-1 or \
-            not re.fullmatch(r'[1-9][0-9]{0,4}',port) or int(port)>65535 or \
+    endpoint=env.get('FARM_BRAVE_CDP_ENDPOINT','')
+    if ('FARM_BRAVE_CDP_PORT' in env)==('FARM_BRAVE_CDP_ENDPOINT' in env) or \
+            not re.fullmatch(r'[1-9][0-9]{0,9}',pid) or int(pid)>2**31-1 or \
             not re.fullmatch(r'[0-9A-Fa-f]{32}',target):
         raise ValueError('Brave requiere PID, puerto CDP local y target explícitos por cuenta')
+    if 'FARM_BRAVE_CDP_ENDPOINT' in env:return int(pid),validate_cdp_endpoint(endpoint),target
+    if not re.fullmatch(r'[1-9][0-9]{0,4}',port) or int(port)>65535:raise ValueError('Puerto CDP inválido')
     return int(pid),int(port),target
 
 

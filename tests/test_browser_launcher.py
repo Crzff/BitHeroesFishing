@@ -1,5 +1,6 @@
 """Lanzador offline: procesos y detección simulados, sin clientes reales."""
 import json
+import io
 import os
 from pathlib import Path
 import tempfile
@@ -37,30 +38,64 @@ class BrowserLauncherTests(unittest.TestCase):
                     with self.assertRaises(ValueError):launcher.detect_browser(path)
                 else:self.assertEqual(launcher.detect_browser(path),str(path))
 
-    def launch(self,root,visible=False,failure=None):
+    def launch(self,root,visible=False,failure=None,parent=1234):
         process=Mock(pid=1234);process.poll.return_value=None
+        endpoint=str(root/'runs'/('cdp-'+'a'*32)/'cdp.sock')
+        process.stdout=io.BytesIO((json.dumps({'ok':True,'pid':5678,'endpoint':endpoint})+'\n').encode())
         with patch.object(launcher,'ROOT',root),patch.object(launcher,'detect_browser',return_value='/bin/chrome'), \
                 patch.object(launcher,'require_closed_profile',side_effect=failure), \
-                patch.object(launcher,'browser_identity',return_value=('chrome','stamp')), \
+                patch.object(launcher,'browser_identity',return_value=('chrome','stamp',parent)), \
                 patch.object(launcher,'prepare_brave',return_value='A'*32) as prepare, \
                 patch.object(launcher.subprocess,'Popen',return_value=process) as spawn, \
-                patch.object(launcher.socket,'socket') as reserve:
-            reserve.return_value.__enter__.return_value.getsockname.return_value=('127.0.0.1',45678)
+                patch.object(launcher.uuid,'uuid4',return_value=Mock(hex='a'*32)), \
+                patch.object(launcher.shutil,'which',return_value='node'):
             if failure:
                 with self.assertRaises(RuntimeError):launcher.launch_browser('personal',visible=visible)
                 spawn.assert_not_called();return
             owned,session=launcher.launch_browser('personal',visible=visible)
             self.assertIs(owned,process);self.assertEqual(session['FARM_BACKEND'],'cdp')
-            prepare.assert_called_once_with(1234,int(session['FARM_BRAVE_CDP_PORT']))
+            prepare.assert_called_once_with(5678,endpoint)
+            process.terminate.assert_not_called()
             return spawn.call_args.args[0],session
+
+    def test_foreign_browser_parent_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(RuntimeError,'hijo'):self.launch(Path(tmp),parent=999)
+
+    def test_endpoint_session_written_and_mixed_session_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(launcher,'ROOT',Path(tmp)), \
+                patch.object(accounts,'validate_cdp_endpoint',side_effect=lambda endpoint:endpoint):
+            session={'FARM_BRAVE_PID':'1234','FARM_BRAVE_CDP_ENDPOINT':str(Path(tmp)/'runs/cdp-test/cdp.sock'),
+                     'FARM_BRAVE_TARGET_ID':'A'*32,'FARM_BACKEND':'cdp'}
+            launcher.write_session('personal',session)
+            self.assertEqual(json.loads((Path(tmp)/'runs/accounts/sessions.json').read_text()),{'personal':session})
+            with self.assertRaises(ValueError):launcher.write_session('personal',{**session,'FARM_BRAVE_CDP_PORT':'9222'})
+
+    def test_windows_endpoint_identity_uses_parent_and_pipe(self):
+        pipe=r'\\.\pipe\bitheroes-12345678-1234-1234-1234-123456789abc'
+        row={'ProcessId':1234,'ParentProcessId':99,'ExecutablePath':'chrome.exe','CommandLine':'mock','CreationDate':'start'}
+        argv=['chrome.exe',f'--user-data-dir={brave.ROOT}/runs/accounts/personal/brave-data','--remote-debugging-pipe']
+        with patch.object(brave,'_windows_processes',return_value=[row]),patch.object(brave,'_windows_argv',return_value=argv), \
+                patch.object(brave,'validate_cdp_endpoint'),patch.object(brave.subprocess,'run') as query:
+            self.assertEqual(brave._windows_identity(1234,pipe,'personal'),('chrome.exe','start',99))
+            query.assert_not_called()
+            argv.append('--remote-debugging-port=9222')
+            with self.assertRaises(ValueError):brave._windows_identity(1234,pipe,'personal')
+
+    def test_bridge_passes_endpoint_to_adapter(self):
+        endpoint='/endpoint'
+        with patch.object(brave,'validate_cdp_endpoint'),patch.object(brave.shutil,'which',return_value='node'), \
+                patch.object(brave.subprocess,'Popen') as spawn,patch.object(brave.Bridge,'_receive',return_value={'id':0,'ok':True}):
+            bridge=brave.Bridge(endpoint,'A'*32)
+            self.assertEqual(spawn.call_args.args[0][2:],[endpoint,'A'*32])
+            bridge.close()
 
     def test_exact_flags_visible_and_nonvisible_and_environment_restored(self):
         for visible in (False,True):
             with self.subTest(visible=visible),tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FARM_ACCOUNT':'steam','FARM_BACKEND':'gamescope'}):
                 root=Path(tmp);argv,session=self.launch(root,visible)
-                expected=['/bin/chrome',f'--user-data-dir={root}/runs/accounts/personal/brave-data',
-                    '--remote-debugging-port='+session['FARM_BRAVE_CDP_PORT'],
-                    '--remote-debugging-address=127.0.0.1','--window-size=1920,1080',
+                expected=['node',str(Path(launcher.__file__).with_name('cdp_broker.mjs')),session['FARM_BRAVE_CDP_ENDPOINT'],
+                    '/bin/chrome',f'--user-data-dir={root}/runs/accounts/personal/brave-data','--window-size=1920,1080',
                     '--force-device-scale-factor=1','--disable-background-timer-throttling',
                     '--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding',
                     '--no-first-run','--no-default-browser-check',
@@ -137,24 +172,21 @@ class BrowserLauncherTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp,patch.object(launcher,'ROOT',Path(tmp)), \
                 patch.object(launcher,'detect_browser',return_value='/bin/chrome'), \
                 patch.object(launcher,'require_closed_profile'), \
-                patch.object(launcher,'browser_identity'), \
+                patch.object(launcher,'browser_identity',return_value=('chrome','stamp',1234)), \
                 patch.object(launcher,'prepare_brave',side_effect=RuntimeError('offline')), \
-                patch.object(launcher.subprocess,'Popen') as spawn,patch.object(launcher.socket,'socket') as reserve:
+                patch.object(launcher.subprocess,'Popen') as spawn,patch.object(launcher.shutil,'which',return_value='node'), \
+                patch.object(launcher.uuid,'uuid4',return_value=Mock(hex='a'*32)):
             process=spawn.return_value;process.poll.return_value=None
-            reserve.return_value.__enter__.return_value.getsockname.return_value=('127.0.0.1',45678)
+            process.pid=1234
+            process.stdout=io.BytesIO((json.dumps({'ok':True,'pid':5678,'endpoint':str(Path(tmp)/'runs'/('cdp-'+'a'*32)/'cdp.sock')})+'\n').encode())
             with self.assertRaisesRegex(RuntimeError,'offline'):launcher.launch_browser('personal')
             process.terminate.assert_called_once();process.wait.assert_called_once_with(timeout=5)
 
-    def test_port_reservation_is_loopback_only(self):
-        with tempfile.TemporaryDirectory() as tmp,patch.object(launcher.socket,'socket') as reserve:
-            # launch() también sustituye socket: capturar bind dentro de esa prueba.
-            with patch.object(launcher,'ROOT',Path(tmp)),patch.object(launcher,'detect_browser',return_value='/bin/chrome'), \
-                    patch.object(launcher,'require_closed_profile'),patch.object(launcher,'browser_identity'), \
-                    patch.object(launcher,'prepare_brave',return_value='A'*32),patch.object(launcher.subprocess,'Popen') as spawn:
-                spawn.return_value.pid=1234;spawn.return_value.poll.return_value=None
-                reserve.return_value.__enter__.return_value.getsockname.return_value=('127.0.0.1',45678)
-                launcher.launch_browser('personal')
-                reserve.return_value.__enter__.return_value.bind.assert_called_once_with(('127.0.0.1',0))
+    def test_broker_flags_have_no_remote_debugging_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            argv,session=self.launch(Path(tmp))
+            self.assertFalse(any(a.startswith('--remote-debugging-') for a in argv))
+            self.assertNotIn('FARM_BRAVE_CDP_PORT',session)
 
     def test_windows_preparation_uses_pipe_without_pidfd(self):
         import io
