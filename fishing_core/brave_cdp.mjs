@@ -6,6 +6,8 @@ import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import net from 'node:net';
+import {frames,MAX_MESSAGE} from './cdp_broker.mjs';
 // Calibrado en vivo (SETTINGS, KORTZZ): 1 evento de deltaY=100 = 1 paso de rueda XTest. Unity solo atiende la rueda
 // si antes llega mouseMoved sobre el canvas.
 export const WHEEL_DELTA_PER_STEP=100;
@@ -100,7 +102,7 @@ export class CDP{
     socket.addEventListener('close',dead);socket.addEventListener('error',dead);
     socket.addEventListener('message',event=>{
       try{
-        if(typeof event.data!=='string' || Buffer.byteLength(event.data)>1_048_576)throw Error();
+        if(typeof event.data!=='string' || Buffer.byteLength(event.data)>MAX_MESSAGE)throw Error();
         const m=JSON.parse(event.data);
         if(m.id){
           const p=this.pending.get(m.id);if(!p)return;
@@ -181,6 +183,24 @@ export class CDP{
 }
 
 export async function openBrowser(port){
+  if(typeof port==='string' && !/^\d+$/.test(port)){
+    const stream=net.connect(port),listeners=new Map();
+    const socket={readyState:0,addEventListener:(name,fn)=>{
+      if(!listeners.has(name))listeners.set(name,[]);listeners.get(name).push(fn);
+    },send:data=>{if(Buffer.byteLength(data)>MAX_MESSAGE)throw Error();stream.write(data+'\0');},close:()=>stream.destroy()};
+    const emit=(name,event)=>{for(const fn of listeners.get(name) ?? [])fn(event);};
+    stream.on('error',()=>emit('error'));stream.on('close',()=>{socket.readyState=3;emit('close');});
+    frames(stream,m=>emit('message',{data:JSON.stringify(m)}),()=>stream.destroy());
+    try{
+      await new Promise((resolve,reject)=>{
+        const timer=setTimeout(()=>{stream.destroy();reject(Error('CDP_TRANSPORT'));},1500);
+        stream.once('connect',()=>{clearTimeout(timer);socket.readyState=1;resolve();});
+        stream.once('error',()=>{clearTimeout(timer);reject(Error('CDP_TRANSPORT'));});
+      });
+      return new CDP(socket,null);
+    }catch{stream.destroy();throw Error('CDP_TRANSPORT');}
+  }
+  if(typeof port==='string')port=Number(port);
   if(!Number.isInteger(port) || port<1 || port>65535)refuse();
   const response=await fetch(`http://127.0.0.1:${port}/json/version`,{redirect:'error',signal:AbortSignal.timeout(1500)});
   if(!response.ok)refuse();
@@ -210,7 +230,14 @@ async function attachTarget(c,target){
 export async function openCDP(port,target){
   if(!validTarget(target))refuse();
   const c=await openBrowser(port);
-  try{await attachTarget(c,target);return c;}
+  try{
+    if(typeof port==='string' && !/^\d+$/.test(port)){
+      const pages=await startupPages(c);
+      const games=pages.filter(t=>gamePage(t.url));
+      if(games.length!==1 || games[0].targetId!==target)refuse();
+    }
+    await attachTarget(c,target);return c;
+  }
   catch{c.close();throw Error('CDP_TRANSPORT');}
 }
 
@@ -488,14 +515,14 @@ async function main(){
     if(process.argv.length!==4 && !(process.argv.length===5 && !startup))refuse();
     if(process.argv[4])state.framesDir=path.resolve(process.argv[4]);
     if(startup){
-      process.stdin.resume();c=await openBrowser(Number(process.argv[2]));
+      process.stdin.resume();c=await openBrowser(process.argv[2]);
       if(state.cancelled)refuse();
       const target=await prepareTarget(c);
       await finishPreparation(c);
       if(state.cancelled)refuse();
       process.stdout.write(JSON.stringify({id:0,ok:true,target})+'\n');return;
     }
-    c=await openCDP(Number(process.argv[2]),process.argv[3]);answer(0,true);
+    c=await openCDP(process.argv[2],process.argv[3]);answer(0,true);
     const lines=createInterface({input:process.stdin,crlfDelay:Infinity});
     for await(const line of lines){
       let request;

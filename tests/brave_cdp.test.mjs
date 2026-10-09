@@ -538,3 +538,15 @@ test('preparación completa: no aceptar canvas ausente, ambiguo o geometría fin
     assert.equal(client.startupStage,kind==='geometry'?'snapshot':'canvas');
   }
 });
+
+
+test('CDP acepta respuestas PNG mayores de 1 MB y rechaza mensajes mayores de 16 MB',async()=>{
+  const listeners=new Map(),socket={readyState:1,addEventListener:(name,fn)=>listeners.set(name,fn),
+    send:()=>{},close:()=>{socket.readyState=3;listeners.get('close')();}};
+  const c=new CDP(socket,null),pending=c.call('Page.captureScreenshot');
+  listeners.get('message')({data:JSON.stringify({id:1,result:{data:'x'.repeat(2*1024*1024)}})});
+  assert.equal((await pending).data.length,2*1024*1024);
+  const rejected=c.call('Page.captureScreenshot');
+  listeners.get('message')({data:'x'.repeat(16*1024*1024+1)});
+  await assert.rejects(rejected,{message:'CDP_TRANSPORT'});assert.equal(c.failed,true);
+});
