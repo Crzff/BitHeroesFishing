@@ -350,3 +350,11 @@ class BoostDetectionTests(unittest.TestCase):
         roi=(980,535,1405,625)
         self.assertIsNotNone(runner.locate(frames['inventory_filter_selected'],'consumables_selected',roi))
         self.assertIsNotNone(runner.locate(frames['inventory_filter'],'consumables',roi))
+
+
+class BoostProfileFilterTests(unittest.TestCase):
+    def test_filter_button_is_found_on_kortzz_profile(self):
+        from unittest.mock import Mock
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frame=data['profile_kortzz_filtered']
+        runner=BoostsRunner(Mock(),Mock(),DungeonVision(),Mock(),Mock())
+        self.assertIsNotNone(runner.locate(frame,'filter',(1070,180,1605,295)))

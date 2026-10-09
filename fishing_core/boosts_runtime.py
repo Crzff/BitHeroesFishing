@@ -48,7 +48,8 @@ class BoostsRunner(DungeonRunner):
         return self.locate(frame,'slot',(425,955,1100,1080)) is not None
 
     def locate(self,frame,key,roi):
-        return self.vision.locate(frame,'BOOST_'+key.upper(),roi)
+        # FILTER cambia algo de tono entre cuentas (KORTZZ: correlación 0,979, diferencia 12,8).
+        return self.vision.locate(frame,'BOOST_'+key.upper(),roi,max_diff=20 if key=='filter' else 12)
 
     def on(self,key,roi):
         return lambda f:self.locate(f,key,roi) is not None
