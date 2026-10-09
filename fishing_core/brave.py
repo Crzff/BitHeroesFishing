@@ -236,7 +236,7 @@ class Bridge:
         except BaseException:
             self.close();raise
 
-    def _receive(self,expected,timeout=3):
+    def _receive(self,expected,timeout=30):  # snapshot: varias llamadas de hasta 8 s mientras Unity carga
         end=time.monotonic()+timeout
         while b'\n' not in self.buffer:
             remaining=end-time.monotonic()

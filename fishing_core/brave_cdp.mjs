@@ -115,7 +115,7 @@ export class CDP{
     if(this.failed || this.socket.readyState!==1)return Promise.reject(Error('CDP_TRANSPORT'));
     const id=++this.next;
     return new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP_TRANSPORT'));},1500);
+      const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP_TRANSPORT'));},8000);  // Unity bloquea el hilo del iframe al cargar una escena (medido >1,5 s en vivo)
       this.pending.set(id,{resolve,reject,timer});
       try{this.socket.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));}
       catch{clearTimeout(timer);this.pending.delete(id);reject(Error('CDP_TRANSPORT'));}
@@ -144,7 +144,7 @@ export class CDP{
     }
     const context=this.contexts.get(key);
     const result=await this.call('Runtime.evaluate',{contextId:context,returnByValue:true,awaitPromise:true,
-      timeout:1000,allowUnsafeEvalBlockedByCSP:false,expression:`(async()=>{
+      timeout:6000,allowUnsafeEvalBlockedByCSP:false,expression:`(async()=>{
         const visible=e=>{const s=getComputedStyle(e);return s.display!=='none' && s.visibility==='visible' && Number(s.opacity)===1 && s.pointerEvents!=='none';};
         const v=visualViewport,cs=[...document.querySelectorAll('canvas')];
         return {size:[innerWidth,innerHeight],dpr:devicePixelRatio,
@@ -421,7 +421,7 @@ export async function runCommand(c,op,state,xy){
               arguments:xy.map(value=>({value})),
               functionDeclaration:'function(x,y){return this.ownerDocument.elementFromPoint(x,y)===this;}'},session);
           }else{
-            result=await c.call('Runtime.evaluate',{contextId:context,returnByValue:true,timeout:1000,
+            result=await c.call('Runtime.evaluate',{contextId:context,returnByValue:true,timeout:6000,
               expression:`document.elementFromPoint(${xy[0]},${xy[1]})===document.querySelector('canvas') && !!document.querySelector('canvas')`},session);
           }
           if(result.exceptionDetails || result.result?.value!==true)refuse();
