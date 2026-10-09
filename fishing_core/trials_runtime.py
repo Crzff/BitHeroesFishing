@@ -189,7 +189,7 @@ def run_trials(runs,difficulty=499):
     locks=[Mutex(role) for role in ('LAUNCHER','CONTROL','CATCH')];io=log=None
     try:
         env=run_environment();channel=Channel(env['FISHING_RUN_ID'])
-        if os.environ.get('FARM_BACKEND')!='gamescope':os.environ[ENV_WINDOW]=focus_window('Steam').serialize()
+        if os.environ.get('FARM_BACKEND') not in ('gamescope','cdp'):os.environ[ENV_WINDOW]=focus_window('Steam').serialize()
         os.environ.pop('FARM_LAUNCHER_PID',None)
         log=Telemetry('TRIALS',channel.run_id);io=LinuxIO();io.control_mode=True
         with LinuxCapture(io.game_guard) as capture:
