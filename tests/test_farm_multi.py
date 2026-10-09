@@ -19,6 +19,73 @@ def sessions():
             for i,account in enumerate(('personal','perfil-1','steam'))}
 
 
+class MultiFarmTests(unittest.TestCase):
+    def test_workers_keep_own_account_and_failure_does_not_stop_survivors(self):
+        children=[Mock(stdout=['== Quest\n']) for _ in range(3)];data=sessions()
+        children[0].poll.side_effect=[None,None,0,0]
+        children[1].poll.return_value=1
+        children[2].poll.side_effect=[None,0,0]
+        checked=[]
+        def spawn(argv,**kwargs):
+            self.assertEqual(checked,list(data))
+            self.assertEqual(argv[3:],['-m','fishing_core.farm_all'])
+            account=kwargs['env']['FARM_ACCOUNT']
+            self.assertEqual(kwargs['env']['FARM_MULTI_FARM'],'1')
+            return children[list(data).index(account)]
+        with patch.object(farm_multi,'require_calibrated_client',side_effect=lambda env:checked.append(env['FARM_ACCOUNT'])), \
+                patch.object(farm_multi,'Mutex') as mutex,patch.object(farm_multi.subprocess,'Popen',side_effect=spawn) as popen, \
+                patch.object(farm_multi,'close_children') as close,patch.object(farm_multi.time,'sleep') as sleep, \
+                patch('builtins.print') as output:
+            self.assertEqual(farm_multi.run_farm(data),{'perfil-1':1,'steam':0,'personal':0})
+            self.assertEqual(popen.call_count,3)
+            announcements=[call.args[0] for call in output.call_args_list if not call.args[0].startswith('[')]
+            self.assertEqual(announcements,[f'{farm_multi.NAMES[a]}: {status}' for a,status in
+                             (('perfil-1','PARADO (código 1)'),('steam','TERMINADO'),('personal','TERMINADO'))])
+            for account in data:self.assertIn(f'[{farm_multi.NAMES[account]}] == Quest',[call.args[0] for call in output.call_args_list])
+            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.1),unittest.mock.call(.1)])
+            close.assert_called_once_with(children);mutex.assert_called_once_with('MULTI_SUPERVISOR')
+            mutex.return_value.close.assert_called_once()
+        for child in children:child.send_signal.assert_not_called();child.wait.assert_not_called()
+
+    def test_supervisor_exception_signals_only_live_workers_and_releases_lock(self):
+        for error in (RuntimeError('monitor failed'),KeyboardInterrupt()):
+            children=[Mock(stdout=[]) for _ in range(3)]
+            children[0].poll.return_value=0
+            for child in children[1:]:child.poll.return_value=None
+            with self.subTest(error=type(error).__name__),patch.object(farm_multi,'require_calibrated_client'), \
+                    patch.object(farm_multi,'Mutex') as mutex,patch.object(farm_multi.subprocess,'Popen',side_effect=children), \
+                    patch.object(farm_multi.time,'sleep',side_effect=error),patch.object(farm_multi,'close_children') as close:
+                with self.assertRaises(type(error)):farm_multi.run_farm(sessions())
+                children[0].send_signal.assert_not_called()
+                for child in children[1:]:child.send_signal.assert_called_once_with(signal.SIGINT)
+                close.assert_called_once_with(children);mutex.return_value.close.assert_called_once()
+
+    def test_failed_account_preflight_blocks_every_launch(self):
+        for entry in (farm_multi.validate_farm,farm_multi.run_farm,farm_multi.start_farm):
+            for account in sessions():
+                def validate(env):
+                    if env['FARM_ACCOUNT']==account:raise RuntimeError('cliente no calibrado')
+                with self.subTest(entry=entry.__name__,account=account), \
+                        patch.object(farm_multi,'require_calibrated_client',side_effect=validate), \
+                        patch.object(farm_multi.subprocess,'Popen') as spawn:
+                    with self.assertRaises(RuntimeError):entry(sessions())
+                    spawn.assert_not_called()
+
+    def test_panel_start_and_cli_pass_sessions_to_farm_supervisor(self):
+        import io
+        import json
+        process=Mock();data=sessions()
+        with patch.object(farm_multi,'require_calibrated_client') as validate, \
+                patch.object(farm_multi.subprocess,'Popen',return_value=process) as spawn:
+            self.assertIs(farm_multi.start_farm(data),process)
+            self.assertEqual(validate.call_count,3)
+            self.assertEqual(spawn.call_args.args[0][3:],['-m','fishing_core.farm_multi','--farm'])
+            self.assertEqual(json.loads(process.stdin.write.call_args.args[0]),data)
+            process.stdin.close.assert_called_once()
+        with patch.object(farm_multi.sys,'stdin',io.StringIO(json.dumps(data))),patch.object(farm_multi,'run_farm') as run:
+            farm_multi.main(['--farm']);run.assert_called_once_with(data)
+
+
 class MultiTrialTests(unittest.TestCase):
     def test_only_dungeon_trial_marks_workers_and_checks_live_brave_before_any_spawn(self):
         with patch('fishing_core.brave.browser_identity',return_value=('brave','stamp')) as identity, \

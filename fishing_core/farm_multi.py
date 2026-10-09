@@ -131,9 +131,14 @@ def run_farm(sessions):
                 if line:print(f'[{NAMES[account]}] {line}',flush=True)
         threads=[threading.Thread(target=relay,args=item,daemon=True) for item in workers.items()]
         for thread in threads:thread.start()
-        for account,worker in workers.items():
-            results[account]=worker.wait()
-            print(f'{NAMES[account]}: '+('TERMINADO' if results[account]==0 else f'PARADO (código {results[account]})'),flush=True)
+        pending=dict(workers)
+        while pending:
+            for account,worker in list(pending.items()):
+                code=worker.poll()
+                if code is None:continue
+                results[account]=code;del pending[account]
+                print(f'{NAMES[account]}: '+('TERMINADO' if code==0 else f'PARADO (código {code})'),flush=True)
+            if pending:time.sleep(.1)
         for thread in threads:thread.join(timeout=2)
         return results
     finally:

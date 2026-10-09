@@ -211,6 +211,61 @@ class FarmAppTrialTests(unittest.TestCase):
             app.return_value.mainloop.assert_called_once_with()
 
 
+class FarmAppMultiTests(unittest.TestCase):
+    """Panel multicuenta con Tk simulado y estado exclusivamente temporal."""
+    def setUp(self):
+        import json
+        from unittest.mock import Mock,patch
+        from fishing_core import farm_app
+        from tests.test_farm_multi import sessions
+        self.farm_app=farm_app;self.data=sessions()
+        tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);self.root=Path(tmp.name)
+        path=self.root/'sessions.json';path.write_text(json.dumps(self.data))
+        def account_root(root,env=None):return self.root/(env or {}).get('FARM_ACCOUNT','default')
+        for target,name,value in ((farm_app,'MULTI_SESSIONS',path),(farm_app,'state_root',account_root),
+                                  (farm_app,'runs_root',account_root),(farm_config,'PATH',self.root/'default.json')):
+            patcher=patch.object(target,name,value);patcher.start();self.addCleanup(patcher.stop)
+        for account in self.data:
+            config=farm_config.load(self.root/'missing.json');config['quest']['max_gold']=list(self.data).index(account)*1000
+            farm_config.save(config,self.root/account/'farm_config.json')
+        # __init__ real, sin intérprete Tk, ventanas ni renderizado gráfico.
+        for target,name,value in ((farm_app.tk.Tk,'__init__',Mock(return_value=None)),
+                                  (farm_app.tk,'Canvas',Mock()),(farm_app.FarmApp,'title',Mock()),
+                                  (farm_app.FarmApp,'resizable',Mock()),(farm_app.FarmApp,'configure',Mock()),
+                                  (farm_app.FarmApp,'protocol',Mock()),(farm_app.FarmApp,'render',Mock())):
+            patcher=patch.object(target,name,value);patcher.start();self.addCleanup(patcher.stop)
+        self.app=farm_app.FarmApp()
+        self.assertEqual(self.app.multi,self.data);self.assertEqual(self.app.account,'steam')
+
+    def test_choose_account_loads_its_config_and_isolates_save(self):
+        paths={account:self.root/account/'farm_config.json' for account in self.data}
+        for account in self.data:
+            before={a:path.read_bytes() for a,path in paths.items()}
+            self.app.choose_account(account)
+            self.assertEqual(self.app.config_data,farm_config.load(paths[account]))
+            self.assertEqual(self.app.config_path(),paths[account])
+            self.assertEqual(self.app.loot_root(),self.root/account)
+            self.app.config_data['runes']=not self.app.config_data['runes'];self.app.save()
+            self.assertEqual(farm_config.load(paths[account]),self.app.config_data)
+            self.assertNotEqual(paths[account].read_bytes(),before[account])
+            for other in self.data:
+                if other!=account:self.assertEqual(paths[other].read_bytes(),before[other])
+        self.assertFalse((self.root/'default.json').exists())
+
+    def test_multi_start_uses_farm_supervisor_without_legacy_worker(self):
+        from unittest.mock import Mock,patch
+        from fishing_core import farm_multi
+        process=Mock()
+        with patch.object(farm_multi,'start_farm',return_value=process) as start, \
+                patch.object(self.farm_app.subprocess,'Popen') as legacy, \
+                patch.object(self.farm_app.threading,'Thread') as thread:
+            self.app.toggle_run()
+            start.assert_called_once_with(self.data);legacy.assert_not_called()
+            self.assertIs(self.app.process,process)
+            thread.assert_called_once_with(target=self.app.follow,args=(process,),daemon=True)
+            thread.return_value.start.assert_called_once()
+
+
 class FarmAppClickTests(unittest.TestCase):
     """Clics simulados sobre las zonas dibujadas; la configuración va a un archivo temporal."""
     def setUp(self):
