@@ -379,6 +379,23 @@ class GamescopeIO:
         try:self.game_guard.check()
         except RuntimeError as exc:raise SafetyStop(str(exc)) from exc
 
+    def rebaseline_web(self):
+        web=getattr(self.game_guard,'web',None)
+        if web is None:return
+        from .brave import BraveGuard
+        replacement=None
+        try:
+            self.emergency();web.close()
+            replacement=BraveGuard(self.game_guard.display,self.game_guard.window)
+            if replacement.settings!=web.settings or replacement.identity!=web.identity:
+                raise RuntimeError('Cambió la identidad o los endpoints propios de Brave')
+            replacement.check()
+            self.game_guard.web=replacement
+        except BaseException as exc:
+            if replacement is not None:replacement.close()
+            if isinstance(exc,RuntimeError):raise SafetyStop(str(exc)) from exc
+            raise
+
     def _move(self,xy,settle=True):
         if getattr(self,'read_only',False):raise SafetyStop('Modo observación: todo input está bloqueado')
         from Xlib import X

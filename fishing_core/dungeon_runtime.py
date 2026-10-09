@@ -239,6 +239,18 @@ class DungeonRunner:
             self.click(screen,xy,key,roi)
             if screen=='DISCONNECTED':
                 self.log.emit('RECONNECT',message='Desconectado: RECONNECT')
+                if hasattr(self.io,'rebaseline_web'):
+                    time.sleep(6)  # en vivo el iframe recarga ~4 s tras RECONNECT: renovar después, no antes
+                    deadline=time.monotonic()+90
+                    while True:
+                        self.io.emergency()
+                        try:
+                            self.io.rebaseline_web();break
+                        except SafetyStop:
+                            remaining=deadline-time.monotonic()
+                            if remaining<=0:raise
+                            time.sleep(min(2,remaining))
+                            if time.monotonic()>=deadline:raise
                 self.wait(lambda f:self.vision.screen(f)!='DISCONNECTED',90,'reconexión')
             time.sleep(1)
         raise SafetyStop('No se pudo volver a Home cerrando ventanas')

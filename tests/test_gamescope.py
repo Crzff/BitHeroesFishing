@@ -28,6 +28,72 @@ PW="""	id 98, type PipeWire:Interface:Node/3
 
 
 class GamescopeTests(unittest.TestCase):
+    def test_rebaseline_preserves_brave_process_endpoints_and_window_or_stops(self):
+        for failure in (None,'settings','identity','check','constructor'):
+            with self.subTest(failure=failure):
+                io=gamescope.GamescopeIO.__new__(gamescope.GamescopeIO)
+                old=Mock(settings=('personal',(':12','4500'),(123,456,'target')),identity=('browser','original'))
+                new=Mock(settings=old.settings,identity=old.identity)
+                if failure in ('settings','identity'):setattr(new,failure,('changed',))
+                if failure=='check':new.check.side_effect=RuntimeError('CDP no confirma')
+                io.game_guard=SimpleNamespace(web=old,display=Mock(),window=Mock(),desktop=Mock())
+                def construct(display,window):
+                    old.close.assert_called_once()
+                    if failure=='constructor':raise RuntimeError('Brave perdió el foco')
+                    return new
+                with patch('fishing_core.brave.BraveGuard',side_effect=construct) as factory:
+                    if failure:
+                        with self.assertRaises(SafetyStop):io.rebaseline_web()
+                        self.assertIs(io.game_guard.web,old)
+                        if failure!='constructor':new.close.assert_called_once()
+                    else:
+                        io.rebaseline_web();self.assertIs(io.game_guard.web,new);new.check.assert_called_once()
+                    factory.assert_called_once_with(io.game_guard.display,io.game_guard.window)
+
+    def test_rebaseline_is_noop_for_steam(self):
+        io=gamescope.GamescopeIO.__new__(gamescope.GamescopeIO)
+        io.game_guard=SimpleNamespace(web=None,desktop=Mock())
+        with patch('fishing_core.brave.BraveGuard') as factory:
+            io.rebaseline_web();factory.assert_not_called();io.game_guard.desktop.emergency.assert_not_called()
+
+    def test_rebaseline_closes_each_failed_replacement_before_retry(self):
+        io=gamescope.GamescopeIO.__new__(gamescope.GamescopeIO)
+        old=Mock(settings=('personal','endpoints'),identity=('browser','original'))
+        replicas=[Mock(settings=old.settings,identity=old.identity) for _ in range(3)]
+        for replica in replicas[:2]:replica.check.side_effect=RuntimeError('iframe recargando')
+        io.game_guard=SimpleNamespace(web=old,display=Mock(),window=Mock(),desktop=Mock())
+        with patch('fishing_core.brave.BraveGuard',side_effect=replicas):
+            for replica in replicas[:2]:
+                with self.assertRaises(SafetyStop):io.rebaseline_web()
+                replica.close.assert_called_once();self.assertIs(io.game_guard.web,old)
+            io.rebaseline_web()
+        self.assertEqual(old.close.call_count,3)
+        self.assertIs(io.game_guard.web,replicas[-1]);replicas[-1].close.assert_not_called()
+
+    def test_rebaseline_constructor_failure_closes_bridge_and_pidfd_before_retry(self):
+        from fishing_core.brave import BraveGuard,Bridge
+        io=gamescope.GamescopeIO.__new__(gamescope.GamescopeIO)
+        settings=('personal',(':12','4500'),(123,456,'a'*32));identity=('browser','original')
+        old=Mock(settings=settings,identity=identity)
+        io.game_guard=SimpleNamespace(web=old,display=Mock(),window=Mock(),desktop=Mock())
+        processes=[Mock(),Mock()]
+        with patch('fishing_core.brave.account_id',return_value=settings[0]), \
+                patch('fishing_core.brave.gamescope_target',return_value=settings[1]), \
+                patch('fishing_core.brave.brave_target',return_value=settings[2]), \
+                patch('fishing_core.brave.browser_identity',return_value=identity), \
+                patch('fishing_core.brave.os.pidfd_open',return_value=42), \
+                patch('fishing_core.brave.os.close') as close_fd, \
+                patch('fishing_core.brave.select.select',return_value=([],[],[])), \
+                patch.object(BraveGuard,'check_window'),patch('fishing_core.brave.shutil.which',return_value='/fake/node'), \
+                patch('fishing_core.brave.subprocess.Popen',side_effect=processes), \
+                patch.object(Bridge,'_receive',side_effect=RuntimeError('sin canvas')), \
+                patch('fishing_core.brave._close_adapter') as close_adapter:
+            for _ in range(2):
+                with self.assertRaisesRegex(SafetyStop,'sin canvas'):io.rebaseline_web()
+            self.assertEqual(close_fd.call_count,2)
+            self.assertEqual([call.args[0] for call in close_adapter.call_args_list],processes)
+        self.assertIs(io.game_guard.web,old)
+
     def test_direct_frame_server_refuses_legacy_steam_files_before_opening_any_stream(self):
         for existing in ('frame','pid','symlink'):
             with self.subTest(existing=existing),tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp:

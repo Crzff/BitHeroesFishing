@@ -107,6 +107,7 @@ def main(argv):
         results=[];server={'proc':start_frame_server() if background else None}
         run_steps(config,results,background,is_gone,relaunch_game,server)
         report(results)
+        if any(not result.startswith('OK') for _,result in results):raise SystemExit(1)
     finally:lock.close()
 
 
@@ -186,7 +187,7 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                 if 'Límite de sesión' in message and sessions<20:
                     # Cada proceso de modo dura como mucho 1 h; con muchos recursos se abre otra sesión.
                     sessions+=1;print(f'== {name} (sesión {sessions+1})',flush=True);continue
-                if account_id() in ('personal','perfil-1') and ('identidad' in message or 'terminó' in message or retried):
+                if account_id() in ('personal','perfil-1') and ('Cambió la identidad' in message or 'terminó' in message or retried):
                     # Identidad/proceso cambiados: nunca otra guarda. Los endpoints están fijados por el supervisor,
                     # así que el único reintento genérico solo vuelve a aceptar el mismo Brave (fallos CDP momentáneos).
                     results.append((name,message));return

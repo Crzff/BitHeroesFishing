@@ -16,6 +16,55 @@ from fishing_core.farm_budget import FarmBudget
 
 
 class DungeonRuntimeTests(unittest.TestCase):
+    def test_reconnect_rebaselines_before_capture_if_supported(self):
+        for supported in (False,True):
+            with self.subTest(supported=supported),tempfile.TemporaryDirectory() as tmp:
+                runner,io,vision=self.runner(Path(tmp))
+                if not supported:del io.rebaseline_web
+                vision.locate.return_value=None
+                vision.screen.side_effect=lambda frame:frame
+                runner.wait=Mock(side_effect=['DISCONNECTED','HOME','HOME']);runner.click=Mock()
+                if supported:io.rebaseline_web.side_effect=lambda:self.assertEqual(runner.wait.call_count,1)
+                with patch('fishing_core.dungeon_runtime.time.sleep'):
+                    self.assertEqual(runner.ensure_home(),'HOME')
+                runner.click.assert_called_once_with('DISCONNECTED',(960,742),'RECONNECT',(770,665,1150,820))
+                if supported:io.rebaseline_web.assert_called_once()
+                self.assertEqual(runner.wait.call_args_list[1].args[1:],(90,'reconexión'))
+
+    def test_reconnect_retries_without_capture_or_input_until_success_or_90_seconds(self):
+        for succeeds in (True,False):
+            with self.subTest(succeeds=succeeds),tempfile.TemporaryDirectory() as tmp:
+                runner,io,vision=self.runner(Path(tmp));clock=[0.0];errors=[];attempts=[]
+                vision.locate.return_value=None;vision.screen.side_effect=lambda frame:frame
+                runner.wait=Mock(side_effect=['DISCONNECTED','HOME','HOME']);runner.click=Mock()
+                def renew():
+                    attempts.append(clock[0])
+                    self.assertEqual(runner.wait.call_count,1)
+                    self.assertEqual(runner.capture.call_count,1)
+                    self.assertEqual(runner.click.call_count,1)
+                    io.click.assert_not_called();io._move.assert_not_called();io.escape.assert_not_called()
+                    if succeeds and len(attempts)==3:return
+                    error=SafetyStop(f'iframe recargando {len(attempts)}');errors.append(error);raise error
+                io.rebaseline_web.side_effect=renew
+                with patch('fishing_core.dungeon_runtime.time.monotonic',side_effect=lambda:clock[0]), \
+                        patch('fishing_core.dungeon_runtime.time.sleep',side_effect=lambda seconds:clock.__setitem__(0,clock[0]+seconds)):
+                    if succeeds:self.assertEqual(runner.ensure_home(),'HOME')
+                    else:
+                        with self.assertRaises(SafetyStop) as caught:runner.ensure_home()
+                        self.assertIs(caught.exception,errors[-1])
+                        self.assertAlmostEqual(clock[0]-attempts[0],90)
+                self.assertEqual(len(attempts),3 if succeeds else 45)
+                for index,attempt in enumerate(attempts):self.assertAlmostEqual(attempt-attempts[0],index*2)
+
+    def test_reconnect_does_not_retry_emergency_stop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner,io,vision=self.runner(Path(tmp))
+            vision.locate.return_value=None;vision.screen.side_effect=lambda frame:frame
+            runner.wait=Mock(return_value='DISCONNECTED');runner.click=Mock()
+            io.emergency.side_effect=KeyboardInterrupt('F8')
+            with patch('fishing_core.dungeon_runtime.time.sleep'),self.assertRaises(KeyboardInterrupt):runner.ensure_home()
+            io.rebaseline_web.assert_not_called()
+
     def test_limited_worker_marker_enforces_one_normal_zero_gold_and_no_targets_in_the_shared_validator(self):
         plan=farm_plan('Z1D2','Normal',1,10)
         with patch.dict(os.environ,{'FARM_SINGLE_DUNGEON':'1'},clear=True):

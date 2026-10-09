@@ -12,3 +12,12 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
   multicuenta aisladas en temporal. · Aceptado tras revisión del diff. · Codex: 43 enfocadas OK (su sandbox
   no permite sockets/Tk/locks: 14 errores ajenos). Claude, entorno real: 481 tests OK (3 omitidas),
   configs reales intactas (md5).
+- t2-brave-reconnect · Codex · GamescopeIO.rebaseline_web(): tras RECONNECT renueva la guarda Brave para la misma
+  ventana/PID/puerto/target (identidad comparada); mensaje CDP genérico con un reintento, 'Cambió la identidad'
+  definitivo; farm_all sale con 1 si algún modo no terminó OK. · Revisión Claude: la renovación iba después de
+  la espera (que captura con la guarda vieja) → redelegado.
+- t2b-reconnect-order · Codex · renovación en bucle (2 s, hasta 90 s) antes de esperar; réplicas fallidas
+  cerradas. · Claude añadió 6 s de espera previa (el iframe recarga ~4 s tras RECONNECT).
+  · Entorno real: 489 tests OK (3 omitidas), configs intactas. Pendiente: validación en vivo.
+- Error de Claude: lanzar el supervisor con `bash … &` hace que ignore SIGINT y STOP no lo para; lanzar
+  siempre desde Python (como el panel) con SIGINT por defecto.

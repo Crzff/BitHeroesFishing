@@ -62,14 +62,16 @@ class RunStepsTests(unittest.TestCase):
 
     def test_brave_safety_stops_do_not_restart_or_accept_a_new_client_baseline(self):
         for account in ('personal','perfil-1'):
-            for message in ('Cambió la identidad de Brave','Geometría no confirmada','DISCONNECTED','Pantalla UNKNOWN'):
+            for message in ('Cambió la identidad de Brave','El proceso Brave original terminó',
+                            'CDP no confirma la identidad, foco o geometría de Brave',
+                            'Geometría no confirmada','DISCONNECTED','Pantalla UNKNOWN'):
                 with self.subTest(account=account,message=message),tempfile.TemporaryDirectory(dir='/tmp/opencode') as tmp, \
                         patch.dict(os.environ,{'FARM_ACCOUNT':account}),patch.object(farm_all,'PROGRESS',Path(tmp)/'progress.json'):
                     quest,calls=self.failing(SafetyStop(message));next_mode=Mock();results=[];relaunch=Mock()
                     with patch.object(farm_all,'steps',return_value=[('Quest',quest),('PvP',next_mode)]):
                         farm_all.run_steps({},results,True,lambda m:True,relaunch,{'proc':None})
                     relaunch.assert_not_called()  # un cliente Brave nunca se relanza ni se sustituye
-                    if 'identidad' in message:  # identidad cambiada: parada definitiva, sin otra guarda
+                    if 'Cambió la identidad' in message or 'terminó' in message:
                         self.assertEqual(results,[('Quest',message)]);self.assertEqual(len(calls),1);next_mode.assert_not_called()
                     else:  # fallo momentáneo: un único reintento con los mismos endpoints fijados
                         self.assertEqual(results,[('Quest','OK'),('PvP','OK')]);self.assertEqual(len(calls),2)
@@ -103,6 +105,21 @@ class RunStepsTests(unittest.TestCase):
 
 
 class SingleDungeonTests(unittest.TestCase):
+    def test_main_reports_failures_and_closes_lock(self):
+        for result in ('OK','OK (ya hecho)','F8','Pantalla UNKNOWN','Derrota'):
+            with self.subTest(result=result),patch.dict(os.environ,{},clear=True), \
+                    patch('fishing_core.gamescope.require_calibrated_client'), \
+                    patch('fishing_core.processes.Mutex') as mutex, \
+                    patch.object(farm_all.farm_config,'load',return_value={}), \
+                    patch.object(farm_all,'run_steps',side_effect=lambda c,r,*args:r.append(('Quest',result))), \
+                    patch.object(farm_all,'report') as report:
+                if result.startswith('OK'):farm_all.main([])
+                else:
+                    with self.assertRaises(SystemExit) as exc:farm_all.main([])
+                    self.assertEqual(exc.exception.code,1)
+                report.assert_called_once_with([('Quest',result)])
+                mutex.return_value.close.assert_called_once()
+
     def test_limited_worker_marker_cannot_run_or_save_the_general_chain(self):
         env={'FARM_ACCOUNT':'steam','FARM_BACKEND':'gamescope','FARM_GAMESCOPE_DISPLAY':':12',
              'FARM_GAMESCOPE_SERIAL':'4500','FARM_SINGLE_DUNGEON':'1'}
