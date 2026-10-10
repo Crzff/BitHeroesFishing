@@ -1001,3 +1001,16 @@ class EnergyShortTests(unittest.TestCase):
             runner.wait('HOME',5)
         self.assertEqual(clicks,[('ENERGY_SHORT',(1102,748))]);self.assertNotIn((814,748),[xy for _,xy in clicks])
         self.assertEqual(WINDOW_CLOSERS['ENERGY_SHORT'][0],(1102,748))
+
+
+class BattleSpeedTests(unittest.TestCase):
+    def test_speed_is_raised_to_the_maximum_and_never_past_it(self):
+        from fishing_core.dungeon_runtime import DungeonRunner
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:
+            frames={k:data[k] for k in ('battle_speed_1x','battle_speed_4_8x','battle_speed_8x','auto_on')}
+        for name,clicked in (('battle_speed_1x',True),('battle_speed_4_8x',True),('battle_speed_8x',False),('auto_on',False)):
+            runner=DungeonRunner.__new__(DungeonRunner);runner.io=Mock();runner.log=Mock();runner.check=lambda:None
+            with patch('fishing_core.dungeon_runtime.time',SimpleNamespace(monotonic=lambda:100.0,sleep=lambda s:None)):
+                runner.max_speed(frames[name],'AUTO_ON' if name=='auto_on' else 'AUTO_ON_BATTLE')
+            self.assertEqual(runner.io.click.called,clicked,name)
+            if clicked:runner.io.click.assert_called_once_with((90,1010))

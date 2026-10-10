@@ -141,6 +141,27 @@ class DungeonRunner:
                 self.log.emit('STOP_CHECK_READY',**ready)
             time.sleep(.1)
 
+    SPEED=(90,1010)  # botón SPEED de combate: cicla 1x → 4.8x → 8x (FMANI); Steam tiene su propia escala
+
+    def speed_level(self,frame):
+        """Flechas amarillas del botón SPEED (1-3; 3 = máximo de la cuenta); None si el botón no se ve."""
+        def yellow(x0):
+            r=frame[955:1015,x0:x0+30].astype(np.int16)
+            return float(((r[...,2]>200)&(r[...,1]>160)&(r[...,0]<90)).mean())
+        if yellow(60)<.15:return None
+        return 3 if yellow(100)>=.3 else 2 if yellow(60)>=.35 else 1
+
+    def max_speed(self,frame,screen):
+        """Combate en curso: llevar SPEED al máximo (crzf). Un clic cada 3 s como mucho, nunca más de 4 por runner."""
+        if screen not in ('AUTO_ON_BATTLE','AUTO_OFF_BATTLE'):return
+        level=self.speed_level(frame)
+        if level in (None,3):return
+        now=time.monotonic();clicks=getattr(self,'speed_clicks',0)
+        if clicks>=4 or now-getattr(self,'speed_last',0)<3:return
+        self.speed_clicks=clicks+1;self.speed_last=now
+        self.check();self.io.click(self.SPEED);time.sleep(.25);self.io._move((960,1070))
+        self.log.emit('DUNGEON_INPUT',screen='SPEED',xy=list(self.SPEED),level=level)
+
     def wait(self,predicate,timeout=10,expected=None):
         deadline=time.monotonic()+timeout;stable=0;frame=None;stories=0
         while time.monotonic()<deadline:
@@ -150,6 +171,7 @@ class DungeonRunner:
             if stable>=2:return frame
             if not okay:
                 screen=self.vision.screen(frame)
+                self.max_speed(frame,screen)
                 if screen=='ENERGY_SHORT':
                     # Nunca YES (compra con gemas): NO verificado y el modo termina sin recursos.
                     self.click('ENERGY_SHORT',(1102,748),'ENERGY_NO',(975,690,1235,810))
@@ -694,6 +716,7 @@ class DungeonRunner:
                     auto_started=True;map_autos+=1;map_off_since=None
                 time.sleep(.12);continue
             map_off_since=None
+            self.max_speed(frame,screen)
             if screen=='AUTO_OFF_BATTLE':
                 # Un combate puede empezar sin Auto (p. ej. tras pausar el mapa). Al entrar está animado y
                 # el clic se pierde: pulsar solo tras 2 s estables; si no prende, se reintenta (máx. 3).
