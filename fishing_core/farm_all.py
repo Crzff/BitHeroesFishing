@@ -228,8 +228,9 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                 return  # estado del juego no confirmado: no seguir
             except Exception as exc:  # un fallo inesperado se informa en vez de tumbar el lanzador en silencio
                 import traceback;traceback.print_exc();results.append((name,f'{type(exc).__name__}: {exc}'));return
-    try:PROGRESS.unlink()  # ciclo completo: el próximo START empieza de nuevo
-    except OSError:pass
+    # Ciclo completo: se recuerda RESUME_SECONDS (3 h) para que un STOP+START no lo repita (crzf, 2026-10-09);
+    # pasado ese tiempo load_progress() lo da por caducado y el próximo START empieza un ciclo nuevo.
+    save_progress(done)
 
 
 def report(results):

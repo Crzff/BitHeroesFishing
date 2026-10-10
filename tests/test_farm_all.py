@@ -61,7 +61,9 @@ class RunStepsTests(unittest.TestCase):
             quest,calls=self.failing(SafetyStop('Steam perdio el foco o cambio su identidad en niri; no se envia input'))
             results,focus=self.run_chain([('Quest',quest),('PvP',lambda:None)],Path(tmp)/'p.json')
             self.assertEqual(results,[('Quest','OK'),('PvP','OK')]);self.assertEqual(len(calls),2);focus.assert_called_once()
-            self.assertFalse((Path(tmp)/'p.json').exists())  # ciclo completo: el próximo START empieza de nuevo
+            # Ciclo completo: se recuerda 3 h para que STOP+START no lo repita (crzf 2026-10-09); luego caduca.
+            import json as _json
+            self.assertEqual(set(_json.loads((Path(tmp)/'p.json').read_text())['done']),{name for name,_ in results})
 
     def test_other_stops_are_retried_once_and_then_the_next_start_resumes(self):
         with tempfile.TemporaryDirectory() as tmp:
