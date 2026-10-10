@@ -369,6 +369,7 @@ test('preparación completa: solo Play/Fullscreen del sitio y foco del canvas, s
   const {client}=fixture(),call=client.call,actions=[];
   client.call=async(method,params,session)=>{
     if(method==='Runtime.evaluate'){
+      if(params.expression.includes('scrollTo('))return {result:{value:false}};  // volver la página a 0: neutro
       assert.equal(params.userGesture,true);
       if(params.expression.includes('#gtm-play-now-button')){actions.push('play');return {result:{value:'clicked'}};}
       if(params.expression.includes('#fullscreen_button'))return {result:{value:[60,35]}};
@@ -454,6 +455,7 @@ test('arranque: URL vacía transitoria solo tras la navegación propia y antes d
   client.call=async(method,params,session)=>{
     if(method==='Target.getTargets' && reads++===0)return {targetInfos:[{type:'page',targetId:client.target,url:''}]};
     if(method==='Runtime.evaluate'){
+      if(params.expression.includes('scrollTo('))return {result:{value:false}};  // volver la página a 0: neutro
       actions.push(params.expression.includes('#gtm-play-now-button')?'play':params.expression.includes('#fullscreen_button')?'fullscreen':'focus');
       return {result:{value:params.expression.includes('#fullscreen_button')?[60,35]:params.expression.includes('#')?'clicked':true}};
     }
@@ -515,6 +517,7 @@ test('preparación completa: una vacía tardía solo se retira con autorización
       if(method==='Target.detachFromTarget')return {};
       if(method==='Target.closeTarget'){assert.equal(params.targetId,'D'.repeat(32));blank=false;closed=true;return {success:true};}
       if(method==='Runtime.evaluate'){
+        if(params.expression.includes('scrollTo('))return {result:{value:false}};  // volver la página a 0: neutro
         if(session==='empty'){assert.equal(params.userGesture,undefined);return {result:{value:empty}};}
         actions.push('site-or-focus');return {result:{value:params.expression.includes('#fullscreen_button')?[60,35]:params.expression.includes('#')?'clicked':true}};
       }

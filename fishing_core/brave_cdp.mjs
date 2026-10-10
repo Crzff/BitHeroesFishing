@@ -365,6 +365,8 @@ async function siteButton(c,selector,timeout){
         const es=document.querySelectorAll(${JSON.stringify(selector)});if(es.length===0)return 'missing';
         if(es.length!==1)return 'blocked';const e=es[0],r=e.getBoundingClientRect(),s=getComputedStyle(e);
         if(r.width<=0 || r.height<=0 || s.display==='none' || s.visibility!=='visible')return 'missing';
+        // Kongregate 2026 (diseño "20 years"): los botones del juego quedan bajo el borde; traerlos a la vista y reintentar.
+        if(r.bottom>innerHeight || r.top<0 || r.right>innerWidth || r.left<0){e.scrollIntoView({block:'center',inline:'center',behavior:'instant'});return 'missing';}  // instantáneo: con scroll suave el toque llegaba mientras el botón se movía
         const x=r.x+r.width/2,y=r.y+r.height/2,hit=document.elementFromPoint(x,y);
         if(e.tagName!=='BUTTON' || e.disabled || !document.hasFocus() || Number(s.opacity)!==1 ||
           s.pointerEvents==='none' || x<0 || y<0 || x>=innerWidth || y>=innerHeight || !hit || !e.contains(hit))return 'blocked';
@@ -417,6 +419,10 @@ export async function finishPreparation(c,timeout=30_000){
     do{
       c.startupStage='canvas';
       if(!await soleOfficial(c))refuse();
+      // El botón estaba bajo el borde (Kongregate 2026): con el juego ya en pantalla completa, volver la página a 0
+      // para que la geometría estricta (scroll [0,0] en todos los frames) siga valiendo.
+      await c.call('Runtime.evaluate',{returnByValue:true,timeout:1000,
+        expression:"document.fullscreenElement && (scrollX||scrollY) && scrollTo({top:0,left:0,behavior:'instant'})"},c.root);
       const candidate=await readyCanvas(c);
       if(candidate && validView({...candidate.view,focused:true}) && same(candidate.canvas.size,[1920,1080]) &&
         same(candidate.canvas.rect,[0,0,1920,1080])){
