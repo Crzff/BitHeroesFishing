@@ -253,7 +253,8 @@ class FarmAppMultiTests(unittest.TestCase):
         for target,name,value in ((farm_app,'MULTI_SESSIONS',path),(farm_app,'state_root',account_root),
                                   (farm_app,'MULTI_STATUS',self.root/'multi_status.json'),
                                   (farm_app,'ENABLED_ACCOUNTS',self.root/'enabled.json'),
-                                  (farm_app,'runs_root',account_root),(farm_config,'PATH',self.root/'default.json')):
+                                  (farm_app,'runs_root',account_root),(farm_config,'PATH',self.root/'default.json'),
+                                  (farm_app.FarmApp,'client_ready',lambda app,account:True)):  # juegos simulados abiertos
             patcher=patch.object(target,name,value);patcher.start();self.addCleanup(patcher.stop)
         for account in self.data:
             config=farm_config.load(self.root/'missing.json');config['quest']['max_gold']=list(self.data).index(account)*1000
@@ -441,8 +442,9 @@ class FarmAppAccountsTests(unittest.TestCase):
         from unittest.mock import patch
         from fishing_core import accounts,farm_multi
         accounts.add_account('Nueva','browser');self.app.refresh_accounts()
-        with patch.object(farm_multi,'start_farm') as start:self.app.toggle_run();start.assert_not_called()
-        self.assertIn('FALTAN SESIONES',self.app.status)
+        # Cuenta activa sin juego abierto: START abre los juegos que faltan (en segundo plano) en vez de farmear.
+        with patch.object(farm_multi,'start_farm') as start,patch.object(self.farm_app.FarmApp,'open_clients') as opening:
+            self.app.toggle_run();start.assert_not_called();opening.assert_called_once_with(['nueva'])
         self.app.toggle_account('nueva');accounts.remove_account('personal');self.app.refresh_accounts()
         with patch.object(farm_multi,'start_farm') as start,patch.object(self.farm_app.threading,'Thread'):
             self.app.toggle_run();self.assertEqual(set(start.call_args.args[0]),{'steam','perfil-1'})
@@ -609,3 +611,20 @@ class FarmAppAnimationTests(unittest.TestCase):
         self.assertEqual(app.photo.getpixel((10,14)),(164,82,49,255))
 
 if __name__=='__main__':unittest.main()
+
+
+class FarmAppOpenClientsTests(unittest.TestCase):
+    setUp=FarmAppMultiTests.setUp
+
+    def test_closed_games_are_opened_with_the_script_and_then_start_runs(self):
+        from unittest.mock import patch,Mock
+        from fishing_core import farm_multi
+        with patch.object(self.farm_app.FarmApp,'client_ready',lambda app,account:account!='steam'), \
+                patch.object(self.farm_app.threading,'Thread') as thread,patch.object(farm_multi,'start_farm') as start:
+            self.app.toggle_run();start.assert_not_called();self.assertIn('ABRIENDO JUEGOS',self.app.status)
+            with patch.object(self.farm_app.subprocess,'run',return_value=Mock(returncode=0,stderr='')) as run:
+                thread.call_args.kwargs['target']()
+            self.assertEqual(run.call_args.args[0][-1],'steam')
+        with patch.object(self.farm_app.threading,'Thread'),patch.object(farm_multi,'start_farm') as start:
+            self.app.poll_clients();start.assert_called_once()
+

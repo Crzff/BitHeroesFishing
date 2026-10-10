@@ -67,20 +67,24 @@ def open_steam(known_displays,known_serials,timeout=300):
     raise RuntimeError('Steam: no apareció la ventana del juego en gamescope (¿Steam abierto fuera de gamescope?)')
 
 
-def main():
-    sessions={}
+def main(accounts=None):
+    """Abre las cuentas pedidas (todas por defecto) y las fusiona en sessions.json conservando las demás."""
+    path=ROOT/'runs/accounts/sessions.json'
+    try:sessions=json.loads(path.read_text()) if path.exists() else {}
+    except ValueError:sessions={}
+    wanted=set(accounts) if accounts else None
     for account in browser_accounts():
+        if wanted is not None and account not in wanted:continue
         sessions[account]=open_browser(account);print(account,'listo',sessions[account]['FARM_GAMESCOPE_DISPLAY'],flush=True)
     steam=steam_account()
-    if steam:
-        known={s['FARM_GAMESCOPE_DISPLAY'] for s in sessions.values()}
-        serials={s['FARM_GAMESCOPE_SERIAL'] for s in sessions.values()}
+    if steam and (wanted is None or steam in wanted):
+        others=[s for a,s in sessions.items() if a!=steam and 'FARM_GAMESCOPE_DISPLAY' in s]
+        known={s['FARM_GAMESCOPE_DISPLAY'] for s in others};serials={s['FARM_GAMESCOPE_SERIAL'] for s in others}
         sessions[steam]=open_steam(known,serials);print(steam,'listo',sessions[steam]['FARM_GAMESCOPE_DISPLAY'],flush=True)
-    path=ROOT/'runs/accounts/sessions.json'
     if path.exists():shutil.copy2(path,path.with_suffix('.json.bak'))
     from fishing_core.protocol import atomic_json
     atomic_json(path,sessions)
     print('sessions.json escrito:',', '.join(sessions))
 
 
-if __name__=='__main__':main()
+if __name__=='__main__':main(sys.argv[1:] or None)

@@ -107,6 +107,40 @@ class FarmApp(tk.Tk):
             self.config_data=farm_config.load(self.config_path())
             self.zone=dungeon(self.config_data['quest']['dungeon'])['zone']
 
+    def client_ready(self,account):
+        """El juego de la cuenta sigue abierto y es el mismo de su sesión (mismas comprobaciones que el supervisor)."""
+        from .farm_multi import validate_farm
+        try:
+            record=self.multi[account];validate_farm({account:record})
+            if 'FARM_BRAVE_PID' in record:return True  # navegador: identidad del proceso ya comprobada
+            # Steam: la validación solo mira el formato; tras reiniciar el PC la pantalla virtual ya no existe.
+            from Xlib import display
+            from .gamescope import window_of
+            d=display.Display(record['FARM_GAMESCOPE_DISPLAY'])
+            try:return window_of(d) is not None
+            finally:d.close()
+        except Exception:return False
+
+    def open_clients(self,accounts):
+        """Abre en segundo plano los juegos de esas cuentas (scripts/abrir_clientes.py) y después pulsa START solo."""
+        self.browser_busy=True;self.status='ABRIENDO JUEGOS... (UNOS MINUTOS)'
+        def run():
+            try:
+                out=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/abrir_clientes.py'),*accounts],cwd=str(ROOT),
+                                   capture_output=True,text=True,timeout=900)
+                ok=out.returncode==0
+                detail=(out.stderr.strip().splitlines() or ['sin detalle'])[-1] if not ok else ''
+            except (OSError,subprocess.SubprocessError) as exc:ok,detail=False,str(exc)
+            self.browser_results.put(('clients',ok,detail))
+        threading.Thread(target=run,daemon=True).start();self.after(500,self.poll_clients)
+
+    def poll_clients(self):
+        try:_,ok,detail=self.browser_results.get_nowait()
+        except Empty:self.after(500,self.poll_clients);return
+        self.browser_busy=False;self.reload_sessions()
+        if not ok:self.set_status(('NO SE ABREN LOS JUEGOS · '+detail)[:90].upper());return
+        self.toggle_run();self.render()
+
     def reload_sessions(self):
         try:
             data=json.loads(MULTI_SESSIONS.read_text())
@@ -578,9 +612,10 @@ class FarmApp(tk.Tk):
             from .farm_multi import start_farm
             self.reload_sessions()
             ids=[r['id'] for r in self.records if self.enabled_accounts[r['id']]]
-            if any(a not in self.multi for a in ids):self.status='FALTAN SESIONES · ABRE LAS CUENTAS ACTIVAS';return
+            if not ids:self.status='ACTIVA AL MENOS UNA CUENTA';return
+            closed=[a for a in ids if a not in self.multi or not self.client_ready(a)]
+            if closed:return self.open_clients(closed)  # tras reiniciar el PC: abrir los juegos y luego farmear
             active={a:self.multi[a] for a in ids}
-            if not active:self.status='ACTIVA AL MENOS UNA CUENTA';return
             self.save()
             try:self.process=start_farm(active)
             except (ValueError,RuntimeError,OSError) as exc:self.status=('NO ARRANCA · '+str(exc))[:52].upper();return
