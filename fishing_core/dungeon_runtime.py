@@ -45,6 +45,7 @@ WINDOW_CLOSERS={'DISCONNECTED':((960,742),'RECONNECT',(770,665,1150,820)),
                 'WB_SUMMON':((1266,260),None,None)}
 COST_ROI=(1210,392,1310,448)
 WINDOW_CLOSERS['GAUNTLET']=WINDOW_CLOSERS['TRIALS']
+WINDOW_CLOSERS['ENERGY_SHORT']=((1102,748),'ENERGY_NO',(975,690,1235,810))  # siempre NO: YES compra energía
 COST_DROPDOWN=(1370,416)
 ENERGY_WAIT=30  # ponytail: acotado sin medir el periodo real del reloj; ajustar con una muestra en vivo.
 MAP_SCREENS=tuple(f'MAP_Z{zone}' for zone in range(1,21))
@@ -147,6 +148,16 @@ class DungeonRunner:
             okay=predicate(frame) if callable(predicate) else self.vision.screen(frame)==predicate
             stable=stable+1 if okay else 0
             if stable>=2:return frame
+            if not okay:
+                screen=self.vision.screen(frame)
+                if screen=='ENERGY_SHORT':
+                    # Nunca YES (compra con gemas): NO verificado y el modo termina sin recursos.
+                    self.click('ENERGY_SHORT',(1102,748),'ENERGY_NO',(975,690,1235,810))
+                    self.log.emit('DUNGEON_STATUS',message='Sin energía suficiente: aviso de compra rechazado con NO')
+                    raise SafetyStop('Sin energía suficiente; compra rechazada con NO')
+                if screen=='EVENT_WINDOW' and predicate!='EVENT_WINDOW' and stories<30:
+                    # La ventana del evento (Halloween) puede abrirse sola a mitad del modo: solo su X.
+                    self.click('EVENT_WINDOW',*WINDOW_CLOSERS['EVENT_WINDOW']);stories+=1;deadline+=2;time.sleep(.8);continue
             if (not okay and predicate not in ('STORY','STORY_ZORUL') and stories<30 and
                     self.vision.screen(frame) in ('STORY','STORY_ZORUL')):
                 # Diálogo de historia (primer jefe, mazmorra...): se pasa con su flecha; no gasta nada.

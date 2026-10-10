@@ -983,3 +983,21 @@ class DungeonRuntimeTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class EnergyShortTests(unittest.TestCase):
+    def test_buy_energy_prompt_gets_no_and_ends_the_mode(self):
+        from unittest.mock import Mock,patch
+        from types import SimpleNamespace
+        from fishing_core.dungeon_runtime import DungeonRunner,WINDOW_CLOSERS
+        from fishing_core.dungeon_vision import DungeonVision
+        from fishing_core.control_flow import SafetyStop
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frame=data['energy_short']
+        runner=DungeonRunner.__new__(DungeonRunner);runner.vision=DungeonVision();runner.capture=lambda:frame
+        runner.io=Mock();runner.log=Mock();runner.check=lambda:None
+        clicks=[];runner.click=lambda screen,xy,*a,**k:clicks.append((screen,xy))
+        fake=SimpleNamespace(monotonic=lambda:0.0,sleep=lambda s:None,perf_counter_ns=lambda:0)
+        with patch('fishing_core.dungeon_runtime.time',fake),self.assertRaisesRegex(SafetyStop,'^Sin energía suficiente'):
+            runner.wait('HOME',5)
+        self.assertEqual(clicks,[('ENERGY_SHORT',(1102,748))]);self.assertNotIn((814,748),[xy for _,xy in clicks])
+        self.assertEqual(WINDOW_CLOSERS['ENERGY_SHORT'][0],(1102,748))

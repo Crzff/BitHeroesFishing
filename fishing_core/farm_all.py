@@ -197,6 +197,9 @@ def run_steps(config,results,background,is_gone,relaunch_game,server):
                 results.append((name,'F8'));return
             except (SafetyStop,RuntimeError,ValueError) as exc:
                 message=str(exc)
+                if message.startswith('Sin energía suficiente'):
+                    # El juego ofreció comprar energía (NO pulsado): el modo terminó sus recursos, se sigue con el siguiente.
+                    results.append((name,'OK (sin energía)'));done.add(name);save_progress(done);break
                 if 'Límite de sesión' in message and sessions<20:
                     # Cada proceso de modo dura como mucho 1 h; con muchos recursos se abre otra sesión.
                     sessions+=1;print(f'== {name} (sesión {sessions+1})',flush=True);continue

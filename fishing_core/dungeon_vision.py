@@ -14,7 +14,7 @@ SETTINGS={'gold':('GOLD',False),'gems':('GEMS',False),'duplicates':('DUPLICATES'
           'tips':('SETTING_TIPS',False),'merchants':('SETTING_MERCHANTS',True),
           'treasures':('SETTING_TREASURES',True),'music':('SETTING_MUSIC',True),'sound':('SETTING_SOUND',True)}
 NEW_TEMPLATES=tuple(key for key,_ in SETTINGS.values() if key.startswith('SETTING_'))+(
-    'AUDIO_ZERO','IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS','EVENT_CLOSE','HOME_GAUNTLET','HOME_GAUNTLET_TOWN1','GAUNTLET_TITLE','EVENT_PLAY')
+    'AUDIO_ZERO','IDLE_TITLE','IDLE_YES','EVENT_TITLE','EVENT_ENDS','EVENT_CLOSE','HOME_GAUNTLET','HOME_GAUNTLET_TOWN1','GAUNTLET_TITLE','EVENT_PLAY','ENERGY_SHORT','ENERGY_NO')
 
 
 def familiar_glyph(frame):
@@ -160,6 +160,9 @@ class DungeonVision:
 
     def screen(self,frame):
         if frame.shape!=(1080,1920,3):return 'UNKNOWN'
+        # Aviso "Not enough energy. Would you like to purchase more?": compra con gemas, siempre NO.
+        if (self.locate(frame,'ENERGY_SHORT',(640,440,1290,560)) and
+                self.locate(frame,'ENERGY_NO',(975,690,1235,810))):return 'ENERGY_SHORT'
         if (self.locate(frame,'IDLE_TITLE',(700,450,1200,610)) and
                 self.locate(frame,'IDLE_YES',(770,680,1140,830))):return 'IDLE_PROMPT'
         if (self.locate(frame,'EVENT_TITLE',(700,90,1220,210)) and
