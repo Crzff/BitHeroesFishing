@@ -440,3 +440,13 @@ class BoostProfileFilterTests(unittest.TestCase):
         with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frame=data['profile_kortzz_filtered']
         runner=BoostsRunner(Mock(),Mock(),DungeonVision(),Mock(),Mock())
         self.assertIsNotNone(runner.locate(frame,'filter',(1070,180,1605,295)))
+
+
+class BoostLetterButtonTests(unittest.TestCase):
+    def test_home_anchor_does_not_depend_on_the_daily_letter(self):
+        from unittest.mock import Mock
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frames={k:data[k] for k in data.files}
+        runner=BoostsRunner(Mock(),Mock(),DungeonVision(),Mock(),Mock())
+        for name in ('home_no_boosts','home_letter_t','home_four_boosts'):  # letras F y T
+            self.assertIsNotNone(runner.locate(frames[name],'slot',(320,955,430,1080)),name)
+        self.assertFalse(runner.boosts_active(frames['home_letter_t']))

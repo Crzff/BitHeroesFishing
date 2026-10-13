@@ -245,7 +245,7 @@ class BoostsRunner(DungeonRunner):
             self.log.emit('BOOST_BOUGHT',boost=BOOSTS[kind],quantity=1,gold=PRICES[kind])
         self.press((1660,146),'shop_close',(1600,80,1730,210),('shop_list',(1000,180,1250,255)))
         self.wait('HOME')
-        self.press((90,1010),'flag',(320,960,425,1060))
+        self.press((90,1010),'slot',(320,955,430,1080),('slot',(320,955,430,1080)))
         self.wait(self.on('filter',(1070,180,1605,295)),10,'perfil')
         self.press((1338,238),'filter',(1070,180,1605,295))
         consumables=lambda f:next((k for k in ('consumables','consumables_selected') if self.locate(f,k,(980,535,1405,625)) is not None),None)
@@ -269,11 +269,11 @@ class BoostsRunner(DungeonRunner):
     def run(self):
         self.missing=[]
         self.leave_profile();self.ensure_home()
-        frame=self.wait(self.on('flag',(320,960,425,1060)),10,'Home con botón F')
+        frame=self.wait(lambda f:self.vision.screen(f)=='HOME' and self.on('slot',(320,955,430,1080))(f),10,'Home con botón de letra')  # la letra (F, S, T...) cambia a diario
         if self.boosts_active(frame):
             self.log.emit('BOOSTS_STATUS',message='ya activos')
             return []
-        self.press((90,1010),'flag',(320,960,425,1060))
+        self.press((90,1010),'slot',(320,955,430,1080),('slot',(320,955,430,1080)))
         self.wait(self.on('filter',(1070,180,1605,295)),10,'perfil')
         self.press((1338,238),'filter',(1070,180,1605,295))
         consumables=lambda f:next((k for k in ('consumables','consumables_selected') if self.locate(f,k,(980,535,1405,625)) is not None),None)
