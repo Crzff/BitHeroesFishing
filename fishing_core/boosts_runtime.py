@@ -262,6 +262,9 @@ class BoostsRunner(DungeonRunner):
         """Al reanudar: cerrar el filtro y el perfil que hayan quedado abiertos (ensure_home no los conoce)."""
         for _ in range(3):
             frame=self.capture()
+            if self.locate(frame,'shop_close',(1600,80,1730,210)) is not None and \
+                    any(self.locate(frame,k,(1000,180,1250,255)) is not None for k in ('shop_tab','shop_list')):
+                self.press((1660,146),'shop_close',(1600,80,1730,210));time.sleep(1);continue  # tienda abierta al reanudar
             if any(self.locate(frame,k,(980,535,1405,625)) is not None for k in ('consumables','consumables_selected')):
                 self.check();self.io.click((1500,290));time.sleep(1);continue
             if self.locate(frame,'filter',(1070,180,1605,295)) is not None and self.locate(frame,'profile_close',(1590,55,1710,170)) is not None:
