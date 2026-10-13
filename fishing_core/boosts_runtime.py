@@ -205,8 +205,10 @@ class BoostsRunner(DungeonRunner):
         # missing solo existe si run() empezó sin ningún boost activo; los Minor que sí estaban ya se consumieron.
         self.ensure_home()
         self.press((1748,100),'shop',(1700,60,1880,180))
-        self.wait(self.on('shop_tab',(1000,180,1250,255)),10,'tienda')
-        self.press((1116,218),'shop_tab',(1000,180,1250,255))
+        # La tienda recuerda la última pestaña: puede abrirse ya en BOOSTS (en vivo, FMANI).
+        tab=self.on('shop_tab',(1000,180,1250,255));listed=self.on('shop_list',(1000,180,1250,255))
+        frame=self.wait(lambda f:tab(f) or listed(f),10,'tienda')
+        if not listed(frame):self.press((1116,218),'shop_tab',(1000,180,1250,255))
         self.wait(self.shop_ready,10,'lista BOOSTS 1x')
         for kind in kinds:
             self.check();self.wheel(-30,(930,600));time.sleep(.5)
