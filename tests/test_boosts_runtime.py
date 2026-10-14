@@ -450,3 +450,15 @@ class BoostLetterButtonTests(unittest.TestCase):
         for name in ('home_no_boosts','home_letter_t','home_four_boosts'):  # letras F y T
             self.assertIsNotNone(runner.locate(frames[name],'slot',(320,955,430,1080)),name)
         self.assertFalse(runner.boosts_active(frames['home_letter_t']))
+
+
+class BoostCollectAndSteamTests(unittest.TestCase):
+    def test_items_window_after_purchase_and_steam_active_boosts(self):
+        from unittest.mock import Mock
+        with np.load(Path(__file__).parent/'fixtures/dungeons.npz',allow_pickle=False) as data:frames={k:data[k] for k in data.files}
+        runner=BoostsRunner(Mock(),Mock(),DungeonVision(),Mock(),Mock())
+        self.assertTrue(runner.items_ready(frames['shop_items_collect']))
+        self.assertEqual([k for k in frames if runner.items_ready(frames[k])],['shop_items_collect'])
+        self.assertTrue(runner.boosts_active(frames['home_steam_four_boosts']))
+        for name in ('home_no_boosts','home_letter_t','home_gvg_gauntlet','home_gauntlet_steam'):
+            self.assertFalse(runner.boosts_active(frames[name]),name)

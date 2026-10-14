@@ -17,7 +17,7 @@ BOOSTS={'item_find':'Minor Item Find Scroll','xp':'Minor Experience Tome',
         'gold':'Minor Gold Potion','speed':'Minor Speed Kicks'}
 LIST_ROI=(1090,330,1540,930)
 PROFILE_CLOSE=(1652,112)
-KEYS=('active','slot','flag','filter','consumables','consumables_selected','profile_close','activated','done','yes',
+KEYS=('active','slot','items_title','collect','flag','filter','consumables','consumables_selected','profile_close','activated','done','yes',
       *BOOSTS,*(f'confirm_{kind}' for kind in BOOSTS),
       'shop','shop_tab','shop_list','shop_close','one','coin','diamond','no',
       'purchase_header','purchase_item_find','purchase_name_xp','purchase_name_gold','purchase_name_speed','purchase_gold','price_10000','price_5000',
@@ -50,7 +50,22 @@ class BoostsRunner(DungeonRunner):
         self.deadline=time.monotonic()+10*60
 
     def boosts_active(self,frame):
-        return self.locate(frame,'slot',(425,955,1100,1080)) is not None
+        # El fondo de la ciudad asoma en las esquinas del marco (en Steam no llegaba a 0,97): tolerancia acotada a la barra.
+        x,y,x1,y1=(425,955,1100,1080);ref=self.vision.templates['BOOST_SLOT']
+        res=cv2.matchTemplate(frame[y:y1,x:x1],ref,cv2.TM_CCOEFF_NORMED,mask=self.vision.home_masks['BOOST_SLOT'])
+        res[~np.isfinite(res)]=-1
+        return float(res.max())>=.9
+
+    def items_ready(self,frame):
+        return (self.locate(frame,'items_title',(760,230,1160,350)) is not None and
+                self.locate(frame,'collect',(780,720,1140,840)) is not None)
+
+    def collect_items(self):
+        """Ventana ITEMS (artículo comprado): solo COLLECT verificado; nada que gastar."""
+        for _ in range(3):
+            frame=self.capture()
+            if not self.items_ready(frame):return
+            self.press((960,781),'collect',(780,720,1140,840),('items_title',(760,230,1160,350)));time.sleep(1)
 
     def locate(self,frame,key,roi):
         # FILTER cambia algo de tono entre cuentas (KORTZZ: correlación 0,979, diferencia 12,8).
@@ -239,7 +254,9 @@ class BoostsRunner(DungeonRunner):
                     self.locate(frame,'yes',(690,695,945,800)) is None):self.reject_purchase()
             self.check();self.io.click((814,748));time.sleep(.25);self.io._move((960,1070))
             self.log.emit('DUNGEON_INPUT',screen='BOOST_PURCHASE_YES',xy=[814,748])
-            # Solo la desaparición del diálogo y la lista permiten continuar; sin clics de recuperación.
+            # Tras YES el juego muestra ITEMS con el artículo comprado y COLLECT (en vivo, KORTZZ); recogerlo y volver a la lista.
+            self.wait(lambda f:self.items_ready(f) or self.shop_ready(f),10,'artículo comprado')
+            self.collect_items()
             self.wait(self.shop_ready,10,'lista tras YES')
             reservation['confirmed']=True
             atomic_json(quota_path,{'purchases':entries})
@@ -262,6 +279,7 @@ class BoostsRunner(DungeonRunner):
         """Al reanudar: cerrar el filtro y el perfil que hayan quedado abiertos (ensure_home no los conoce)."""
         for _ in range(3):
             frame=self.capture()
+            if self.items_ready(frame):self.collect_items();continue  # compra anterior sin recoger
             if self.locate(frame,'shop_close',(1600,80,1730,210)) is not None and \
                     any(self.locate(frame,k,(1000,180,1250,255)) is not None for k in ('shop_tab','shop_list')):
                 self.press((1660,146),'shop_close',(1600,80,1730,210));time.sleep(1);continue  # tienda abierta al reanudar
