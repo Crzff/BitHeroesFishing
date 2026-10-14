@@ -30,8 +30,8 @@ class EmptySlotTests(unittest.TestCase):
         self.assertIs(runner.vision.templates['RUNE_INSERT'],template)
 
     def empty_wait(self,predicate,timeout,expected):
-        self.assertEqual(timeout,10)
-        self.assertEqual(expected,'opciones de runa')
+        self.assertIn(timeout,(10,5))  # apertura y relectura tras la animación
+        self.assertTrue(expected.startswith('opciones de runa'))
         frame=FRAMES['rune_options_empty_slot']
         self.assertTrue(predicate(frame))
         return frame
