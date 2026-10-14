@@ -100,3 +100,20 @@ class RuneTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class OccupiedSlotTests(unittest.TestCase):
+    def test_insert_with_active_switch_is_an_occupied_slot(self):
+        # En vivo (Steam): con runa puesta el menú muestra INSERT activo y SWITCH activo; vacío = SWITCH gris.
+        from unittest.mock import Mock,patch
+        from types import SimpleNamespace
+        from fishing_core.runes_runtime import RunesRunner
+        runner=RunesRunner.__new__(RunesRunner);runner.io=Mock();runner.log=Mock();runner.check=lambda:None
+        runner.board=lambda:None;runner.capture=lambda:np.zeros((1080,1920,3),np.uint8)
+        runner.wait=lambda predicate,*a,**k:runner.capture()
+        runner.on=lambda key,roi:(lambda f:key in ('RUNE_INSERT','RUNE_SWITCH'))
+        clicked=[];runner.click_on=lambda frame,action:clicked.append(action[1])
+        runner.vision=SimpleNamespace(locate=lambda *a,**k:(1,1))
+        with patch('fishing_core.runes_runtime.time',SimpleNamespace(sleep=lambda s:None,monotonic=lambda:0)):
+            runner.open_list(0)
+        self.assertEqual(clicked,['RUNE_SWITCH']);runner.log.emit.assert_not_called()

@@ -89,8 +89,12 @@ class RunesRunner(DungeonRunner):
 
     def open_list(self,slot):
         self.board();self.check();self.io.click(SLOTS[slot]);time.sleep(.25);self.io._move((960,1070))
-        frame=self.wait(lambda f:self.on('RUNE_SWITCH',SWITCH[2])(f) or self.on('RUNE_INSERT',INSERT_ROI)(f),10,'opciones de runa')
-        if self.on('RUNE_INSERT',INSERT_ROI)(frame):
+        menu=lambda f:self.on('RUNE_SWITCH',SWITCH[2])(f) or self.on('RUNE_INSERT',INSERT_ROI)(f)
+        self.wait(menu,10,'opciones de runa')
+        # INSERT existe también con runa puesta (en vivo, Steam): el hueco solo está vacío si SWITCH está gris.
+        # Releer tras la animación de apertura para no confundir un SWITCH aún no dibujado con uno gris.
+        time.sleep(.5);frame=self.wait(menu,5,'opciones de runa estables')
+        if self.on('RUNE_INSERT',INSERT_ROI)(frame) and not self.on('RUNE_SWITCH',SWITCH[2])(frame):
             self.check();self.io.click(OPTIONS_CLOSE);self.board()
             self.log.emit('RUNE_SLOT_EMPTY',slot=slot,message=f'Hueco {slot+1}: vacío (0%)')
             return None
