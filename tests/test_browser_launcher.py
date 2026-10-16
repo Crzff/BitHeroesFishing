@@ -86,6 +86,7 @@ class BrowserLauncherTests(unittest.TestCase):
         endpoint='/endpoint'
         with patch.object(brave,'validate_cdp_endpoint'),patch.object(brave.shutil,'which',return_value='node'), \
                 patch.object(brave.subprocess,'Popen') as spawn,patch.object(brave.Bridge,'_receive',return_value={'id':0,'ok':True}):
+            spawn.return_value.stdout=io.BytesIO(b'')
             bridge=brave.Bridge(endpoint,'A'*32)
             self.assertEqual(spawn.call_args.args[0][2:],[endpoint,'A'*32])
             bridge.close()

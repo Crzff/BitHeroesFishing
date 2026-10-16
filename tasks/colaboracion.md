@@ -30,3 +30,22 @@ Formato: fecha · id · quién · tarea · resultado · pruebas · pendiente.
 - t8a/t8b (Codex) boosts: en vivo FMANI ya activos, Steam consumió 4, KORTZZ consumió Speed y la compra paró por icono de tienda animado (arreglado con máscara).
 - t12a/t12b (Codex) backend CDP: validado en vivo, ciclo completo de KORTZZ sin gamescope. Calibración rueda: mouseMoved previo + deltaY 100/paso.
 - Fase 2 (seguridad) s1–s4 (Codex) hecha: escrituras privadas, identidad CDP, compras seguras, retención, plazo supervisor, hashes, intermediario CDP por pipe. Pendiente DACL Windows y lock con red.
+
+## 2026-10-16 (Windows, Claude solo; Codex aún no delegado)
+- Entorno migrado a Windows 11. Perfiles de Brave de FMANI (`personal`) y KORTZZ (`perfil-1`)
+  recreados con sesión iniciada (Kongregate); Steam ya la tenía el usuario.
+- w0-fuga-ram · Claude · **Bug de RAM que congelaba el equipo**: el hilo lector de Windows en
+  `brave.Bridge` (`os.name=='nt'`) giraba sin fin cuando `process.stdout` es un Mock (nunca EOF),
+  acumulando objetos `_Call` de mock sin tope. Al correr `unittest discover` (todo en un proceso)
+  se sumaba entre archivos → 16 GB → congelamiento. Arreglo: el bucle corta con `self.closed`,
+  `close()` hace `join(timeout=1)` del hilo (`fishing_core/brave.py`); y la prueba
+  `test_bridge_passes_endpoint_to_adapter` da una salida finita (`io.BytesIO(b'')`).
+  Verificado: `test_browser_launcher` pasó de +1861 MB a +2 MB.
+- Runner seguro nuevo `scripts/comprobar_tests.ps1` + `COMPROBAR_TESTS.bat`: un archivo por proceso,
+  vigila el árbol y lo mata si supera el tope de RAM. **No usar `unittest discover` completo en Windows.**
+- Línea base Windows (segura): 37/51 archivos OK, 641 pruebas, pico máx 1528 MB. Los 14 rojos son
+  portabilidad Linux→Windows (Fase 3): `from Xlib import X` en `dungeon_runtime.py:379` (gvg/pvp/trials),
+  ruta fija `/tmp/opencode` (dungeon_runtime/gamescope), `os.getuid` (cdp_backend/accounts), `os.symlink`
+  sin privilegio (medium_hardening), guarda `Multicuenta Windows requiere CDP` en tests de gamescope
+  (farm_all/farm_multi), separador `\`/`/` en asserts (browser_launcher), node/CDP (brave), supervisor
+  multicuenta (farm_app). Pendiente: F8 Windows en `cdp_backend.py` (bloquea todo el backend CDP).

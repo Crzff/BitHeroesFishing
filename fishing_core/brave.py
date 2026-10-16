@@ -303,7 +303,7 @@ def launch_brave(executable=None):
 class Bridge:
     """CDP persistente; respuestas acotadas, imagen por archivos privados."""
     def __init__(self,port,target,frames_dir=None):
-        self.process=None;self.closed=False;self.broken=False;self.buffer=b'';self.sequence=0
+        self.process=None;self.closed=False;self.broken=False;self.buffer=b'';self.sequence=0;self._reader=None
         if isinstance(port,str):
             try:validate_cdp_endpoint(port)
             except ValueError as exc:raise RuntimeError('Endpoint CDP inválido') from exc
@@ -321,12 +321,13 @@ class Bridge:
                 self.replies=queue.Queue()
                 def read_pipe():
                     try:
-                        while True:
+                        while not self.closed:
                             chunk=self.process.stdout.read(1)
                             self.replies.put(chunk)
                             if not chunk:return
                     except OSError:self.replies.put(b'')
-                threading.Thread(target=read_pipe,daemon=True).start()
+                self._reader=threading.Thread(target=read_pipe,daemon=True)
+                self._reader.start()
             self._receive(0,15)  # en vivo, con tres cuentas arrancando a la vez, 5 s no bastó
         except (OSError,ValueError,TypeError):
             self.close()
@@ -371,7 +372,10 @@ class Bridge:
     def close(self):
         if self.closed:return
         self.closed=True
-        _close_adapter(self.process)
+        try:
+            _close_adapter(self.process)
+        finally:
+            if self._reader is not None:self._reader.join(timeout=1)
 
 
 class BraveGuard:
