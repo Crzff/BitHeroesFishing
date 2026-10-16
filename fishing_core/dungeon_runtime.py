@@ -376,10 +376,10 @@ class DungeonRunner:
 
     def wheel(self,amount,xy):
         """Rueda sobre xy (positivo = bajar); el llamante confirma antes la pantalla."""
-        from Xlib import X
-        from Xlib.ext import xtest
-        if hasattr(self.io,'wheel'):  # gamescope: rueda en su servidor X, sin cursor del usuario
+        if hasattr(self.io,'wheel'):  # gamescope/CDP: rueda en su servidor, sin cursor del usuario
             self.io.wheel(amount,xy);time.sleep(.12);self.io._move((960,1070));return
+        from Xlib import X  # solo el respaldo X11 (Linux directo) necesita Xlib
+        from Xlib.ext import xtest
         self.io._move(xy)
         for _ in range(abs(amount)):
             self.check()

@@ -6,6 +6,9 @@
   secciones pertinentes de `docs/FARM_BOT.md` o `docs/LINUX.md`. No cargues la bóveda.
 - No inicies juegos, paneles, motores, pesca ni farmeo para analizar el proyecto.
   No captures el escritorio ni envíes inputs. Las pruebas deben ser offline.
+- Windows — RAM: NUNCA corras la suite completa con `unittest discover` sin `-p` (llena la
+  memoria y congela el equipo). Corre un archivo por proceso: `.venv\Scripts\python.exe -B -m
+  unittest discover -s tests -p <archivo>`, o `scripts\comprobar_tests.ps1 -Filtro <archivo>`.
 - No hagas compras, persuasión, entradas ni gasto de recursos. Conserva F8,
   foco, exclusividad, límites de gasto y las pausas ante estados desconocidos.
 - No leas ni muestres credenciales, `.env`, cookies, perfiles personales o archivos
